@@ -28,6 +28,7 @@ import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Slider
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
@@ -107,7 +108,7 @@ import kotlin.math.roundToInt
                         )) {
                             AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
                                 ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
-                                onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
+                                onPreview = { vm.previewAdaptive(band(it)) },
                                 onSave = { vm.commitAdaptive(band(it)) })
                         }
                     }
@@ -140,11 +141,11 @@ import kotlin.math.roundToInt
                             AudioAdjustment("效果强度", settings.strength.toFloat(), 0f..4f,
                                 { listOf("弱", "默认", "中", "强", "超强")[it.roundToInt().coerceIn(0, 4)] }, controls,
                                 "adaptive_strength", steps = 3, onPreview = { value -> vm.previewAdaptive { it.copy(strength = value.roundToInt()) } },
-                                onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(strength = value.roundToInt()) } })
+                                onSave = { value -> vm.commitAdaptive { it.copy(strength = value.roundToInt()) } })
                             AudioAdjustment("响应速度", settings.speed.toFloat(), 0f..4f,
                                 { listOf("舒缓", "标准", "灵敏", "快速", "极快")[it.roundToInt().coerceIn(0, 4)] }, controls,
                                 "adaptive_speed", steps = 3, onPreview = { value -> vm.previewAdaptive { it.copy(speed = value.roundToInt()) } },
-                                onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(speed = value.roundToInt()) } })
+                                onSave = { value -> vm.commitAdaptive { it.copy(speed = value.roundToInt()) } })
                         }
                     }
                 }
@@ -155,7 +156,7 @@ import kotlin.math.roundToInt
                         if (settings.virtualBass) {
                             AudioAdjustment("低频力度", settings.bassStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
                                 enabled, "adaptive_bass_strength", onPreview = { value -> vm.previewAdaptive { it.copy(bassStrength = value.roundToInt()) } },
-                                onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(bassStrength = value.roundToInt()) } })
+                                onSave = { value -> vm.commitAdaptive { it.copy(bassStrength = value.roundToInt()) } })
                         }
                     }
                 }
@@ -182,7 +183,7 @@ import kotlin.math.roundToInt
                             }
                             AudioAdjustment("震动力度", settings.hapticStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
                                 enabled, "adaptive_haptic_strength", onPreview = { value -> vm.previewAdaptive { it.copy(hapticStrength = value.roundToInt()) } },
-                                onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(hapticStrength = value.roundToInt()) } })
+                                onSave = { value -> vm.commitAdaptive { it.copy(hapticStrength = value.roundToInt()) } })
                             if (!vm.hapticsAmplitudeControl) SettingsHint("此设备采用短脉冲模式，通过时长与间隔调节震感。")
                         }
                     }
@@ -228,7 +229,7 @@ import kotlin.math.roundToInt
 
 @Composable private fun AudioAdjustment(title: String, value: Float, range: ClosedFloatingPointRange<Float>,
     label: (Float) -> String, enabled: Boolean, tag: String, steps: Int = 0, key: Any = tag,
-    onPreview: (Float) -> Unit, onCancel: () -> Unit, onSave: (Float) -> Unit) {
+    onPreview: (Float) -> Unit, onSave: (Float) -> Unit) {
     // A stable key prevents switching bands midway through an accessibility/keyboard adjustment.
     key(key) {
         var preview by remember(value) { mutableFloatStateOf(value) }
@@ -239,11 +240,11 @@ import kotlin.math.roundToInt
                 Text(label(preview), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
                     color = if (enabled) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant)
             }
-            GlassSlider(preview, { preview = if (steps == 0 && range.start < 0) (it * 10).roundToInt() / 10f else it; onPreview(preview) },
+            Slider(preview, { preview = if (steps == 0 && range.start < 0) (it * 10).roundToInt() / 10f else it; onPreview(preview) },
                 Modifier.fillMaxWidth().testTag(tag).semantics { contentDescription = title }, enabled = enabled,
                 valueRange = range, steps = steps, showKeyPoints = true,
                 keyPoints = if (range.start < 0) listOf(-6f, 0f, 6f) else null,
-                onValueChangeFinished = { onSave(preview) }, onValueChangeCancelled = onCancel)
+                onValueChangeFinished = { onSave(preview) })
         }
     }
 }

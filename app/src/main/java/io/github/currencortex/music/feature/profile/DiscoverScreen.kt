@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
@@ -29,6 +30,10 @@ import io.github.suqi8.coui.kmp.basic.*
     val posts: PostsViewModel = viewModel(factory = viewModelFactory { PostsViewModel(vm.container) })
     val chat: ChatViewModel = viewModel(factory = viewModelFactory { ChatViewModel(vm.container) })
     LaunchedEffect(pager.settledPage) { if (pager.settledPage == 2) posts.ensureLoaded() }
+    // A sub-tab backs out to 发现 · 音乐 instead of leaving the app from where it was.
+    BackHandler(enabled = pager.currentPage != 0 || pager.targetPage != 0) {
+        scope.launch { pager.animateScrollToPage(0) }
+    }
     SettingsScrollLayout(Modifier.fillMaxSize().testTag("discover_screen"),
         topBar = { SettingsRootTopBar("发现", Modifier.testTag("discover_root_toolbar")) }) { topInset ->
         // Tabs own a fixed row. In particular, Chat's reversed message list must not
@@ -36,7 +41,7 @@ import io.github.suqi8.coui.kmp.basic.*
         Column(Modifier.fillMaxSize().padding(top = topInset)) {
             SettingsSegmentedControl(listOf("音乐", "用户", "帖子", "Chat"), pager.targetPage,
                 { index -> scope.launch { pager.animateScrollToPage(index) } },
-                Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs", role = Role.Tab)
+                Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs")
             HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().clipToBounds()
                 .testTag("discover_pager")) { page ->
                 when (page) {

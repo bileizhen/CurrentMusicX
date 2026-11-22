@@ -289,7 +289,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
 @Composable private fun FootprintTabs(period:ListeningPeriod, select:(ListeningPeriod)->Unit,modifier:Modifier) {
     SettingsSegmentedControl(ListeningPeriod.entries.map { it.label }, period.ordinal,
         { select(ListeningPeriod.entries[it]) }, modifier,
-        tag="listening_period", role=Role.Tab)
+        tag="listening_period")
 }
 
 @Composable private fun ListeningDurationInfo(open: () -> Unit, onBounds: (Rect) -> Unit, modifier: Modifier = Modifier) {

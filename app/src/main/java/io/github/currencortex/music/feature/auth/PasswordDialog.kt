@@ -38,8 +38,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!recovery) SettingsSegmentedControl(listOf("原密码验证", "邮箱验证"), if (usingCode) 1 else 0, {
             usingCode = it == 1; credential = ""
-        }, enabled = !busy, tag = "password_verification",
-            itemTag = { if (it == 1) "password_email_mode" else "password_old_mode" })
+        }, enabled = !busy, tag = "password_verification")
         if (recovery) TextField(email, { email = it }, label = "已注册的邮箱", singleLine = true,
             enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth().testTag("password_email"))
