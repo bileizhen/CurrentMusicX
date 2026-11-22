@@ -44,7 +44,7 @@ android {
 
     defaultConfig {
         applicationId = "com.bileizhen.currentmusic"
-        minSdk = 33
+        minSdk = 26
         // Only PR smoke builds opt into a single ABI; releases keep every supported ABI.
         if (providers.gradleProperty("ciPrArm64Only").orNull == "true") {
             ndk.abiFilters += "arm64-v8a"

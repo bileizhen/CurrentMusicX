@@ -47,7 +47,7 @@
 
 ## 3. Blur and compatibility
 
-`coui-blur-android:2.1.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
+`coui-blur-android:2.1.0` is now used directly and the application minimum SDK is 26 via `tools:overrideLibrary="io.github.suqi8.coui.kmp.blur"` in `AndroidManifest.xml` (restored from the temporary 33 bump during migration; all public COUI blur entry points gate on `isRuntimeShaderSupported()`). The former `coui-blur-compat` module and its directory have been removed.
 
 The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. A dedicated collapsing header uses the 116dp/40sp SettingsHome metrics, but removes the generic `TopAppBar` 52dp collapsed toolbar slot: the title height reaches zero and the pinned search bar sits directly below the status bar, matching the system Settings page without an empty band. Without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
 

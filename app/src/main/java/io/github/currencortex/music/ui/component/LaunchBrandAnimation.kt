@@ -129,7 +129,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
     val blurEnabled = enableBlur && android.os.Build.VERSION.SDK_INT >= 33 &&
         LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()
     val effectBackground = blurEnabled && android.os.Build.VERSION.SDK_INT >= 35
-    val backdrop = rememberLayerBackdrop()
+    val backdrop = if (blurEnabled) rememberLayerBackdrop() else null
     val isDark = LocalDarkTheme.current
     val inkColors = remember(isDark) { BlurColors(blendColors = ColorBlendToken.brandInk(isDark)) }
     val measurer = rememberTextMeasurer()
@@ -142,7 +142,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
         BgEffectBackground(dynamicBackground = effectBackground && !reducedMotion,
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - smooth(state.flight.value) }
                 .background(colors.cardBackground),
-            bgModifier = Modifier.layerBackdrop(backdrop),
+            bgModifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier,
             isFullSize = true, effectBackground = effectBackground, animationSpeed = 3f) { }
         val viewportWidth = with(displayDensity) { maxWidth.toPx() }
         val viewportHeight = with(displayDensity) { maxHeight.toPx() }
@@ -183,7 +183,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
                 scaleX = scale; scaleY = scale
                 alpha = if (target == null) 1f - smooth(state.flight.value) else 1f
             }
-        if (blurEnabled) Canvas(wordmark.testTag("launch_wordmark")
+        if (blurEnabled && backdrop != null) Canvas(wordmark.testTag("launch_wordmark")
             .graphicsLayer { alpha = 1f - smooth(state.flight.value) }
             .textureBlur(backdrop = backdrop, shape = RoundedCornerShape(0.dp), blurRadius = 150f,
                 colors = inkColors, contentBlendMode = BlendMode.DstIn, enabled = true)) {
