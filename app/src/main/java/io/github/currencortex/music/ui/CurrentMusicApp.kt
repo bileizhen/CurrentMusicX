@@ -679,13 +679,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onSupport = { navigateLibrary(SupportConfig.route) },
                                     onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                                     accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
-                                    onAccount = { selectTab(ME_TAB) })
+                                    onAccount = { navigateLibrary("user/account") })
                             }
                             }
                         }
                         }
                     }
                     }
+                    CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides overlayBackOwner) {
                     io.github.currencortex.music.feature.search.SearchSheetHost(searchOpen, searchSheet, predictiveBack,
                         backEnabled = backStack.last() == SEARCH.toString() && !playerPresented && songMenu == null && !miniQueueOpen && libraryDialogSong == null,
                         onBack = ::navigateBack) {
@@ -704,6 +705,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         }
                     }
                     }
+                    }
                 }
                 entry(SETTINGS.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -716,7 +718,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onSupport = { navigateLibrary(SupportConfig.route) },
                             onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                             accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
-                            onAccount = { navigateBack(); selectTab(ME_TAB) })
+                            onAccount = { navigateLibrary("user/account") })
                     }
                 }
                 entry(NETWORK.toString()) {
@@ -845,6 +847,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                         })
                                     io.github.currencortex.music.feature.announcement.AnnouncementArchiveScreen(vm, ::navigateBack)
                                 }
+                                route == "user/account" -> io.github.currencortex.music.feature.profile.AccountHubScreen(
+                                    container, ::navigateLibrary, ::navigateBack)
                                 route == "user/security" -> AccountSecurityScreen(profileVm, authVm, add = {
                                     authVm.begin(); navigateLibrary("user/login")
                                 }, onBack = ::navigateBack)

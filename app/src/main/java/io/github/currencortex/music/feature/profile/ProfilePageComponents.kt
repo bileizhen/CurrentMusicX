@@ -102,11 +102,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 }
 
 /** Native and CurrentMusic accounts share destinations and the same list geometry. */
+/** Account rows live on the account page opened from settings; services stay here. */
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
-    native: Boolean = false, bound: Boolean = true,
     navidromeConfigured: Boolean = false, embyConfigured: Boolean = false,
     platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false) {
     SettingsListSection("音乐服务") {
+        var divided = false
         if (platform == MusicPlatform.QQ_MUSIC) {
             ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",
                 if (qqBound) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
@@ -115,33 +116,33 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             ProfileDestination("收藏的专辑", "管理 QQ 音乐收藏专辑", MusicIcons.List, "open_qq_albums") {
                 navigate("qq/albums")
             }
-        } else {
-            ProfileDestination(if (native && !bound) "登录网易云" else "网易云账号",
-                if (native && !bound) "需先注册并登录 CurrentMusic" else "绑定账号、同步歌单",
-                MusicIcons.Account, "open_binding") { navigate("user/binding") }
+            divided = true
         }
         if (tasks && platform == MusicPlatform.NETEASE) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("网易云任务", "签到、云贝与会员成长", MusicIcons.Check, "open_netease_tasks") { navigate("user/netease-tasks") }
+            divided = true
         }
         if (platform == MusicPlatform.NETEASE) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") {
                 navigate("user/playlist-import")
             }
+            divided = true
         }
         if (navidromeConfigured) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }
+            divided = true
         }
         if (embyConfigured) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("Emby 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_emby") { navigate("emby") }
         }
     }
 }
 
-@Composable internal fun ProfileAccountSection(navigate: (String) -> Unit, native: Boolean = false, administrator: Boolean = false) {
+@Composable internal fun ProfileAccountSection(navigate: (String) -> Unit, native: Boolean = false) {
     SettingsListSection("账号") {
         if (native) ProfileDestination("CurrentMusic 账户", "注册与登录、头像装饰与一起听", MusicIcons.Account,
             "open_currentmusic_login") { navigate("user/login") }
@@ -149,12 +150,6 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             ProfileDestination("等级与成长", "查看积分、每日进度与等级试炼", MusicIcons.Check, "open_levels") { navigate("user/levels") }
             SettingsDivider(52.dp)
             ProfileDestination("头像挂件", "装饰你的头像", MusicIcons.Image, "open_decorations") { navigate("user/decorations") }
-            SettingsDivider(52.dp)
-            ProfileDestination("账号与安全", "切换账号、修改密码与退出登录", MusicIcons.Account, "open_security") { navigate("user/security") }
-            if (administrator) {
-                SettingsDivider(52.dp)
-                ProfileDestination("管理员面板", "用户、公告、设备与系统管理", MusicIcons.Account, "open_admin") { navigate("user/admin") }
-            }
         }
     }
 }

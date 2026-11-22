@@ -176,7 +176,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                         val result = io.github.currencortex.music.core.network.appResult { vm.container.neteaseTaskPreferences.enable(enabled) }
                         if (result is io.github.currencortex.music.core.network.AppResult.Failure) vm.container.errorNotices.show(result.message)
                     }
-                }, Modifier.testTag("netease_tasks_enabled"), summary = "开启后在“我的”的网易云账号下方显示任务入口", enabled = tasksEnabled != null)
+                }, Modifier.testTag("netease_tasks_enabled"), summary = "开启后在“我的”的音乐服务中显示任务入口", enabled = tasksEnabled != null)
             }
             Spacer(Modifier.height(12.dp))
             Text(if (vm.container.apiClient.hasLocalNeteaseLogin)

@@ -141,7 +141,7 @@ fun SettingsScreen(
         "查看版本和更新说明" else "查看下载进度、切换来源或安装"
     val displayAccountName = accountName?.takeIf { it.isNotBlank() } ?: "登录账号"
     val destinations = listOf(
-        SettingsDestination("account", displayAccountName, "管理资料、收藏与听歌记录", COUIIcons.Contacts,
+        SettingsDestination("account", displayAccountName, "网易云账号与账号安全", COUIIcons.Contacts,
             colors.blue, onAccount),
         SettingsDestination("updates", updateTitle, updateSummary, COUIIcons.Update,
             colors.blue) { onUpdates(null) },
@@ -465,7 +465,7 @@ private fun SettingsAccountCard(
         item {
             ArrowPreference(
                 title = name,
-                summary = "管理资料、收藏与听歌记录",
+                summary = "网易云账号与账号安全",
                 startAction = {
                     DecoratedAvatar(
                         avatarUrl = avatarUrl,

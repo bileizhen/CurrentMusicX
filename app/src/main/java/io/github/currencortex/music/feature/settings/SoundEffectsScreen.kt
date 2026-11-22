@@ -390,7 +390,7 @@ import kotlinx.serialization.json.*
         MusicDialog(effect.name, onDismiss = { selectedEffect = null }) {
             Text(effect.description, fontSize = 15.sp)
             Text(unavailable ?: if (effect.legacyMemberOriginal)
-                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“我的 → 网易云账号”登录。选择会保存，重启后重新核验。"
+                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“设置 → 账号”登录。选择会保存，重启后重新核验。"
                 else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。",
                 color = colors.labelSecondaryVariant, fontSize = 13.sp)
             MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {

@@ -137,7 +137,7 @@ import kotlinx.coroutines.launch
                 "open_currentmusic_login") { navigate("user/login") }
         } }
         item("library") { ProfileLibrarySection(navigate) }
-        item("services") { ProfileServicesSection(navigate, tasksEnabled == true, native = true, bound = account.loggedIn,
+        item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
             navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured) }
         if (account.profile != null) item("account") { ProfileAccountSection(navigate, native = true) }
     }
@@ -241,8 +241,7 @@ import kotlinx.coroutines.launch
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
                     navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured,
                     platform = platform, qqBound = qqAccount.loggedIn) }
-                item("account") { ProfileAccountSection(navigate, administrator = !account.loading && !account.offline &&
-                    account.account?.let { it.isAdmin || it.isSuper || it.isOwner } == true) }
+                item("account") { ProfileAccountSection(navigate) }
             }
             if (platform == MusicPlatform.NETEASE || !privateOwnProfile) {
                 state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")
