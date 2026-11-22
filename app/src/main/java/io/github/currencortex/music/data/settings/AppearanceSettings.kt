@@ -59,6 +59,10 @@ data class AppearanceSettings(
     val customTextScale: Boolean = false,
     val textScale: Float = 1f,
     val playerCoverStyle: PlayerCoverStyle = PlayerCoverStyle.CIRCLE,
+    /** Developer mode is unlocked by tapping the version row five times on the About page. */
+    val developerMode: Boolean = false,
+    val scrollEdgeHaptic: Boolean = true,
+    val showFrameRate: Boolean = false,
 ) {
     fun normalized() = copy(floatingBar = true,
         uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,

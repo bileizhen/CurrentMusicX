@@ -53,7 +53,8 @@ fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, ena
     storageVm: StorageViewModel, onStorage: () -> Unit,
     onOpenMember: (AboutMember, String) -> Unit, onSupport: () -> Unit = {},
     updateState: UpdateState = UpdateState.Idle, onCheckUpdates: (PageContainerOrigin?) -> Unit = {},
-    accountName: String? = null) {
+    accountName: String? = null,
+    developerMode: Boolean = false, onDeveloperModeUnlocked: () -> Unit = {}) {
     val context = LocalContext.current
     val state = remember { AboutUiState() }
     val storage by storageVm.state.collectAsStateWithLifecycle()
@@ -64,11 +65,12 @@ fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, ena
         state = state,
         actions = AboutScreenActions(onBack) { link ->
             when {
+                // Tapping 版本 copies its info silently: the row now also counts taps toward
+                // unlocking developer mode, so a toast on every tap would only get in the way.
                 link == "currentmusic:version" -> {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("version",
                         "${AppMetadata.APP_NAME} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n${BuildConfig.APPLICATION_ID}"))
-                    context.showMusicMessage("版本信息已复制")
                 }
                 link.startsWith("currentmusic:") -> onOpenDocument(LegalDocument.valueOf(link.substringAfter(':')))
                 else -> openExternalLink(context, link)
@@ -82,6 +84,8 @@ fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, ena
         updateState = updateState,
         onCheckUpdates = onCheckUpdates,
         accountName = accountName,
+        developerMode = developerMode,
+        onDeveloperModeUnlocked = onDeveloperModeUnlocked,
     )
 }
 
@@ -114,8 +118,12 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
     storageUsage: StorageUsage, onStorage: () -> Unit,
     onOpenMember: (AboutMember, String) -> Unit, onSupport: () -> Unit = {},
     updateState: UpdateState = UpdateState.Idle, onCheckUpdates: (PageContainerOrigin?) -> Unit = {},
-    accountName: String? = null) {
+    accountName: String? = null,
+    developerMode: Boolean = false, onDeveloperModeUnlocked: () -> Unit = {}) {
     val colors = COUITheme.colorScheme
+    val context = LocalContext.current
+    // Five taps on the version row unlock the developer options; the counter resets once it fires.
+    var versionTaps by remember { mutableIntStateOf(0) }
     val projectLinks = state.links.filter { it.fullText in setOf("GitHub", "QQ 群", "网站") }
     val legalLinks = state.links.filterNot { it.fullText == "在线隐私政策" || it.fullText in setOf("GitHub", "QQ 群", "网站") }
     SettingsPage(state.title, "about_screen", actions.onBack, largeTitle = true) {
@@ -153,7 +161,17 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
                         BasicComponent(
                             title = "版本",
                             endActions = { AboutValue("${state.versionName} (${BuildConfig.VERSION_CODE})") },
-                            onClick = { actions.onOpenLink("currentmusic:version") },
+                            onClick = {
+                                if (!developerMode) {
+                                    versionTaps++
+                                    if (versionTaps >= 5) {
+                                        versionTaps = 0
+                                        onDeveloperModeUnlocked()
+                                        context.showMusicMessage("开发者模式已开启")
+                                    }
+                                }
+                                actions.onOpenLink("currentmusic:version")
+                            },
                         )
                     }
                     item {

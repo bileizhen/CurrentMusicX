@@ -40,6 +40,9 @@ internal object SettingsPreferences {
     private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
     private val PLAYER_DYNAMIC_BACKGROUND = booleanPreferencesKey("player_dynamic_background")
     private val PLAYER_COVER_STYLE = stringPreferencesKey("player_cover_style")
+    private val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
+    private val SCROLL_EDGE_HAPTIC = booleanPreferencesKey("scroll_edge_haptic")
+    private val SHOW_FRAME_RATE = booleanPreferencesKey("show_frame_rate")
 
     fun read(p: Preferences) = AppearanceSettings(
         customFont = p[CUSTOM_FONT].orEmpty(),
@@ -71,6 +74,9 @@ internal object SettingsPreferences {
         playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
         playerDynamicBackground = p[PLAYER_DYNAMIC_BACKGROUND] ?: true,
         playerCoverStyle = runCatching { PlayerCoverStyle.valueOf(p[PLAYER_COVER_STYLE].orEmpty()) }.getOrDefault(PlayerCoverStyle.CIRCLE),
+        developerMode = p[DEVELOPER_MODE] ?: false,
+        scrollEdgeHaptic = p[SCROLL_EDGE_HAPTIC] ?: true,
+        showFrameRate = p[SHOW_FRAME_RATE] ?: false,
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -102,5 +108,8 @@ internal object SettingsPreferences {
         p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur
         p[PLAYER_DYNAMIC_BACKGROUND] = v.playerDynamicBackground
         p[PLAYER_COVER_STYLE] = v.playerCoverStyle.name
+        p[DEVELOPER_MODE] = v.developerMode
+        p[SCROLL_EDGE_HAPTIC] = v.scrollEdgeHaptic
+        p[SHOW_FRAME_RATE] = v.showFrameRate
     }
 }
