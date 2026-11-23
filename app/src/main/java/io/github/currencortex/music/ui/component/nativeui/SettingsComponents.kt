@@ -57,6 +57,7 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
 import io.github.suqi8.coui.kmp.icon.extended.Back
 import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
+import io.github.suqi8.coui.kmp.preference.MarkPreference
 import io.github.suqi8.coui.kmp.preference.OverlaySpinnerPreference
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -357,8 +358,17 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
 
 @Composable internal fun SettingsChoiceRow(title:String,selected:Boolean,onClick:()->Unit,
     modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true,leading:(@Composable ()->Unit)?=null) {
-    SettingsPreference(title,summary,modifier.semantics {this.selected=selected},enabled,onClick,Role.RadioButton,leading,
-        trailing={SettingsSelectionCheck(selected)})
+    // COUI's single-select row: the whole row toggles the mark at its end. The leading content
+    // becomes the start action, so previews and icons keep their place without being a control.
+    MarkPreference(
+        title = title,
+        checked = selected,
+        onClick = onClick,
+        enabled = enabled,
+        summary = summary,
+        modifier = modifier.semantics {this.selected=selected},
+        startAction = leading,
+    )
 }
 
 @Immutable internal data class SettingsOption(val id:String,val label:String,val selected:Boolean,

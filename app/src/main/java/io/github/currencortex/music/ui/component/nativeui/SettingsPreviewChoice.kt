@@ -13,9 +13,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
@@ -27,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.preference.MarkPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SettingsInfoHeader(title: String, icon: ImageVector, modifier: Modifier = Modifier,
@@ -73,23 +72,28 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
 }
 
-/** A whole row selects; the miniature and check are decorative, with one accessible owner. */
+/**
+ * COUI [MarkPreference] rows: the whole row selects and carries the mark. The miniature stays a
+ * decorative start action, so the option keeps its preview without becoming its own control.
+ */
 @Composable internal fun SettingsPreviewChoiceGroup(title: String, icon: ImageVector, labels: List<String>,
     selected: Int, onSelect: (Int) -> Unit, tag: String, enabled: (Int) -> Boolean = { true },
     pictogram: @Composable (Int) -> Unit) {
-    val colors = COUITheme.colorScheme
     Column(Modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingsListHeader(title)
         SettingsGroup(Modifier.padding(horizontal = 16.dp).semantics { selectableGroup() }) {
             labels.forEachIndexed { index, label ->
-                SettingsPreference(label, modifier = Modifier.semantics { this.selected = selected == index }
-                    .testTag("${tag}_$index").drawWithContent {
-                        drawContent()
-                        if (index < labels.lastIndex) drawLine(colors.labelPrimary.copy(alpha = .08f),
-                            Offset(72.dp.toPx(), size.height), Offset(size.width - 16.dp.toPx(), size.height), .5.dp.toPx())
-                    }, enabled = enabled(index), onClick = { onSelect(index) }, role = Role.RadioButton,
-                    leading = { Box(Modifier.clearAndSetSemantics { }) { pictogram(index) } },
-                    trailing = { SettingsSelectionCheck(selected == index) })
+                MarkPreference(
+                    title = label,
+                    checked = selected == index,
+                    onClick = { onSelect(index) },
+                    enabled = enabled(index),
+                    modifier = Modifier.testTag("${tag}_$index").semantics { this.selected = selected == index },
+                    startAction = { Box(Modifier.clearAndSetSemantics { }) { pictogram(index) } },
+                )
+                // Lines up with the title: 16dp inside margin + the 30dp preview (43.6dp wide),
+                // then MarkPreference's 5dp slot gap and COUI's 16dp start-action spacing.
+                if (index < labels.lastIndex) SettingsDivider(start = 80.dp)
             }
         }
     }
