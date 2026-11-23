@@ -135,10 +135,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     }
                 }
                 if (loading && sourcePlaylists.isEmpty()) {
-                    val firstLoadingRow = cells / gridColumns
+                    // Absolute cell index: the run may start mid-row.
+                    val firstLoadingCell = cells
                     cells += 4
                     items(4) { index ->
-                        Box(Modifier.springChainItem(chain, firstLoadingRow + index / gridColumns)) { LoadingCoverTile() }
+                        Box(Modifier.springChainItem(chain, (firstLoadingCell + index) / gridColumns)) { LoadingCoverTile() }
                     }
                 }
                 if (!loading && sourcePlaylists.isEmpty() && sourceErrors["我的歌单"] == null) {
@@ -160,11 +161,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         Box(Modifier.springChainItem(chain, emptyHintRow)) { SettingsHint("暂无${category.label}歌单") }
                     }
                 }
-                val firstPlaylistRow = cells / gridColumns
+                val firstPlaylistCell = cells
                 cells += playlists.size
                 itemsIndexed(playlists, key = { _, playlist -> "${playlist.source}-${playlist.id}" }) { index, playlist ->
                     var coverBounds by remember { mutableStateOf(Rect.Zero) }
-                    Box(Modifier.springChainItem(chain, firstPlaylistRow + index / gridColumns)) {
+                    Box(Modifier.springChainItem(chain, (firstPlaylistCell + index) / gridColumns)) {
                         Column(Modifier.testTag("playlist_card_${playlist.id}").combinedClickable(role = Role.Button,
                             onClick = { openPlaylist(playlist) },
                             onLongClickLabel = "预览歌单与操作",

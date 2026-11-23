@@ -150,8 +150,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                             chainRow += count
                             return first
                         }
-                        fun takeCellRows(count: Int): Int {
-                            val first = (chainRow * columns + chainColumn) / columns
+                        /** Absolute first cell index; the run may start mid-row. */
+                        fun takeCells(count: Int): Int {
+                            val first = chainRow * columns + chainColumn
                             chainColumn += count
                             chainRow += chainColumn / columns
                             chainColumn %= columns
@@ -220,23 +221,23 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                             val albumsHeadingRow = takeFullRow()
                             item("albums-heading", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.springChainItem(chain, albumsHeadingRow)) { MusicSectionHeader("专辑") } }
                         }
-                        val firstEntryRow = if (entriesAsRows) takeFullRows(state.entries.size) else takeCellRows(state.entries.size)
+                        val firstEntryCell = if (entriesAsRows) takeFullRows(state.entries.size) * columns else takeCells(state.entries.size)
                         itemsIndexed(state.entries, key = { _, entry -> "entry-${entry.id}" }, span = { _, _ -> GridItemSpan(if (entriesAsRows) maxLineSpan else 1) }) { index, entry ->
                             val open = { vm.open(when (state.page.kind) { "artists" -> "artist"; "playlists" -> "playlist"; else -> "album" }, entry) }
-                            val row = if (entriesAsRows) firstEntryRow + index else firstEntryRow + index / columns
+                            val row = (firstEntryCell + if (entriesAsRows) index * columns else index) / columns
                             Box(Modifier.springChainItem(chain, row).then(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260)))) {
                                 if (entriesAsRows) NavEntryRow(entry, open) else NavAlbumCard(entry, open)
                             }
                         }
-                        val firstSearchAlbumRow = takeCellRows(state.albums.size)
+                        val firstSearchAlbumCell = takeCells(state.albums.size)
                         itemsIndexed(state.albums, key = { _, entry -> "search-album-${entry.id}" }) { index, entry ->
-                            Box(Modifier.springChainItem(chain, firstSearchAlbumRow + index / columns)) { NavAlbumCard(entry) { vm.open("album", entry) } }
+                            Box(Modifier.springChainItem(chain, (firstSearchAlbumCell + index) / columns)) { NavAlbumCard(entry) { vm.open("album", entry) } }
                         }
                         if (!state.loaded && state.loading) {
                             if (state.page.kind in setOf("albums", "artist")) {
-                                val firstPlaceholderRow = takeCellRows(4)
+                                val firstPlaceholderCell = takeCells(4)
                                 items(4, key = { "placeholder-$it" }) { index ->
-                                    Box(Modifier.springChainItem(chain, firstPlaceholderRow + index / columns)) {
+                                    Box(Modifier.springChainItem(chain, (firstPlaceholderCell + index) / columns)) {
                                         LoadingCoverTile(cornerRadius = 14.dp, titleGap = 7.dp)
                                     }
                                 }
