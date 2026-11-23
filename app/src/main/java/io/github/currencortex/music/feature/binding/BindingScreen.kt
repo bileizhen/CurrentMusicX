@@ -16,7 +16,6 @@ import io.github.currencortex.music.ui.component.MusicPlaceholder
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -215,16 +214,28 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                                     modifier = Modifier.weight(1f).testTag("binding_phone"),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next))
                             }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                TextField(captcha, { captcha = it.filter(Char::isDigit).take(8) }, singleLine = true, label = "验证码",
-                                    modifier = Modifier.weight(1f).testTag("binding_code"),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                                    keyboardActions = KeyboardActions(onDone = { finishInput() }))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("验证码", fontSize = 14.sp, color = COUITheme.colorScheme.labelSecondary,
+                                    modifier = Modifier.weight(1f))
                                 GlassActionButton(if (now < state.codeUntil) "${(state.codeUntil - now + 999) / 1000}s 后重发" else "获取验证码",
                                     { vm.code(phone, country) },
                                     enabled = phone.length >= 5 && country.isNotBlank() && !busy && now >= state.codeUntil,
-                                    modifier = Modifier.width(116.dp).testTag("send_binding_code"))
+                                    fillWidth = false, minHeight = 36.dp,
+                                    modifier = Modifier.testTag("send_binding_code"))
                             }
+                            CodeTextField(
+                                value = captcha,
+                                onValueChange = { captcha = it.filter(Char::isDigit) },
+                                cellCount = 6,
+                                modifier = Modifier.fillMaxWidth().testTag("binding_code"),
+                                // The default cell fill is cardBackground, the very color of the card
+                                // this form sits on, so the cells would vanish; one step up the
+                                // surface scale keeps them visible.
+                                colors = CodeTextFieldDefaults.codeTextFieldColors(
+                                    cellBackgroundColor = COUITheme.colorScheme.surfaceContainerHighest,
+                                ),
+                                onComplete = { finishInput() },
+                            )
                             if (state.codeFailed) {
                                 Text("若已收到短信，可直接填写；未收到可等倒计时结束后尝试备用发送。", fontSize = 12.sp, lineHeight = 19.sp,
                                     color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
