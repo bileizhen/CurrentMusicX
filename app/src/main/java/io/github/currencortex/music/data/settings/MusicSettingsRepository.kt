@@ -34,7 +34,9 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val musicPlatform: MusicPlatform = MusicPlatform.NETEASE,
                          val qqMobileQuality: AudioQuality = AudioQuality.AUTO,
                          val qqWirelessQuality: AudioQuality = AudioQuality.AUTO,
-                         val qqDownloadQuality: AudioQuality = AudioQuality.AUTO) {
+                         val qqDownloadQuality: AudioQuality = AudioQuality.AUTO,
+                         /** Mirror the current lyric line into the system media card, lockscreen and Bluetooth AVRCP title. */
+                         val bluetoothLyrics: Boolean = false) {
     fun qualityFor(source: MusicSource?, network: PlaybackNetworkKind = PlaybackNetworkKind.MOBILE): AudioQuality =
         if (source == MusicSource.QQ_MUSIC) {
             if (network == PlaybackNetworkKind.WIRELESS) qqWirelessQuality else qqMobileQuality
@@ -141,6 +143,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
     private val lyricsSource = stringPreferencesKey("lyrics.source")
     private val lyricsSourceMigration = intPreferencesKey("lyrics.source.automaticMigrationVersion")
+    private val bluetoothLyrics = booleanPreferencesKey("lyrics.bluetooth")
     private val centered = booleanPreferencesKey("lyrics.centered")
     private val fontWeight = intPreferencesKey("lyrics.fontWeight")
     private val blur = booleanPreferencesKey("lyrics.blur")
@@ -220,7 +223,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             MusicPlatform.from(p[platform]),
             p[qqMobileQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
             p[qqWirelessQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
-            p[qqDownloadQuality]?.let(AudioQuality::from) ?: legacyQuality)
+            p[qqDownloadQuality]?.let(AudioQuality::from) ?: legacyQuality,
+            p[bluetoothLyrics] ?: false)
     }
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
@@ -271,6 +275,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setLyricsFontFile(value: String) { store.edit { it[lyricsFontFile] = value; it[lyricsFont] = LyricsFont.IMPORTED.name } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
     suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
+    suspend fun setBluetoothLyrics(value: Boolean) { store.edit { it[bluetoothLyrics] = value } }
     suspend fun setLyricsSource(value: LyricsSource) {
         store.edit {
             it[lyricsSource] = value.name

@@ -34,6 +34,11 @@ import kotlinx.coroutines.guava.future
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import io.github.currencortex.music.core.media.engine.*
+import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
+import io.github.currencortex.music.feature.lyrics.timeline.LyricCaptionTimeline
+import io.github.currencortex.music.feature.lyrics.timeline.LyricsPlaybackClock
+import io.github.currencortex.music.feature.lyrics.timeline.PlaybackAnchor
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
@@ -153,6 +158,9 @@ class MusicService : MediaSessionService() {
     }
     private var desktopLyrics: AutoCloseable? = null
     private var session: MediaSession? = null
+    /** Current lyric line exposed through the session metadata; null keeps the song title. */
+    private var sessionLyric: SessionLyricLine? = null
+    private val sessionWindow = Timeline.Window()
     private var loading: Job? = null
     private var lxRetrySongId: Long? = null
     private val lxRetrySources = mutableSetOf<String>()
@@ -286,6 +294,7 @@ class MusicService : MediaSessionService() {
         session = MediaSession.Builder(this, sessionPlayer()).setSessionActivity(
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
+        startSessionLyrics()
         scope.launch {
             var wasExternal = false
             container.playerController.state.collect { state ->
@@ -606,6 +615,15 @@ class MusicService : MediaSessionService() {
                         Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
                     ).build())
                 }
+                // Bluetooth AVRCP, the lockscreen and media cards read this combined metadata.
+                // A caption for another song must never overwrite the item still being replaced.
+                val lyric = sessionLyric
+                if (lyric != null && !state.timeline.isEmpty) {
+                    val index = state.currentMediaItemIndex.takeIf { it in 0 until state.timeline.windowCount } ?: 0
+                    if (state.timeline.getWindow(index, sessionWindow).mediaItem.mediaId == lyric.songId.toString())
+                        builder.setPlaylist(state.timeline, state.currentTracks,
+                            state.currentMetadata.buildUpon().setTitle(lyric.title).build())
+                }
                 return builder.build()
             }
             fun remoteChanged() { invalidateState() }
@@ -665,6 +683,63 @@ class MusicService : MediaSessionService() {
         refreshSession = { forwarding.remoteChanged() }
         return forwarding
     }
+
+    /**
+     * Mirrors the mini-player caption into the session metadata. AVRCP has no lyric attribute, so
+     * the current line replaces the title that Bluetooth, the lockscreen and system media cards read.
+     */
+    private fun startSessionLyrics() {
+        scope.launch {
+            val clock = LyricsPlaybackClock()
+            var captionSongKey: String? = null
+            var captionDocument: LyricsDocument? = null
+            var caption = LyricCaptionTimeline(LyricsDocument())
+            combine(container.musicSettings.state, container.playbackLyrics.state,
+                container.playerController.state) { settings, lyrics, playback ->
+                SessionLyricInput(settings.bluetoothLyrics, lyrics.loading, lyrics.songId,
+                    settings.lyricsOffsetMs - lyrics.songOffsetMs, lyrics.songKey,
+                    lyrics.document.takeIf {
+                        !lyrics.loading && it.lines.isNotEmpty() && lyrics.matches(playback.song)
+                    }, PlaybackAnchor(playback.positionMs, playback.anchorRealtimeMs,
+                        playback.playing && !playback.loading, playback.durationMs,
+                        playback.playbackSpeed, playback.timelineRevision))
+            }.collectLatest { input ->
+                val document = when {
+                    input.document != null -> input.document
+                    // A reload of the same song keeps its caption instead of flashing the song title.
+                    input.enabled && input.loading && input.songKey != null && input.songKey == captionSongKey -> captionDocument
+                    else -> null
+                }
+                if (!input.enabled || document == null) { setSessionLyric(null, null); return@collectLatest }
+                if (captionDocument !== document) {
+                    captionSongKey = input.songKey
+                    captionDocument = document
+                    caption = LyricCaptionTimeline(document)
+                }
+                clock.update(input.songKey, input.anchor, SystemClock.elapsedRealtime())
+                while (true) {
+                    val now = SystemClock.elapsedRealtime()
+                    setSessionLyric(input.songId,
+                        caption.textAt(LyricsSynchronizer.lyricPosition(clock.positionAt(now), input.offsetMs)))
+                    val wait = caption.nextCheckMs(clock, now, input.offsetMs) ?: break
+                    delay((now + wait - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+                }
+            }
+        }
+    }
+
+    private data class SessionLyricInput(val enabled: Boolean, val loading: Boolean, val songId: Long?,
+        val offsetMs: Long, val songKey: String?, val document: LyricsDocument?, val anchor: PlaybackAnchor)
+
+    private data class SessionLyricLine(val songId: Long, val title: String)
+
+    private fun setSessionLyric(songId: Long?, text: String?) {
+        val next = if (songId == null) null else sessionLyricTitle(text)?.let { SessionLyricLine(songId, it) }
+        if (next == sessionLyric) return
+        sessionLyric = next
+        refreshSession()
+    }
+
     private fun requestQueueCheckpoint() {
         // Capture the controller's local queue on Main, after startup has restored it.
         if (container.ready.isCompleted) queueCheckpoints.offer(container.playerController.queueForPersistence())
@@ -870,3 +945,19 @@ class MusicService : MediaSessionService() {
         const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE"
     }
 }
+
+/** Trims a caption and keeps it within the AVRCP element budget. */
+internal fun sessionLyricTitle(text: String?): String? =
+    text?.trim()?.takeIf { it.isNotEmpty() }?.let(::truncateAvrcpTitle)
+
+/** AVRCP element values share the L2CAP MTU; stay within 240 UTF-8 bytes on a character boundary. */
+private fun truncateAvrcpTitle(text: String): String {
+    val bytes = text.toByteArray(Charsets.UTF_8)
+    if (bytes.size <= SESSION_LYRIC_MAX_BYTES) return text
+    var end = SESSION_LYRIC_MAX_BYTES
+    while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
+    return String(bytes, 0, end, Charsets.UTF_8)
+}
+
+/** Leave room for the AVRCP protocol header within the L2CAP MTU. */
+private const val SESSION_LYRIC_MAX_BYTES = 240

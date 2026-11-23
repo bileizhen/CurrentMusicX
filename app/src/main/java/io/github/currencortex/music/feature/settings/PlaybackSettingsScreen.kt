@@ -78,6 +78,11 @@ import kotlin.math.roundToInt
                     Modifier.testTag("open_apple_lyrics_settings"), summary = "字号、间距、动画速度与光效")
             }
         } }
+        item("bluetooth_lyrics") { SettingsSection("蓝牙歌词", MusicIcons.Device) {
+            SettingsSwitch("显示蓝牙歌词", settings.bluetoothLyrics, vm::bluetoothLyrics,
+                summary = "在系统媒体卡片、锁屏和蓝牙车机显示当前歌词，关闭后显示歌名",
+                modifier = Modifier.testTag("bluetooth_lyrics"))
+        } }
         item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update) {
             Column(Modifier.testTag("playback_transition").semantics { selectableGroup() }) {
                 modes.entries.forEachIndexed { index, (mode, title) ->
