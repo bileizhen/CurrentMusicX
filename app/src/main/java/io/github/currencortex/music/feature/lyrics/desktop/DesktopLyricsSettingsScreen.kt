@@ -4,6 +4,10 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 
 import io.github.suqi8.coui.kmp.basic.Slider
 
@@ -190,8 +194,17 @@ import kotlin.math.roundToInt
     reset: (() -> Unit)? = null, resetVisible: Boolean = false, resetTag: String = "") {
     SettingsPreference(title, trailing = {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, fontSize = 13.sp, color = COUITheme.colorScheme.primary, modifier = Modifier.testTag("${tag}_value"))
-            if (reset != null) SettingsFadingReset(resetVisible, reset, "恢复默认$title", Modifier.testTag(resetTag))
+            // Same gray as the color rows' values, so the trailing column reads as one column.
+            Text(label, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant, modifier = Modifier.testTag("${tag}_value"))
+            if (reset != null) {
+                // The slot only takes room while the reset is shown: a hidden button used to keep
+                // 36dp of its own, leaving a row's value 44dp short of every other row's value.
+                // Animating the width lets the label slide instead of jumping at the default.
+                AnimatedVisibility(resetVisible, enter = fadeIn(tween(200)) + expandHorizontally(tween(200)),
+                    exit = fadeOut(tween(200)) + shrinkHorizontally(tween(200))) {
+                    SettingsHeaderReset(reset, "恢复默认$title", Modifier.testTag(resetTag))
+                }
+            }
         }
     }, footer = {
         Slider(value = value, onValueChange = change, modifier = Modifier.fillMaxWidth().testTag(tag).semantics {
