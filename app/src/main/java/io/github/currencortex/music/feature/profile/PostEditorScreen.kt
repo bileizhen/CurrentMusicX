@@ -66,7 +66,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         SettingsSegmentedControl(listOf("编辑", "预览"), if (preview) 1 else 0, {
                             focus.clearFocus(); preview = it == 1
                         }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), tag = "post_editor_mode", enabled = !state.busy)
-                        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
+                        SpringLazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
                             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             item {
                                 SettingsGroup {

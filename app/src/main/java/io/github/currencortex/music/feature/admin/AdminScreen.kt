@@ -151,7 +151,7 @@ internal sealed interface AdminConfirmation {
             enabled = !loading && !state.busy) { open(AdminDestination.Announcement(null)) }
         if (error != null && loaded) AdminNotice(error, error = true, retry = actions::refresh)
         MusicPullToRefresh(loading, actions::refresh, Modifier.weight(1f).fillMaxWidth(), enabled = active && !state.busy) {
-            LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("admin_list_${tab.name.lowercase()}"),
+            SpringLazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("admin_list_${tab.name.lowercase()}"),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = LocalMusicBottomInset.current + 28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {

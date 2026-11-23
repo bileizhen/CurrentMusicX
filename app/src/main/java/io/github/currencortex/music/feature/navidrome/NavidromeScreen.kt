@@ -36,6 +36,9 @@ import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
+import io.github.suqi8.coui.kmp.effect.springChainItem
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun NavidromeScreen(vm: NavidromeViewModel, library: LibraryViewModel, navigate: (String) -> Unit,
@@ -117,6 +120,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     state.page.kind, { focus.clearFocus(); keyboard?.hide(); vm.tab(it) }, "navidrome_tab", Modifier.padding(horizontal = 16.dp))
                 val positionKey = "${if (root) "home" else "route"}:${account.revision}:${state.page.key}"
                 val grid = remember(positionKey) { vm.position(positionKey).let { LazyGridState(it.index, it.offset) } }
+                val chain = rememberSpringChainState(grid)
                 DisposableEffect(grid, positionKey) { onDispose { vm.savePosition(positionKey, grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) } }
                 val latest by rememberUpdatedState(state)
                 LaunchedEffect(grid, positionKey) {
@@ -130,26 +134,65 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 val songKeys = remember(shownSongs) { playlistSongKeys(shownSongs) }
                 val canPlay = playback.mode == PlayerMode.LOCAL
                 Box(Modifier.weight(1f).clipToBounds().nestedScroll(motion)) {
-                    LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().playlistPullSurface(motion).testTag("navidrome_grid"), state = grid,
+                    LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().playlistPullSurface(motion).testTag("navidrome_grid").springChain(chain), state = grid,
                         contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)),
                         horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(if (entriesAsRows) 4.dp else 12.dp)) {
-                        if (vm.nested && state.page.kind != "search") item("hero", span = { GridItemSpan(maxLineSpan) }) { NavDetailHero(state) }
-                        if (state.page.kind == "playlists") item("create", span = { GridItemSpan(maxLineSpan) }) {
-                            MusicSectionHeader("${state.entries.size} 个歌单", "新建歌单", { action("create") })
+                        // The chain moves a whole grid row; full-span items own a row of their own.
+                        var chainRow = 0
+                        var chainColumn = 0
+                        fun takeFullRow(): Int {
+                            if (chainColumn > 0) { chainRow++; chainColumn = 0 }
+                            return chainRow++
                         }
-                        if (error != null && dialog.isEmpty()) item("error", span = { GridItemSpan(maxLineSpan) }) {
-                            Column { Text(error.orEmpty(), color = COUITheme.colorScheme.error, fontSize = 13.sp)
-                                MusicTextAction("关闭", { vm.clearError() }) }
+                        fun takeFullRows(count: Int): Int {
+                            if (chainColumn > 0) { chainRow++; chainColumn = 0 }
+                            val first = chainRow
+                            chainRow += count
+                            return first
                         }
-                        if (shownSongs.isNotEmpty()) item("play", span = { GridItemSpan(maxLineSpan) }) {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                MusicTransportButton("播放全部", { play(shownSongs, 0) }, Modifier.testTag("navidrome_play_all"), prominent = true, enabled = canPlay)
-                                Column(Modifier.weight(1f).padding(start = 14.dp)) { Text("播放全部", fontSize = 20.sp, fontWeight = FontWeight.Medium); NavHint(playlistDurationLabel(shownSongs)) }
-                                MusicTextAction("随机播放", { play(shownSongs.shuffled(), 0) }, enabled = canPlay)
+                        fun takeCellRows(count: Int): Int {
+                            val first = (chainRow * columns + chainColumn) / columns
+                            chainColumn += count
+                            chainRow += chainColumn / columns
+                            chainColumn %= columns
+                            return first
+                        }
+                        if (vm.nested && state.page.kind != "search") {
+                            val heroRow = takeFullRow()
+                            item("hero", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.springChainItem(chain, heroRow)) { NavDetailHero(state) } }
+                        }
+                        if (state.page.kind == "playlists") {
+                            val createRow = takeFullRow()
+                            item("create", span = { GridItemSpan(maxLineSpan) }) {
+                                Box(Modifier.springChainItem(chain, createRow)) {
+                                    MusicSectionHeader("${state.entries.size} 个歌单", "新建歌单", { action("create") })
+                                }
                             }
                         }
+                        if (error != null && dialog.isEmpty()) {
+                            val errorRow = takeFullRow()
+                            item("error", span = { GridItemSpan(maxLineSpan) }) {
+                                Box(Modifier.springChainItem(chain, errorRow)) {
+                                    Column { Text(error.orEmpty(), color = COUITheme.colorScheme.error, fontSize = 13.sp)
+                                        MusicTextAction("关闭", { vm.clearError() }) }
+                                }
+                            }
+                        }
+                        if (shownSongs.isNotEmpty()) {
+                            val playRow = takeFullRow()
+                            item("play", span = { GridItemSpan(maxLineSpan) }) {
+                                Box(Modifier.springChainItem(chain, playRow)) {
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        MusicTransportButton("播放全部", { play(shownSongs, 0) }, Modifier.testTag("navidrome_play_all"), prominent = true, enabled = canPlay)
+                                        Column(Modifier.weight(1f).padding(start = 14.dp)) { Text("播放全部", fontSize = 20.sp, fontWeight = FontWeight.Medium); NavHint(playlistDurationLabel(shownSongs)) }
+                                        MusicTextAction("随机播放", { play(shownSongs.shuffled(), 0) }, enabled = canPlay)
+                                    }
+                                }
+                            }
+                        }
+                        val firstSongRow = takeFullRows(shownSongs.size)
                         itemsIndexed(shownSongs, key = { index, _ -> "song-${songKeys[index]}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, song ->
-                            Box(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260), fadeOutSpec = tween(150))) {
+                            Box(Modifier.springChainItem(chain, firstSongRow + index).then(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260), fadeOutSpec = tween(150)))) {
                                 PlaylistTrack(song, queue.current?.id == song.id, likes[song.id] == true,
                                     { play(shownSongs, index) }, { vm.enqueue(song, true) }, { vm.enqueue(song) }) {
                                     LibrarySongActions(library, song, navigate)
@@ -165,31 +208,63 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                                 }
                             }
                         }
-                        if (state.artists.isNotEmpty()) item("artists-heading", span = { GridItemSpan(maxLineSpan) }) { MusicSectionHeader("艺术家") }
-                        items(state.artists, key = { "search-artist-${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { NavEntryRow(it) { vm.open("artist", it) } }
-                        if (state.albums.isNotEmpty()) item("albums-heading", span = { GridItemSpan(maxLineSpan) }) { MusicSectionHeader("专辑") }
-                        items(state.entries, key = { "entry-${it.id}" }, span = { GridItemSpan(if (entriesAsRows) maxLineSpan else 1) }) { entry ->
+                        if (state.artists.isNotEmpty()) {
+                            val artistsHeadingRow = takeFullRow()
+                            item("artists-heading", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.springChainItem(chain, artistsHeadingRow)) { MusicSectionHeader("艺术家") } }
+                        }
+                        val firstArtistRow = takeFullRows(state.artists.size)
+                        itemsIndexed(state.artists, key = { _, artist -> "search-artist-${artist.id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, artist ->
+                            Box(Modifier.springChainItem(chain, firstArtistRow + index)) { NavEntryRow(artist) { vm.open("artist", artist) } }
+                        }
+                        if (state.albums.isNotEmpty()) {
+                            val albumsHeadingRow = takeFullRow()
+                            item("albums-heading", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.springChainItem(chain, albumsHeadingRow)) { MusicSectionHeader("专辑") } }
+                        }
+                        val firstEntryRow = if (entriesAsRows) takeFullRows(state.entries.size) else takeCellRows(state.entries.size)
+                        itemsIndexed(state.entries, key = { _, entry -> "entry-${entry.id}" }, span = { _, _ -> GridItemSpan(if (entriesAsRows) maxLineSpan else 1) }) { index, entry ->
                             val open = { vm.open(when (state.page.kind) { "artists" -> "artist"; "playlists" -> "playlist"; else -> "album" }, entry) }
-                            Box(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260))) {
+                            val row = if (entriesAsRows) firstEntryRow + index else firstEntryRow + index / columns
+                            Box(Modifier.springChainItem(chain, row).then(Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260)))) {
                                 if (entriesAsRows) NavEntryRow(entry, open) else NavAlbumCard(entry, open)
                             }
                         }
-                        items(state.albums, key = { "search-album-${it.id}" }) { entry -> NavAlbumCard(entry) { vm.open("album", entry) } }
-                        if (!state.loaded && state.loading) {
-                            if (state.page.kind in setOf("albums", "artist")) items(4, key = { "placeholder-$it" }) {
-                                LoadingCoverTile(cornerRadius = 14.dp, titleGap = 7.dp)
-                            } else item("loading", span = { GridItemSpan(maxLineSpan) }) { LoadingSongList(5) }
+                        val firstSearchAlbumRow = takeCellRows(state.albums.size)
+                        itemsIndexed(state.albums, key = { _, entry -> "search-album-${entry.id}" }) { index, entry ->
+                            Box(Modifier.springChainItem(chain, firstSearchAlbumRow + index / columns)) { NavAlbumCard(entry) { vm.open("album", entry) } }
                         }
-                        if (!state.loading && state.error == null && state.entries.isEmpty() && shownSongs.isEmpty() && state.artists.isEmpty() && state.albums.isEmpty()) item("empty", span = { GridItemSpan(maxLineSpan) }) {
-                            Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(when { filter.isNotBlank() -> "没有匹配的歌曲"; state.page.kind == "search" -> "没有找到相关音乐"; state.page.kind == "likes" -> "还没有喜欢的歌曲"; state.page.kind == "playlists" -> "创建你的第一张歌单"; else -> "这里还没有音乐" }, fontSize = 18.sp)
-                                NavHint(when (state.page.kind) { "likes" -> "歌曲菜单中的喜欢会同步到服务器"; "playlist" -> "从歌曲菜单添加喜欢的音乐"; else -> "试试其他分类，或下拉重新读取" })
-                                if (filter.isNotBlank()) MusicTextAction("清除搜索", { filter = "" })
-                                else if (state.page.kind == "playlists") MusicTextAction("新建歌单", { action("create") })
+                        if (!state.loaded && state.loading) {
+                            if (state.page.kind in setOf("albums", "artist")) {
+                                val firstPlaceholderRow = takeCellRows(4)
+                                items(4, key = { "placeholder-$it" }) { index ->
+                                    Box(Modifier.springChainItem(chain, firstPlaceholderRow + index / columns)) {
+                                        LoadingCoverTile(cornerRadius = 14.dp, titleGap = 7.dp)
+                                    }
+                                }
+                            } else {
+                                val loadingRow = takeFullRow()
+                                item("loading", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.springChainItem(chain, loadingRow)) { LoadingSongList(5) } }
                             }
                         }
-                        if (state.more) item("more", span = { GridItemSpan(maxLineSpan) }) {
-                            TextButton(if (state.loading) "正在加载更多…" else "加载更多", { vm.refresh(true) }, enabled = !state.loading, modifier = Modifier.fillMaxWidth())
+                        if (!state.loading && state.error == null && state.entries.isEmpty() && shownSongs.isEmpty() && state.artists.isEmpty() && state.albums.isEmpty()) {
+                            val emptyRow = takeFullRow()
+                            item("empty", span = { GridItemSpan(maxLineSpan) }) {
+                                Box(Modifier.springChainItem(chain, emptyRow)) {
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(when { filter.isNotBlank() -> "没有匹配的歌曲"; state.page.kind == "search" -> "没有找到相关音乐"; state.page.kind == "likes" -> "还没有喜欢的歌曲"; state.page.kind == "playlists" -> "创建你的第一张歌单"; else -> "这里还没有音乐" }, fontSize = 18.sp)
+                                        NavHint(when (state.page.kind) { "likes" -> "歌曲菜单中的喜欢会同步到服务器"; "playlist" -> "从歌曲菜单添加喜欢的音乐"; else -> "试试其他分类，或下拉重新读取" })
+                                        if (filter.isNotBlank()) MusicTextAction("清除搜索", { filter = "" })
+                                        else if (state.page.kind == "playlists") MusicTextAction("新建歌单", { action("create") })
+                                    }
+                                }
+                            }
+                        }
+                        if (state.more) {
+                            val moreRow = takeFullRow()
+                            item("more", span = { GridItemSpan(maxLineSpan) }) {
+                                Box(Modifier.springChainItem(chain, moreRow)) {
+                                    TextButton(if (state.loading) "正在加载更多…" else "加载更多", { vm.refresh(true) }, enabled = !state.loading, modifier = Modifier.fillMaxWidth())
+                                }
+                            }
                         }
                     }
                 }

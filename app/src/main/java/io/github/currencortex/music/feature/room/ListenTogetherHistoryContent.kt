@@ -58,7 +58,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             if (state.page != ListenArchivePage.HISTORY || state.peerFilter != null)
                 MusicTextAction("全部记录", { onHistory(null) }, Modifier.testTag("listen_archive_all"))
         }) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_archive_list"),
+        SpringLazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_archive_list"),
             contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val hasContent = when (state.page) {

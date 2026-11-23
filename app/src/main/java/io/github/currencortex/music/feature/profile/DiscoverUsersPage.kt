@@ -93,7 +93,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             }
         }
         MusicPullToRefresh(state.loading && !state.loadingMore, vm::refresh, Modifier.weight(1f).fillMaxWidth()) {
-            LazyColumn(Modifier.fillMaxSize().testTag("discover_users_list"), state = list,
+            SpringLazyColumn(Modifier.fillMaxSize().testTag("discover_users_list"), state = list,
                 contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp + bottom),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rootMotionItems {

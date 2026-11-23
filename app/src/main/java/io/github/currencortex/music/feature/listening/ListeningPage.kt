@@ -6,6 +6,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -140,7 +141,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
                     (list.firstVisibleItemScrollOffset / with(density) { (6.667f * s).dp.toPx() }).coerceIn(0f, 1f) } }
                 val collapsed by animateFloatAsState(collapseTarget,
                     tween(250, easing=FastOutSlowInEasing), label="listening header collapse")
-                LazyColumn(Modifier.fillMaxSize().testTag("listening_list")
+                SpringLazyColumn(Modifier.fillMaxSize().testTag("listening_list")
                     .then(if(bodyBackdrop != null) Modifier.layerBackdrop(bodyBackdrop) else Modifier), state = list,
                     contentPadding = PaddingValues(start = (20*s).dp, end = (20*s).dp, top = statusInset + (70*s).dp + 44.dp + (if (period == ListeningPeriod.YEAR) 10 else 20).dp, bottom = (36*s).dp + LocalMusicBottomInset.current),
                     verticalArrangement = Arrangement.spacedBy((20*s).dp)) {

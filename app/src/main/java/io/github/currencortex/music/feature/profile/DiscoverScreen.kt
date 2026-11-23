@@ -58,7 +58,7 @@ import io.github.suqi8.coui.kmp.basic.*
 @Composable private fun DiscoverMusicPage(vm: DiscoverViewModel, navigate: (String) -> Unit) {
     val styles by vm.styles.collectAsPageState()
     val bottom = LocalMusicBottomInset.current
-    LazyColumn(Modifier.fillMaxSize().testTag("discover_music"),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("discover_music"),
         contentPadding = PaddingValues(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems(skipKeys = setOf("styles")) {

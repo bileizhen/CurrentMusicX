@@ -131,7 +131,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             }
         }) { topInset ->
             Box(Modifier.fillMaxSize()) {
-            if (!showSuggestions) LazyColumn(Modifier.fillMaxSize().testTag("search_screen").graphicsLayer {
+            if (!showSuggestions) SpringLazyColumn(Modifier.fillMaxSize().testTag("search_screen").graphicsLayer {
                 val p = sheet?.progress ?: 1f
                 translationY = height * (1f - p); alpha = (p / .65f).coerceIn(0f, 1f)
             }, state = scroll, contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 32.dp + bottomInset),

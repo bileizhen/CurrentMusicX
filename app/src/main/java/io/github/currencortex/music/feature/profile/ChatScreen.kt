@@ -118,7 +118,7 @@ import java.util.Locale
         GlassMenuTags("chat_menu_panel", "chat_menu_dismiss", "chat_menu_action"), menuWidth = null, content = {
         Box(Modifier.fillMaxSize().then(if (messagesBackdrop != null) Modifier.layerBackdrop(messagesBackdrop) else Modifier)) {
             // The messages scroll under the fades; the fixed controls stay sharp above them.
-            LazyColumn(Modifier.fillMaxSize()
+            SpringLazyColumn(Modifier.fillMaxSize()
                 .testTag("chat_messages"), state = list, reverseLayout = true,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp, bottom = composerHeight + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {

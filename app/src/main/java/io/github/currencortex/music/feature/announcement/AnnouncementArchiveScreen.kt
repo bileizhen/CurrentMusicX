@@ -42,7 +42,7 @@ import java.time.format.DateTimeFormatter
         MusicTextAction(if (state.loading) "加载中" else "刷新", refresh,
             Modifier.testTag("announcement_refresh"), enabled = !state.loading)
     }) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("announcement_list"),
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("announcement_list"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.loading && state.items.isEmpty()) item {

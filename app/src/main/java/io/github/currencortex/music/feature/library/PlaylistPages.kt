@@ -64,6 +64,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
+import io.github.suqi8.coui.kmp.effect.springChainItem
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Cover-first library entrance; the existing create dialog and server ownership stay in the host. */
@@ -90,6 +93,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
     val playlistPlayback = rememberPlaylistPreviewPlayback(vm, play)
     var category by rememberSaveable { mutableStateOf(PlaylistCategory.ALL) }
+    val grid = rememberLazyGridState()
+    val chain = rememberSpringChainState(grid)
     val playlists = remember(sourcePlaylists, category, account.account?.id) {
         sourcePlaylists.filter { category.includes(it, account.account?.id ?: 0) }
     }
@@ -100,46 +105,81 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
     }) { topInset ->
     MusicPullToRefresh(loading, refresh, Modifier.fillMaxSize(), showIndicator = false) {
-        LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index"),
-            contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
-            horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            item(key = "categories", span = { GridItemSpan(maxLineSpan) }) {
-                SettingsSegmentedControl(PlaylistCategory.entries.map { it.label }, category.ordinal,
-                    { category = PlaylistCategory.entries[it] }, tag = "playlist_category")
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Adaptive columns: the chain moves a whole grid row, so cells share their row number.
+            val gridColumns = ((maxWidth - 32.dp + 16.dp) / (148.dp + 16.dp)).toInt().coerceAtLeast(1)
+            var cells = 0
+            fun fullSpanRow(): Int {
+                val row = (cells + gridColumns - 1) / gridColumns
+                cells = (row + 1) * gridColumns
+                return row
             }
-            item(key = "count", span = { GridItemSpan(maxLineSpan) }) { SettingsHint("${playlists.size} 个歌单 · ${category.label}") }
-            sourceErrors["我的歌单"]?.let { error -> item(span = { GridItemSpan(maxLineSpan) }) {
-                Column { Text(error); TextButton("重试", onClick = refresh) }
-            } }
-            if (loading && sourcePlaylists.isEmpty()) items(4) {
-                LoadingCoverTile()
-            }
-            if (!loading && sourcePlaylists.isEmpty() && sourceErrors["我的歌单"] == null)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = COUITheme.colorScheme.primary.copy(alpha = .6f))
-                        Text(if (qqPlaylists != null && !qqAccount.loggedIn) "登录 QQ 音乐后查看你的歌单" else if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
-                        Text(if (qqPlaylists != null && !qqAccount.loggedIn) "同步 QQ 音乐的自建与收藏歌单" else if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
-                            fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
+            LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index").springChain(chain), state = grid,
+                contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+                horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                val categoriesRow = fullSpanRow()
+                item(key = "categories", span = { GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.springChainItem(chain, categoriesRow)) {
+                        SettingsSegmentedControl(PlaylistCategory.entries.map { it.label }, category.ordinal,
+                            { category = PlaylistCategory.entries[it] }, tag = "playlist_category")
                     }
                 }
-            if (!loading && sourcePlaylists.isNotEmpty() && playlists.isEmpty() && sourceErrors["我的歌单"] == null)
-                item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("暂无${category.label}歌单") }
-            items(playlists, key = { "${it.source}-${it.id}" }) { playlist ->
-                var coverBounds by remember { mutableStateOf(Rect.Zero) }
-                Column(Modifier.testTag("playlist_card_${playlist.id}").combinedClickable(role = Role.Button,
-                    onClick = { openPlaylist(playlist) },
-                    onLongClickLabel = "预览歌单与操作",
-                    onLongClick = { if (!coverBounds.isEmpty) playlistPreview = playlist to coverBounds })) {
-                    MusicCover(playlist.cover.ifBlank { playlist.songs.firstOrNull()?.cover.orEmpty() },
-                        Modifier.fillMaxWidth().aspectRatio(1f).onGloballyPositioned { coordinates ->
-                            coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
-                                coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
-                        }, 480, cornerRadius = 18.dp)
-                    Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }}",
-                        Modifier.padding(top = 4.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
+                val countRow = fullSpanRow()
+                item(key = "count", span = { GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.springChainItem(chain, countRow)) { SettingsHint("${playlists.size} 个歌单 · ${category.label}") }
+                }
+                sourceErrors["我的歌单"]?.let { error ->
+                    val errorRow = fullSpanRow()
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(Modifier.springChainItem(chain, errorRow)) { Column { Text(error); TextButton("重试", onClick = refresh) } }
+                    }
+                }
+                if (loading && sourcePlaylists.isEmpty()) {
+                    val firstLoadingRow = cells / gridColumns
+                    cells += 4
+                    items(4) { index ->
+                        Box(Modifier.springChainItem(chain, firstLoadingRow + index / gridColumns)) { LoadingCoverTile() }
+                    }
+                }
+                if (!loading && sourcePlaylists.isEmpty() && sourceErrors["我的歌单"] == null) {
+                    val emptyRow = fullSpanRow()
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(Modifier.springChainItem(chain, emptyRow)) {
+                            Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = COUITheme.colorScheme.primary.copy(alpha = .6f))
+                                Text(if (qqPlaylists != null && !qqAccount.loggedIn) "登录 QQ 音乐后查看你的歌单" else if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
+                                Text(if (qqPlaylists != null && !qqAccount.loggedIn) "同步 QQ 音乐的自建与收藏歌单" else if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
+                                    fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
+                            }
+                        }
+                    }
+                }
+                if (!loading && sourcePlaylists.isNotEmpty() && playlists.isEmpty() && sourceErrors["我的歌单"] == null) {
+                    val emptyHintRow = fullSpanRow()
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(Modifier.springChainItem(chain, emptyHintRow)) { SettingsHint("暂无${category.label}歌单") }
+                    }
+                }
+                val firstPlaylistRow = cells / gridColumns
+                cells += playlists.size
+                itemsIndexed(playlists, key = { _, playlist -> "${playlist.source}-${playlist.id}" }) { index, playlist ->
+                    var coverBounds by remember { mutableStateOf(Rect.Zero) }
+                    Box(Modifier.springChainItem(chain, firstPlaylistRow + index / gridColumns)) {
+                        Column(Modifier.testTag("playlist_card_${playlist.id}").combinedClickable(role = Role.Button,
+                            onClick = { openPlaylist(playlist) },
+                            onLongClickLabel = "预览歌单与操作",
+                            onLongClick = { if (!coverBounds.isEmpty) playlistPreview = playlist to coverBounds })) {
+                            MusicCover(playlist.cover.ifBlank { playlist.songs.firstOrNull()?.cover.orEmpty() },
+                                Modifier.fillMaxWidth().aspectRatio(1f).onGloballyPositioned { coordinates ->
+                                    coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
+                                        coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
+                                }, 480, cornerRadius = 18.dp)
+                            Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }}",
+                                Modifier.padding(top = 4.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
+                        }
+                    }
                 }
             }
         }
@@ -383,7 +423,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         // The hero and toolbar keep their own live sources.
         val trackBackdrop = rememberSolidGlassBackdrop(LocalGlassBackdrop.current, surface)
         Box(Modifier.fillMaxSize().testTag("playlist_refresh")) {
-            LazyColumn(Modifier.fillMaxSize().clipToBounds().nestedScroll(pullMotion).testTag("playlist_tracks"),
+            SpringLazyColumn(Modifier.fillMaxSize().clipToBounds().nestedScroll(pullMotion).testTag("playlist_tracks"),
                 state = list, overscrollEffect = null,
                 contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 32.dp + searchClearance))) {
                 item(key = "hero") {

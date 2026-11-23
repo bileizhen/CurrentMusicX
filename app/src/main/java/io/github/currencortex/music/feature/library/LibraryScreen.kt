@@ -175,7 +175,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             onRename = { name = state.title; rename = true }, onDelete = { delete = true })
     } else {
     MusicPullToRefresh(state.loading || state.refreshing, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("library_detail"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("library_detail"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text(state.title, fontSize = 28.sp) }
             if (state.loading && state.songs.isEmpty() && state.mv == null) item { LoadingSongList(4) }
             if (state.cover.isNotBlank()) item { MusicCover(state.cover, Modifier.size(180.dp), 500) }
@@ -243,7 +243,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }
     MusicSubpage(if (state.albums) "专辑" else "歌手", "catalog_page", onBack) { topInset ->
-    LazyColumn(Modifier.fillMaxSize().testTag("catalog_screen"),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("catalog_screen"),
         contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             MusicSearchBar(state.query, ::submit, onInput = vm::input, placeholder = "搜索${if (state.albums) "专辑" else "歌手"}",

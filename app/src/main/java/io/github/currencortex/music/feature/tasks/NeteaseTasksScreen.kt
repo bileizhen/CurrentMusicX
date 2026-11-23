@@ -54,7 +54,7 @@ import java.time.format.DateTimeFormatter
         MusicTextAction(if (state.loading) "更新中" else "刷新", vm::refresh, Modifier.testTag("tasks_refresh"),
             enabled = connected && !state.loading && !busy)
     }) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("tasks_list"), state = list,
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("tasks_list"), state = list,
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item("account") { SettingsGroup {

@@ -53,7 +53,7 @@ import io.github.suqi8.coui.kmp.basic.Text
         loading = false
     }
     MusicSubpage("QQ 音乐评论 · $total", "qq_comments", onBack) { inset ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
+        SpringLazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             error?.let { item { SettingsHint(it); MusicTextAction("重试", { refresh++ }) } }
             items(comments, key = { it.id }) { comment ->

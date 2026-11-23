@@ -174,7 +174,7 @@ import io.github.currencortex.music.feature.binding.BindingAction
         } else null
     }
     MusicSubpage("QQ 音乐账号", "qq_account", onBack) { inset ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
+        SpringLazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (canLogin) item {
                 SettingsGroup(Modifier.testTag("qq_project_sync")) {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,7 +86,7 @@ import io.github.suqi8.coui.kmp.basic.Text
                     }
                 }
             }
-            LazyColumn(Modifier.fillMaxSize().statusBarsPadding().testTag("sound_speaker_detail_scroll"), state = scroll,
+            SpringLazyColumn(Modifier.fillMaxSize().statusBarsPadding().testTag("sound_speaker_detail_scroll"), state = scroll,
                 contentPadding = musicScrollPadding(PaddingValues(bottom = 140.dp))) {
                 item(key = "speaker-hero") { Spacer(Modifier.height(heroHeight)) }
                 item(key = "speaker-heading") {

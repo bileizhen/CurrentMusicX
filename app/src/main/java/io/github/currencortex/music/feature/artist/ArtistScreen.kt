@@ -52,7 +52,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     MusicSubpage(state.displayArtist?.name?.ifBlank { "艺人主页" } ?: "艺人主页", "artist_page", onBack, backTag = "artist_back") { topInset ->
         MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize().padding(top = topInset)) {
-            LazyColumn(Modifier.fillMaxSize().testTag("artist_home"), state = scroll,
+            SpringLazyColumn(Modifier.fillMaxSize().testTag("artist_home"), state = scroll,
                 contentPadding = musicScrollPadding(PaddingValues(16.dp, 8.dp, 16.dp, 32.dp)),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (tab == "home") item("hero") { ArtistHero(state.displayArtist, state.fans) { encyclopedia = true } }
