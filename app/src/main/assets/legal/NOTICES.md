@@ -24,8 +24,7 @@ The native Kotlin task center uses the existing NetEase transport. Feature organ
 This template uses the following libraries at runtime:
 
 - MaterialKolor color utilities by Jordond and Google contributors (`com.materialkolor:material-color-utilities`), Apache-2.0; used for the FlClash HCT theme-color adaptation.
-- COUI 2.0 (ColorOS 17 component kit) by suqi8 and contributors (`io.github.suqi8.coui.kmp`), Apache-2.0: https://github.com/suqi8/coui.
-- The `coui-blur-compat` module vendors the COUI 2.0 `coui-blur` sources under Apache-2.0 because the published Android artifact requires minSdk 33. Copyright 2026, compose-coui-ui contributors; the original file headers are retained.
+- COUI 2.1 (ColorOS 17 component kit) by suqi8 and contributors (`io.github.suqi8.coui.kmp`), Apache-2.0: https://github.com/suqi8/coui.
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
 - AndroidX WorkManager provides persistent, cancellable song-download tasks (Apache-2.0).
 - Jaudiotagger 3.0.1 by JThink / Paul Taylor, Raphael Slinckx and contributors is used under LGPL-2.1-or-later (the LGPL-3.0 option). Unmodified source: https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar. The complete LGPL text is bundled in `legal/LGPL-3.0.txt`. The public application's Gradle source and build instructions allow rebuilding with a modified/replacement library; no library modifications are distributed. The Android artwork adapter is in `core/download/SongDownloadMetadata.kt`.

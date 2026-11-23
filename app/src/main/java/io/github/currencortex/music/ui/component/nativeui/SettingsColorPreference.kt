@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package io.github.currencortex.music.ui.component.nativeui
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.*
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
@@ -61,13 +64,15 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val colors = COUITheme.colorScheme
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val backdrop = rememberLayerBackdrop(onDraw = { drawRect(colors.cardBackground) })
+    val backdrop = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
+        rememberLayerBackdrop(onDraw = { drawRect(colors.cardBackground) })
+    } else null
     val height = (LocalWindowInfo.current.containerDpSize.height -
         WindowInsets.statusBars.asPaddingValues().calculateTopPadding()) * .9f
     fun pick(color: Color) { draft = color; hex = hexDigits(color) }
     fun dismiss() { focus.clearFocus(); keyboard?.hide(); visible = false }
     OverlayBottomSheet(show = visible, title = title,
-        modifier = Modifier.height(height).layerBackdrop(backdrop).testTag("${tag}_sheet"),
+        modifier = Modifier.height(height).then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier).testTag("${tag}_sheet"),
         backgroundColor = colors.cardBackground, cornerRadius = 32.dp,
         insideMargin = DpSize(16.dp, 0.dp), outsideMargin = DpSize.Zero,
         startAction = {
