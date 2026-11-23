@@ -102,7 +102,9 @@ internal object QqMusicParsing {
         val id = when (type) {
             "mv" -> o.identifier("vid")
             "artist" -> o.identifier("mid", "singerMid", "singerMID", "singermid", "id")
-            "album" -> o.identifier("albumMid", "albumMID", "mid", "albumID", "id")
+            // Search rows (music.search lite) spell the mid "albummid"; the numeric "id" is an
+            // albumID the detail endpoints reject, so never fall back to it while a mid exists.
+            "album" -> o.identifier("albumMid", "albumMID", "albummid", "album_mid", "mid", "albumID", "id")
             else -> o.identifier("id", "mid", "tid", "albumMID", "albumMid", "singerMID", "singerMid", "dissid")
         }
         if (id.isBlank()) return null
