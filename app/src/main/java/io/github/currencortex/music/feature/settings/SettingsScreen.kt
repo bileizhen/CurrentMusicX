@@ -1,7 +1,9 @@
 package io.github.currencortex.music.feature.settings
 
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +43,8 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
+import io.github.suqi8.coui.kmp.blur.TopAppBarGlowDefaults
+import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
@@ -127,10 +132,12 @@ fun SettingsScreen(
     val colors = COUITheme.colorScheme
     val backgroundColor = colors.background
     val isDark = COUITheme.isDark
-    val backdrop = rememberLayerBackdrop {
-        drawRect(backgroundColor)
-        drawContent()
-    }
+    val backdrop = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
+        rememberLayerBackdrop {
+            drawRect(backgroundColor)
+            drawContent()
+        }
+    } else null
     val updateProgress = updateTransfer.download
     val updateTitle = when (updateProgress) {
         is io.github.currencortex.music.core.update.UpdateDownloadState.Downloading ->
@@ -197,7 +204,7 @@ fun SettingsScreen(
                 },
             ) { padding ->
                 val contentTopPadding = maxOf(0.dp, padding.calculateTopPadding() - 24.dp)
-                Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+                Box(Modifier.fillMaxSize().then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)) {
                     if (searchState.isContentVisible) {
                         LazyColumn(
                             state = settingsListState,
@@ -370,7 +377,7 @@ private fun SettingsHomeHeader(
     titleHeight: androidx.compose.ui.unit.Dp,
     collapseFraction: Float,
     scrollOffsetPx: Float,
-    backdrop: Backdrop,
+    backdrop: Backdrop?,
     isDark: Boolean,
     baseColor: Color,
     query: String,
@@ -382,13 +389,21 @@ private fun SettingsHomeHeader(
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val titleAreaHeight = (titleHeight * (1f - collapseFraction)).coerceAtLeast(0.dp)
     Box(Modifier.fillMaxWidth().testTag("settings_root_toolbar")) {
-        TopAppBarGlow(
-            backdrop = backdrop,
-            scrollOffsetPx = scrollOffsetPx,
-            isDark = isDark,
-            baseColor = baseColor,
-            enabled = true,
-        )
+        if (backdrop != null) {
+            TopAppBarGlow(
+                backdrop = backdrop,
+                scrollOffsetPx = scrollOffsetPx,
+                isDark = isDark,
+                baseColor = baseColor,
+                enabled = true,
+            )
+        } else {
+            Box(
+                Modifier.matchParentSize()
+                    .padding(bottom = TopAppBarGlowDefaults.ExtraHeight)
+                    .background(baseColor)
+            )
+        }
         Column(Modifier.fillMaxWidth()) {
             Spacer(Modifier.height(statusBarInset))
             Box(Modifier.fillMaxWidth().height(titleAreaHeight).clipToBounds()) {
