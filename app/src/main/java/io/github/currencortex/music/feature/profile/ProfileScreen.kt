@@ -44,6 +44,13 @@ import io.github.currencortex.music.feature.auth.LoginScreen
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Contacts
+import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
@@ -111,7 +118,7 @@ import kotlinx.coroutines.launch
         contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
-        account.profile?.let { native -> item("identity") { SettingsGroup {
+        account.profile?.let { native -> item("identity") { Card(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
                     .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
@@ -132,9 +139,9 @@ import kotlinx.coroutines.launch
                 }
             }
         } } }
-        if (account.profile == null) item("identity") { SettingsGroup {
-            ProfileDestination("登录 CurrentMusic", "登录后同步资料与音乐收藏", MusicIcons.Account,
-                "open_currentmusic_login") { navigate("user/login") }
+        if (account.profile == null) item("identity") { Card(Modifier.fillMaxWidth()) {
+            ProfileDestination("登录 CurrentMusic", "登录后同步资料与音乐收藏", COUIIcons.Contacts,
+                "open_currentmusic_login", iconColor = COUITheme.colorScheme.blue) { navigate("user/login") }
         } }
         item("library") { ProfileLibrarySection(navigate) }
         item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
@@ -198,7 +205,7 @@ import kotlinx.coroutines.launch
         if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
 
         if (user != null) {
-            item("identity") { SettingsGroup(Modifier.testTag("profile_identity")) {
+            item("identity") { Card(Modifier.testTag("profile_identity").fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
@@ -246,31 +253,35 @@ import kotlinx.coroutines.launch
                 item("account") { ProfileAccountSection(navigate) }
             }
             if (platform == MusicPlatform.NETEASE || !privateOwnProfile) {
-                state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")
+                state.profile?.current?.let { song -> item { PreferenceCategory(title = "当前在听", marginStartType = PreferenceCategoryMarginStartType.Small)
                     SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
                         { vm.container.playerController.add(song.toDomain(), true) },
                         { vm.container.playerController.add(song.toDomain()) })
                 } }
                 val recent = state.profile?.recent.orEmpty().map { it.toDomain() }
-                if (recent.isNotEmpty()) item { SettingsListHeader("最近听过") }
+                if (recent.isNotEmpty()) item { PreferenceCategory(title = "最近听过", marginStartType = PreferenceCategoryMarginStartType.Small) }
                 itemsIndexed(recent, key = { _, song -> "recent-${song.id}" }) { index, song ->
                     SongRow(SongRowUi(song), { play(recent, index) },
                         { vm.container.playerController.add(song, true) },
                         { vm.container.playerController.add(song) })
                 }
                 val lists = state.profile?.playlists.orEmpty()
-                if (lists.isNotEmpty()) item { SettingsListHeader(if (privateOwnProfile) "我的歌单" else "公开歌单") }
+                if (lists.isNotEmpty()) item { PreferenceCategory(title = if (privateOwnProfile) "我的歌单" else "公开歌单", marginStartType = PreferenceCategoryMarginStartType.Small) }
                 items(lists, key = { "playlist-${it.source}-${it.id}" }) { list ->
-                    SettingsGroup(Modifier.padding(bottom = 12.dp)) {
-                        SettingsUiScope {
-                            SettingsPreference(list.name, "${list.count} 首" +
-                                if (list.source in setOf("ncm", "netease")) " · 网易云" else "",
-                                Modifier.testTag("profile_playlist_${list.id}"),
-                                onClick = {
-                                    navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}")
-                                },
-                                leading = { MusicCover(list.cover, Modifier.size(48.dp)) },
-                                trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                    Card(Modifier.padding(bottom = 12.dp).fillMaxWidth()) {
+                        CardListGroup {
+                            item {
+                                ArrowPreference(
+                                    title = list.name,
+                                    summary = "${list.count} 首" +
+                                        if (list.source in setOf("ncm", "netease")) " · 网易云" else "",
+                                    startAction = { MusicCover(list.cover, Modifier.size(48.dp)) },
+                                    onClick = {
+                                        navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}")
+                                    },
+                                    modifier = Modifier.testTag("profile_playlist_${list.id}"),
+                                )
+                            }
                         }
                     }
                 }

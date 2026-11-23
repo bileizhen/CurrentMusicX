@@ -24,19 +24,26 @@ import io.github.currencortex.music.ui.component.rememberPageNavigationSource
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.CardListGroup
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.*
+import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun ProfilePageTitle(navigate: (String) -> Unit, onSettings: (() -> Unit)?,
     public: Boolean = false, loading: Boolean = false, reload: () -> Unit = {}) {
     val actions: @Composable RowScope.() -> Unit = {
-        if (public) GlassIconButton(reload, "刷新", enabled = !loading) { Icon(MusicIcons.Update, null) }
+        if (public) GlassIconButton(reload, "刷新", enabled = !loading) { Icon(COUIIcons.Refresh, null) }
         else GlassIconButton({ navigate("user/announcements") }, "公告", Modifier.testTag("me_announcements")) {
-            Icon(MusicIcons.File, null)
+            Icon(COUIIcons.File, null)
         }
         onSettings?.let { action -> GlassIconButton(action, "设置", Modifier.testTag("me_settings")) {
-            Icon(Icons.Outlined.Settings, null)
+            Icon(COUIIcons.Settings, null)
         } }
     }
     SettingsUiScope {
@@ -61,43 +68,61 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 }
 
 @Composable internal fun ProfileDestination(title: String, summary: String?, icon: ImageVector,
-    tag: String, onClick: () -> Unit) {
+    tag: String, iconColor: androidx.compose.ui.graphics.Color = COUITheme.colorScheme.primary, onClick: () -> Unit) {
     val source = rememberPageNavigationSource(title, summary.orEmpty(), icon)
-    SettingsUiScope {
-        SettingsPreference(title, summary, Modifier.testTag(tag).then(source.modifier), onClick = { source.open(onClick) },
-            leading = { Icon(icon, null, Modifier.size(24.dp)) },
-            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.labelSecondaryVariant) })
+    ArrowPreference(
+        title = title,
+        summary = summary,
+        startAction = { Icon(icon, null, Modifier.size(24.dp), tint = iconColor) },
+        onClick = { source.open(onClick) },
+        modifier = Modifier.testTag(tag).then(source.modifier),
+    )
+}
+
+/** Category title plus one COUI card group; the group draws the rows' corners and dividers. */
+@Composable private fun ProfileCardGroup(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        PreferenceCategory(title = title, marginStartType = PreferenceCategoryMarginStartType.Small)
+        Card(Modifier.fillMaxWidth()) { content() }
     }
 }
 
 @Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit, platform: MusicPlatform = MusicPlatform.NETEASE,
     showLikes: Boolean = true) {
     val qq = platform == MusicPlatform.QQ_MUSIC
-    SettingsListSection("我的音乐") {
-        if (showLikes) {
-            ProfileDestination("我喜欢", "收藏的歌曲", MusicIcons.Heart, "open_likes") {
-                navigate(if (qq) "qq/likes" else "lib/likes")
+    val colors = COUITheme.colorScheme
+    ProfileCardGroup("我的音乐") {
+        CardListGroup {
+            if (showLikes) item {
+                ProfileDestination("我喜欢", "收藏的歌曲", COUIIcons.Favorites, "open_likes", iconColor = colors.red) {
+                    navigate(if (qq) "qq/likes" else "lib/likes")
+                }
             }
-            SettingsDivider(52.dp)
-        }
-        ProfileDestination("歌单", "创建与收藏的歌单", MusicIcons.List, "open_playlists") {
-            navigate(if (qq) "qq/playlists" else "lib/playlists")
-        }
-        SettingsDivider(52.dp)
-        if (qq) {
-            ProfileDestination("本周常听", "本周播放次数最多的歌曲", MusicIcons.Update, "open_recent") {
-                navigate("qq/recent")
+            item {
+                ProfileDestination("歌单", "创建与收藏的歌单", COUIIcons.Playlist, "open_playlists", iconColor = colors.blue) {
+                    navigate(if (qq) "qq/playlists" else "lib/playlists")
+                }
             }
-        } else {
-            ProfileDestination("音乐云盘", "网易云音乐个人云盘", MusicIcons.Storage, "open_cloud_drive") { navigate("lib/cloud") }
-            SettingsDivider(52.dp)
-            ProfileDestination("最近播放", "回顾听过的歌曲", MusicIcons.Update, "open_recent") { navigate("lib/recent") }
+            if (qq) item {
+                ProfileDestination("本周常听", "本周播放次数最多的歌曲", COUIIcons.Recent, "open_recent", iconColor = colors.green) {
+                    navigate("qq/recent")
+                }
+            } else {
+                item {
+                    ProfileDestination("音乐云盘", "网易云音乐个人云盘", COUIIcons.CloudFill, "open_cloud_drive", iconColor = colors.blue) { navigate("lib/cloud") }
+                }
+                item {
+                    ProfileDestination("最近播放", "回顾听过的歌曲", COUIIcons.Recent, "open_recent") { navigate("lib/recent") }
+                }
+            }
+            item {
+                ProfileDestination("听歌时长", if (qq) "本机与 QQ 音乐听歌足迹" else "本机与网易云听歌足迹",
+                    COUIIcons.Stopwatch, "open_listening", iconColor = colors.azure) { navigate("user/listening") }
+            }
+            item {
+                ProfileDestination("本地音乐", "手机上的歌曲", COUIIcons.Phone, "open_local_music", iconColor = colors.azure) { navigate("lib/local") }
+            }
         }
-        SettingsDivider(52.dp)
-        ProfileDestination("听歌时长", if (qq) "本机与 QQ 音乐听歌足迹" else "本机与网易云听歌足迹",
-            MusicIcons.Headphones, "open_listening") { navigate("user/listening") }
-        SettingsDivider(52.dp)
-        ProfileDestination("本地音乐", "手机上的歌曲", MusicIcons.Device, "open_local_music") { navigate("lib/local") }
     }
 }
 
@@ -106,50 +131,55 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
     navidromeConfigured: Boolean = false, embyConfigured: Boolean = false,
     platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false) {
-    SettingsListSection("音乐服务") {
-        var divided = false
-        if (platform == MusicPlatform.QQ_MUSIC) {
-            ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",
-                if (qqBound) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
-                MusicIcons.Account, "open_qq_binding") { navigate("qq/account") }
-            SettingsDivider(52.dp)
-            ProfileDestination("收藏的专辑", "管理 QQ 音乐收藏专辑", MusicIcons.List, "open_qq_albums") {
-                navigate("qq/albums")
+    val colors = COUITheme.colorScheme
+    ProfileCardGroup("音乐服务") {
+        CardListGroup {
+            if (platform == MusicPlatform.QQ_MUSIC) {
+                item {
+                    ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",
+                        if (qqBound) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
+                        COUIIcons.ContactsCircle, "open_qq_binding", iconColor = colors.green) { navigate("qq/account") }
+                }
+                item {
+                    ProfileDestination("收藏的专辑", "管理 QQ 音乐收藏专辑", COUIIcons.Album, "open_qq_albums", iconColor = colors.orange) {
+                        navigate("qq/albums")
+                    }
+                }
             }
-            divided = true
-        }
-        if (tasks && platform == MusicPlatform.NETEASE) {
-            if (divided) SettingsDivider(52.dp)
-            ProfileDestination("网易云任务", "签到、云贝与会员成长", MusicIcons.Check, "open_netease_tasks") { navigate("user/netease-tasks") }
-            divided = true
-        }
-        if (platform == MusicPlatform.NETEASE) {
-            if (divided) SettingsDivider(52.dp)
-            ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") {
-                navigate("user/playlist-import")
+            if (tasks && platform == MusicPlatform.NETEASE) item {
+                ProfileDestination("网易云任务", "签到、云贝与会员成长", COUIIcons.Tasks, "open_netease_tasks", iconColor = colors.orange) { navigate("user/netease-tasks") }
             }
-            divided = true
-        }
-        if (navidromeConfigured) {
-            if (divided) SettingsDivider(52.dp)
-            ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }
-            divided = true
-        }
-        if (embyConfigured) {
-            if (divided) SettingsDivider(52.dp)
-            ProfileDestination("Emby 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_emby") { navigate("emby") }
+            if (platform == MusicPlatform.NETEASE) item {
+                ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", COUIIcons.Import, "profile_playlist_import", iconColor = colors.violet) {
+                    navigate("user/playlist-import")
+                }
+            }
+            if (navidromeConfigured) item {
+                ProfileDestination("Navidrome 曲库", "自己的音乐服务器", COUIIcons.Folder, "profile_navidrome", iconColor = colors.mint) { navigate("navidrome") }
+            }
+            if (embyConfigured) item {
+                ProfileDestination("Emby 曲库", "自己的音乐服务器", COUIIcons.Folder, "profile_emby", iconColor = colors.mint) { navigate("emby") }
+            }
         }
     }
 }
 
 @Composable internal fun ProfileAccountSection(navigate: (String) -> Unit, native: Boolean = false) {
-    SettingsListSection("账号") {
-        if (native) ProfileDestination("CurrentMusic 账户", "注册与登录、头像装饰与一起听", MusicIcons.Account,
-            "open_currentmusic_login") { navigate("user/login") }
-        else {
-            ProfileDestination("等级与成长", "查看积分、每日进度与等级试炼", MusicIcons.Check, "open_levels") { navigate("user/levels") }
-            SettingsDivider(52.dp)
-            ProfileDestination("头像挂件", "装饰你的头像", MusicIcons.Image, "open_decorations") { navigate("user/decorations") }
+    val colors = COUITheme.colorScheme
+    ProfileCardGroup("账号") {
+        CardListGroup {
+            if (native) item {
+                ProfileDestination("CurrentMusic 账户", "注册与登录、头像装饰与一起听", COUIIcons.Contacts,
+                    "open_currentmusic_login", iconColor = COUITheme.colorScheme.blue) { navigate("user/login") }
+            }
+            else {
+                item {
+                    ProfileDestination("等级与成长", "查看积分、每日进度与等级试炼", COUIIcons.Ok, "open_levels", iconColor = colors.orange) { navigate("user/levels") }
+                }
+                item {
+                    ProfileDestination("头像挂件", "装饰你的头像", COUIIcons.Image, "open_decorations", iconColor = colors.violet) { navigate("user/decorations") }
+                }
+            }
         }
     }
 }
