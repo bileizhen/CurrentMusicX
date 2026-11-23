@@ -111,7 +111,7 @@ internal val UpdateSource.menuLabel:String get()=when(this) {
     }
 }
 
-private val UpdateSourceStatus.fullLabel: String get() = when (this) {
+internal val UpdateSourceStatus.fullLabel: String get() = when (this) {
     UpdateSourceStatus.CHECKING -> "检测中"
     UpdateSourceStatus.AVAILABLE -> "可用"
     UpdateSourceStatus.LIMITED -> "限流"
