@@ -369,6 +369,21 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                             text = candidate.menuLabel,
                             summary = health.status.fullLabel,
                             selected = candidate == source,
+                            // The probe result leads the row, like the icons of the other entries;
+                            // as a hint it would sit at the row's right edge instead.
+                            icon = { iconModifier ->
+                                Box(iconModifier, contentAlignment = Alignment.Center) {
+                                    // CompleteState carries 8dp padding on each side of its
+                                    // animation, so a 16dp glyph measures 32dp wide; requiredWidth
+                                    // keeps that box from being squeezed into the row's 20dp icon
+                                    // cell, and centring the two boxes puts the circle on the same
+                                    // axis as the 20dp icons of the other entries.
+                                    Box(Modifier.requiredWidth(UpdateSourceGlyphSize),
+                                        contentAlignment = Alignment.Center) {
+                                        UpdateSourceStateGlyph(health.status)
+                                    }
+                                }
+                            },
                             onClick = {
                                 menu = false
                                 chosenSource = candidate
@@ -441,7 +456,10 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                             entries = menuEntries,
                             onDismissRequest = { menu = false },
                             popupModifier = Modifier.testTag("update_menu_popup"),
-                            minWidth = 200.dp,
+                            // No explicit minWidth: the panel sizes itself to its widest row, and
+                            // the cascade forces the sub menu to that same width. A longer width
+                            // only bought the long mirror host a single line, while the main menu
+                            // inherited it and left a blank band right of every short row.
                             // The popup draws in the root Scaffold's host, outside this page's dark
                             // COUITheme, so its surface and row colors are handed over explicitly.
                             dropdownColors = menuColors,
@@ -461,6 +479,31 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     }
     }
     }
+}
+
+/** 16dp of animation plus CompleteState's 8dp padding on each side. */
+private val UpdateSourceGlyphSize = 32.dp
+
+/** The probe result as a shrunk CompleteState animation, sized for the menu row's 20dp icon cell. */
+@Composable private fun UpdateSourceStateGlyph(status: UpdateSourceStatus) {
+    val type = when (status) {
+        UpdateSourceStatus.AVAILABLE, UpdateSourceStatus.LIMITED -> CompleteStateType.Success
+        UpdateSourceStatus.CHECKING -> CompleteStateType.Waiting
+        UpdateSourceStatus.TIMEOUT, UpdateSourceStatus.UNAVAILABLE -> CompleteStateType.Failed
+        // None draws nothing, which would leave the row's icon cell blank; an idle clock keeps
+        // every row aligned and reads as "not checked yet" beside the 未检测 label.
+        UpdateSourceStatus.UNKNOWN -> CompleteStateType.Waiting
+    }
+    val colors = when (status) {
+        UpdateSourceStatus.LIMITED ->
+            CompleteStateDefaults.completeStateColors(successColor = Color(0xFFE8BA69))
+        UpdateSourceStatus.TIMEOUT ->
+            CompleteStateDefaults.completeStateColors(failedColor = Color(0xFFE8BA69))
+        UpdateSourceStatus.CHECKING, UpdateSourceStatus.UNKNOWN ->
+            CompleteStateDefaults.completeStateColors(waitingColor = Color(0xFF9A93AD))
+        else -> CompleteStateDefaults.completeStateColors()
+    }
+    CompleteState(title = "", type = type, colors = colors, animationSize = 16.dp)
 }
 
 @Composable private fun UpdateCheckingSpinner() {
