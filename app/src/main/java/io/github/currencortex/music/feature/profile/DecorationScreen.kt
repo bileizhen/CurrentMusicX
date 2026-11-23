@@ -120,8 +120,10 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
                         Text("没有找到相关挂件", fontSize = 15.sp)
                         MusicTextAction("清除搜索", { focus.clearFocus(); query("") })
                     } else BoxWithConstraints(Modifier.weight(1f)) {
-                        // The chain moves a whole grid row, so cells share their row number.
-                        val gridColumns = ((maxWidth - 32.dp + 10.dp) / (92.dp + 10.dp)).toInt().coerceAtLeast(1)
+                        // The chain moves a whole grid row, so cells share their row number. This
+                        // Box already sits inside the page's 16dp padding, and the grid adds no
+                        // horizontal content padding, so the width here is the grid's own width.
+                        val gridColumns = ((maxWidth + 10.dp) / (92.dp + 10.dp)).toInt().coerceAtLeast(1)
                         var cells = 0
                         LazyVerticalGrid(GridCells.Adaptive(92.dp), Modifier.fillMaxSize().testTag("decoration_grid").springChain(chain), state = grid,
                             contentPadding = PaddingValues(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -136,10 +138,11 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
                                     }
                                 }
                             }
-                            val firstRow = cells / gridColumns
+                            // Absolute cell index, so the leading "none" tile keeps its column.
+                            val firstCell = cells
                             cells += matches.size
                             itemsIndexed(matches, key = { _, item -> "frame:${item.id}" }) { index, item ->
-                                Box(Modifier.springChainItem(chain, firstRow + index / gridColumns)) {
+                                Box(Modifier.springChainItem(chain, (firstCell + index) / gridColumns)) {
                                     DecorationTile(item, selectedId == item.id, catalog.current == item.id, busy,
                                         { focus.clearFocus(); preview(item) }, avatar)
                                 }
