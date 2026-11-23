@@ -31,6 +31,9 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
+import io.github.suqi8.coui.kmp.effect.springChainItem
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun DecorationScreen(vm: DecorationViewModel, onBack: () -> Unit = {}) {
@@ -58,6 +61,7 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
     val name = if (selectedId.isEmpty()) "不佩戴挂件" else chosen?.label() ?: selectedId.removePrefix("key-")
     val focus = LocalFocusManager.current
     val grid = rememberLazyGridState()
+    val chain = rememberSpringChainState(grid)
     LaunchedEffect(state.query) { grid.scrollToItem(0) }
     MusicSubpage("头像挂件", "decoration_screen", onBack, backTag = "decoration_back", actions = {
         MusicTextAction(if (state.loading) "更新中" else "刷新", reload, enabled = !busy && !state.loading)
@@ -115,19 +119,37 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
                     if (matches.isEmpty() && state.query.isNotBlank()) Column(Modifier.weight(1f).fillMaxWidth(), Arrangement.Center, Alignment.CenterHorizontally) {
                         Text("没有找到相关挂件", fontSize = 15.sp)
                         MusicTextAction("清除搜索", { focus.clearFocus(); query("") })
-                    } else LazyVerticalGrid(GridCells.Adaptive(92.dp), Modifier.weight(1f).testTag("decoration_grid"), state = grid,
-                        contentPadding = PaddingValues(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (state.query.isBlank()) item(key = "none") {
-                            DecorationTile(Decoration("", "不佩戴"), selectedId.isEmpty(), catalog.current.isEmpty(), busy,
-                                { focus.clearFocus(); preview(Decoration("", "不佩戴")) }, avatar)
-                        }
-                        items(matches, key = { "frame:${it.id}" }) { item ->
-                            DecorationTile(item, selectedId == item.id, catalog.current == item.id, busy,
-                                { focus.clearFocus(); preview(item) }, avatar)
-                        }
-                        if (matches.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text("暂时没有上架的挂件", Modifier.padding(vertical = 20.dp), fontSize = 13.sp, color = hint)
+                    } else BoxWithConstraints(Modifier.weight(1f)) {
+                        // The chain moves a whole grid row, so cells share their row number. This
+                        // Box already sits inside the page's 16dp padding, and the grid adds no
+                        // horizontal content padding, so the width here is the grid's own width.
+                        val gridColumns = ((maxWidth + 10.dp) / (92.dp + 10.dp)).toInt().coerceAtLeast(1)
+                        var cells = 0
+                        LazyVerticalGrid(GridCells.Adaptive(92.dp), Modifier.fillMaxSize().testTag("decoration_grid").springChain(chain), state = grid,
+                            contentPadding = PaddingValues(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (state.query.isBlank()) {
+                                val row = cells / gridColumns
+                                cells++
+                                item(key = "none") {
+                                    Box(Modifier.springChainItem(chain, row)) {
+                                        DecorationTile(Decoration("", "不佩戴"), selectedId.isEmpty(), catalog.current.isEmpty(), busy,
+                                            { focus.clearFocus(); preview(Decoration("", "不佩戴")) }, avatar)
+                                    }
+                                }
+                            }
+                            // Absolute cell index, so the leading "none" tile keeps its column.
+                            val firstCell = cells
+                            cells += matches.size
+                            itemsIndexed(matches, key = { _, item -> "frame:${item.id}" }) { index, item ->
+                                Box(Modifier.springChainItem(chain, (firstCell + index) / gridColumns)) {
+                                    DecorationTile(item, selectedId == item.id, catalog.current == item.id, busy,
+                                        { focus.clearFocus(); preview(item) }, avatar)
+                                }
+                            }
+                            if (matches.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text("暂时没有上架的挂件", Modifier.padding(vertical = 20.dp), fontSize = 13.sp, color = hint)
+                            }
                         }
                     }
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.SpringLazyColumn
+
 import io.github.currencortex.music.ui.component.MusicChoiceDialog
 
 import io.github.currencortex.music.ui.component.MusicDialogButton
@@ -93,7 +95,7 @@ import io.github.suqi8.coui.kmp.basic.*
         val detail = live.detail
         if (detail == null) {
             // Keep the viewport full-width so elastic controls can paint into the side gutters.
-            LazyColumn(Modifier.fillMaxSize(),
+            SpringLazyColumn(Modifier.fillMaxSize(),
                 contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp,
                     top = topInset + 8.dp, bottom = 24.dp)),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -248,7 +250,7 @@ import io.github.suqi8.coui.kmp.basic.*
 @Composable private fun RoomQueue(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier) {
     val live by vm.session.state.collectAsStateWithLifecycle()
     val waiting = detail.queue.filter { it.status == "approved" }
-    LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    SpringLazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(detail.queue, key = { it.id }) { item -> SettingsGroup(Modifier.fillMaxWidth().animateItem()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             val pending = "queue:${item.id}" in live.pendingActions
             Text(item.name, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -285,7 +287,7 @@ import io.github.suqi8.coui.kmp.basic.*
     LaunchedEffect(role) { if (role != RoomRole.OWNER) { settings = false; showBans = false } }
     LaunchedEffect(target != null || settings || showBans) { onDialogActive(target != null || settings || showBans) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
-    LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    SpringLazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (role == RoomRole.OWNER) item {
             SettingsGroup {
                 MusicDestinationRow("房间设置", { settings = true }, summary = "名称、密码、可见性与点歌权限")

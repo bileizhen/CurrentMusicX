@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -246,7 +247,7 @@ fun QqMusicHomeScreen(
                     }
                 },
             ) { topInset ->
-                LazyColumn(
+                SpringLazyColumn(
                     Modifier.fillMaxSize().testTag("qq_music_home"),
                     contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 24.dp + bottom),
                     verticalArrangement = Arrangement.spacedBy(14.dp),

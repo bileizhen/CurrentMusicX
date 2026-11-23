@@ -107,7 +107,7 @@ import kotlinx.coroutines.launch
             .collect { if (!it) avatarFlight?.profileLanding = null }
     }
     ProfilePageLayout(navigate, onSettings) { topInset ->
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
         contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
@@ -192,7 +192,7 @@ import kotlinx.coroutines.launch
     }
     ProfilePageLayout(navigate, onSettings, public = onBack != null, loading = state.loading, reload = vm::reload, onBack = onBack) { topInset ->
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize(), enabled = onBack != null) {
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
         if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
@@ -300,7 +300,7 @@ import kotlinx.coroutines.launch
     MusicSubpage("账号与安全", "security_page", onBack, actions = {
         MusicTextAction("添加账号", add, Modifier.testTag("add_account"), enabled = !state.loading)
     }) { topInset ->
-    LazyColumn(Modifier.fillMaxSize().testTag("security_screen"),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("security_screen"),
         contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SettingsListHeader("已保存账号") }

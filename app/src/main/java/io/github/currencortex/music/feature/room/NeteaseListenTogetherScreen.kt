@@ -261,11 +261,11 @@ internal data class NeteaseListenTogetherActions(
         }) { topInset ->
         ListenTogetherPageTransition(state, ::phase, { if (it.active) 1 else 0 }, Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp)) { state ->
         if (phase(state) == "checking") {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp))) {
+            SpringLazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp))) {
                 item { ListenTogetherSkeleton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复一起听…" else "正在检查已有会话…",
                     "netease_listen_loading", rows = 2) }
             }
-        } else LazyColumn(Modifier.fillMaxSize().testTag("netease_listen_content"),
+        } else SpringLazyColumn(Modifier.fillMaxSize().testTag("netease_listen_content"),
             contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!showAccountCard) item {

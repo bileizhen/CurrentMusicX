@@ -2,6 +2,7 @@ package io.github.currencortex.music.feature.profile
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -32,7 +33,7 @@ fun AccountHubScreen(container: AppContainer, navigate: (String) -> Unit, onBack
     val administrator = !account.loading &&
         account.account?.let { it.isAdmin || it.isSuper || it.isOwner } == true
     MusicSubpage("账号", "account_page", onBack) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("account_page"),
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("account_page"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item("services") {

@@ -158,7 +158,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SearchSuggestionsContent(query: String, suggestions: SearchSuggestions, onSearch: (String) -> Unit, modifier: Modifier, header: @Composable () -> Unit = {}) {
     val colors = COUITheme.colorScheme
-    LazyColumn(modifier.testTag("search_suggestions"), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+    SpringLazyColumn(modifier.testTag("search_suggestions"), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
         item { header() }
         item { Text("搜索建议", Modifier.padding(bottom = 8.dp), fontSize = 13.sp, color = colors.labelPrimary.copy(alpha = .45f)) }
         itemsIndexed(suggestions.words, key = { _, word -> word }) { index, word ->

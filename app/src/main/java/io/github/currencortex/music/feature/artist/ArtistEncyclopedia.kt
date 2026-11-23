@@ -29,7 +29,7 @@ import java.time.format.DateTimeFormatter
     val brief = state.biography?.briefDesc?.takeIf(String::isNotBlank) ?: artist?.briefDesc.orEmpty()
     val sections = state.biography?.introduction.orEmpty().filter { it.text.isNotBlank() }
     MusicSubpage("艺人百科", "artist_encyclopedia", onBack, backTag = "artist_bio_back") { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("artist_bio_list"),
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("artist_bio_list"),
             state = if (tab == "basic") basicScroll else detailsScroll,
             contentPadding = musicScrollPadding(PaddingValues(24.dp, topInset + 24.dp, 24.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(24.dp)) {

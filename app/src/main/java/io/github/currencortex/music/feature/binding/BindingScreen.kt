@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import io.github.currencortex.music.ui.component.MusicPlaceholder
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -104,7 +105,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         }
     }
     MusicSubpage("网易云账号", "binding_page", onBack, backTag = "binding_back") { topInset ->
-    LazyColumn(Modifier.fillMaxSize().testTag("binding_screen"), state = list,
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("binding_screen"), state = list,
         contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (!canLoginNetease) item {

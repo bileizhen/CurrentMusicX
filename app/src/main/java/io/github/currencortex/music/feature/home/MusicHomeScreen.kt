@@ -89,7 +89,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                 decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
         }
     }) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState,
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState,
             contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 24.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
         rootMotionItems(skipKeys = setOf("for-you", "recommended-playlists", "playlists")) {

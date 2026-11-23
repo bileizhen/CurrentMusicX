@@ -207,7 +207,7 @@ import java.time.format.DateTimeFormatter
             }
         }) { topInset ->
         if (showingHistory) {
-            LazyColumn(Modifier.fillMaxSize().testTag("recognition_history_list"),
+            SpringLazyColumn(Modifier.fillMaxSize().testTag("recognition_history_list"),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = topInset + 8.dp, bottom = bottom + 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (history.isEmpty()) item { Text("还没有识别记录，听见喜欢的音乐就来试试", Modifier.padding(vertical = 30.dp), color = colors.labelSecondaryVariant, fontSize = 14.sp) }
@@ -246,7 +246,7 @@ import java.time.format.DateTimeFormatter
             else (usableHeight * .34f).coerceIn(160.dp, 220.dp))
         val topSpace = if (state.songs.isEmpty() && permissionMessage == null)
             ((usableHeight - orbSize - 238.dp) / 2).coerceIn(12.dp, 64.dp) else 12.dp
-        LazyColumn(Modifier.fillMaxSize().padding(bottom = bottom + 12.dp).testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
+        SpringLazyColumn(Modifier.fillMaxSize().padding(bottom = bottom + 12.dp).testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
             contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topInset + topSpace, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)) {
             item {

@@ -46,7 +46,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             if (trial == null && state.signedIn) MusicTextAction(if (state.loading) "更新中" else "刷新", refresh,
                 enabled = !state.loading && !state.busy)
         }) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("levels_list"), state = list, contentPadding = PaddingValues(
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("levels_list"), state = list, contentPadding = PaddingValues(
             start = 16.dp, end = 16.dp, top = topInset + 12.dp, bottom = LocalMusicBottomInset.current + 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!state.signedIn) item { SettingsHint("登录 CurrentMusic 后查看等级与成长进度") }

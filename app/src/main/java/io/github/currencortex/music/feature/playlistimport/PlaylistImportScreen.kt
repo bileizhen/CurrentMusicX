@@ -84,7 +84,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     MusicSubpage("导入歌单", "playlist_import", onBack, backTag = "playlist_import_back",
         modifier = Modifier.imePadding()) { topInset ->
-        LazyColumn(Modifier.fillMaxSize().testTag("playlist_import_list"),
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("playlist_import_list"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (state.task == null) item("actions") { SettingsGroup {

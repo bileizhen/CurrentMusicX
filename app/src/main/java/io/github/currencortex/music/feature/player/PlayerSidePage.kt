@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -248,7 +249,7 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
     aiEnabled: Boolean, onAi: () -> Unit) {
     val colors = COUITheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+        SpringLazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .padding(start = maxWidth * (1f - SIDE_TRAVEL)).testTag("player_side_scroll"),
             contentPadding = PaddingValues(start = 12.dp, end = 20.dp, top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {

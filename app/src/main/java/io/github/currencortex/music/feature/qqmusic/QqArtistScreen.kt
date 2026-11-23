@@ -203,7 +203,7 @@ fun QqArtistScreen(
     MusicSubpage(detail?.name?.ifBlank { "QQ 歌手" } ?: "QQ 歌手", "qq_artist_page", onBack,
         backTag = "qq_artist_back") { topInset ->
         MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize().padding(top = topInset)) {
-            LazyColumn(
+            SpringLazyColumn(
                 Modifier.fillMaxSize().testTag("qq_artist_home"),
                 state = scroll,
                 contentPadding = musicScrollPadding(PaddingValues(16.dp, 8.dp, 16.dp, 32.dp)),

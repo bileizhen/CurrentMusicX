@@ -313,7 +313,7 @@ fun QqAlbumScreen(
         )
     }) { topInset ->
         MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize(), showIndicator = false) {
-            LazyColumn(
+            SpringLazyColumn(
                 Modifier.fillMaxSize().testTag("qq_album_tracks"),
                 state = list,
                 contentPadding = musicScrollPadding(

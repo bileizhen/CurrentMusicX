@@ -71,7 +71,7 @@ private fun postTime(seconds: Long): String {
         content = {
     Box(Modifier.fillMaxSize().then(if (menuBackdrop != null) Modifier.layerBackdrop(menuBackdrop) else Modifier)) {
     MusicPullToRefresh(state.loading, { vm.reload() }, Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
         contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         rootMotionItems {

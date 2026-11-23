@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberPlatformOverscrollFactory
 import androidx.compose.foundation.withoutVisualEffect
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -149,7 +150,7 @@ private val WallListBackground: Color @Composable get() = if (FootprintDark) Foo
             }
         }
         CompositionLocalProvider(LocalGlassBackdrop provides wallBackdrop) {
-        LazyColumn(state=state,overscrollEffect=scrollEvents,modifier=Modifier.fillMaxSize().testTag("listening_wall_scroll")
+        SpringLazyColumn(state=state,overscrollEffect=scrollEvents,modifier=Modifier.fillMaxSize().testTag("listening_wall_scroll")
             .then(if(listBackdrop!=null) Modifier.layerBackdrop(listBackdrop) else Modifier)) {
             item(key="hero") {
                 Column(Modifier.fillMaxWidth().padding(top=(366.667f*s).dp),horizontalAlignment=Alignment.CenterHorizontally) {

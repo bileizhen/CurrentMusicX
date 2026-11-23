@@ -91,7 +91,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                         (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= list.layoutInfo.totalItemsCount - 4
                 }.distinctUntilChanged().collect { if (it) vm.refresh(true) }
             }
-            LazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
+            SpringLazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
                 contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = topInset + 12.dp, bottom = 104.dp))) {
                 error?.let { message -> item("action_error") {
                     Text(message, Modifier.padding(vertical = 8.dp), color = COUITheme.colorScheme.error)
@@ -148,7 +148,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
         vm.connect(server, username, password) { password = ""; connected() }
     }
     SettingsUiScope {
-        LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
+        SpringLazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { SettingsHint("连接 Emby 音乐库，按需分页读取，原音质播放。登录令牌加密保存在本机，不保存密码。") }
             if (account.configured) item { SettingsSection("当前账号", MusicIcons.Device) {

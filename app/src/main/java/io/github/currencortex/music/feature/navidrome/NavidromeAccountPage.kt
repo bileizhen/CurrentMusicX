@@ -40,7 +40,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val keyboard = LocalSoftwareKeyboardController.current
     val canConnect = !busy && server.isNotBlank() && username.isNotBlank() && password.isNotEmpty()
     fun connect() { if (canConnect) { focus.clearFocus(); keyboard?.hide(); vm.connect(server, username, password) { password = ""; visible = false; onConnected() } } }
-    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp,topInset+8.dp,16.dp,32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    SpringLazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp,topInset+8.dp,16.dp,32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SettingsHint("兼容 Navidrome / Subsonic，歌曲原音质直连播放，账号加密保存在本机。") }
         if (account.configured) {
             item { SettingsSection("当前账号", MusicIcons.Device) {

@@ -301,7 +301,7 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
             MusicTextAction("账号", { navigate("qq/account") })
         } else SettingsTopBar(if (isSearch) "搜索 QQ 音乐" else pageTitle, onBack)
     }) { inset ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp + bottom),
+        SpringLazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp + bottom),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (route == "home" || isSearch) item {
                 MusicSearchBar(query, {

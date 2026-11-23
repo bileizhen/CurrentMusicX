@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,7 +49,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 ) {
     val colors = COUITheme.colorScheme
     MusicSubpage("缘分报告", "listen_fate_screen", onBack, backTag = "listen_fate_back") { topInset ->
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_fate_list"),
+        SpringLazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_fate_list"),
             contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (loading) item {

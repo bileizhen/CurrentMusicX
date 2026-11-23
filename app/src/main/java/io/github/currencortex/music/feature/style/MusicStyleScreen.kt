@@ -159,7 +159,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     PreloadMusicCovers(state.songs.take(12).map(Song::cover))
     MusicPullToRefresh(state.loading, { vm.reload(fresh = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("style_detail"), contentPadding = musicScrollPadding(),
+        SpringLazyColumn(Modifier.fillMaxSize().testTag("style_detail"), contentPadding = musicScrollPadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Row(Modifier.clickable(role = Role.Button, onClick = onBack).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {

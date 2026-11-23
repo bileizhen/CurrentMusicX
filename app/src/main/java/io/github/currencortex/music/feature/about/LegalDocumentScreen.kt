@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -67,7 +68,7 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
     io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(Modifier.fillMaxSize(),topBar = {
         SettingsTopBar(document.title,onBack)
     }) { topInset ->
-    LazyColumn(Modifier.fillMaxSize().testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset+24.dp, 16.dp, 48.dp))) {
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset+24.dp, 16.dp, 48.dp))) {
         if (document == LegalDocument.LICENSE) item {
             SettingsSection("组件许可", MusicIcons.File) {
             io.github.currencortex.music.ui.component.PageNavigationPreference(title = "Apache License 2.0",
