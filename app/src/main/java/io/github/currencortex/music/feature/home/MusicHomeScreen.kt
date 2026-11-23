@@ -39,7 +39,11 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val avatarVersions by vm.container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val binding by vm.container.bindingRepository.state.collectAsStateWithLifecycle()
     val direct = vm.container.nativeNetease != null
+    // Without a local NetEase login the recommendations come from the engine, which personalizes
+    // them through the cloud binding; only ask for a login when neither source is available.
+    val cloudBound = binding?.let { it.bound && !it.stale } == true
     val qqPlatform = preferences.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC
     val user = profile?.takeIf { it.id == account.account?.id }
     val avatar = user?.avatar ?: account.account?.avatar ?: nativeAccount.profile?.avatar.orEmpty()
@@ -102,7 +106,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             }
             item(key = "daily") {
                 DailyRecommendationHero(home.daily, dailyLoading, home.errors["每日推荐"],
-                    discovery = direct && (!nativeAccount.loggedIn || nativeAccount.stale), playback = playback,
+                    discovery = direct && (!nativeAccount.loggedIn || nativeAccount.stale) && !cloudBound,
+                    playback = playback,
                     onPlay = { index ->
                         val song = home.daily.getOrNull(index)
                         if (song != null) {
