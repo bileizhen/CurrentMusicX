@@ -3,6 +3,7 @@
 // @ 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7, hosted by the native sheet.
 package io.github.currencortex.music.feature.settings
 
+import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
@@ -35,6 +37,7 @@ import io.github.currencortex.music.ui.theme.rememberAppearanceColors
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -51,7 +54,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     // Capture only the inert sheet color, excluding its controls, to avoid feedback.
-    val backdrop = rememberLayerBackdrop(onDraw = { drawRect(colors.cardBackground) })
+    val backdrop = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
+        rememberLayerBackdrop(onDraw = { drawRect(colors.cardBackground) })
+    } else null
     val preview = config.copy(monet = false, primaryColor = draft.toArgb().toLong() and 0xFFFFFFFF)
     val previewRenderer = rememberCurrentMusicPreviewRenderer()
     val light = rememberAppearanceColors(preview, false)
@@ -63,7 +68,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val currentDeleted by rememberUpdatedState(onDeleted)
     fun pick(color: Color) { draft = color; hex = hexDigits(color) }
     fun dismiss() { focus.clearFocus(); keyboard?.hide(); visible = false }
-    OverlayBottomSheet(show = visible, title = "自定义颜色", modifier = Modifier.height(height).layerBackdrop(backdrop).testTag("appearance_color_sheet"),
+    OverlayBottomSheet(show = visible, title = "自定义颜色", modifier = Modifier.height(height).then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier).testTag("appearance_color_sheet"),
         backgroundColor = colors.cardBackground, cornerRadius = 32.dp,
         insideMargin = DpSize(16.dp, 0.dp), outsideMargin = DpSize(0.dp, 0.dp),
         startAction = {

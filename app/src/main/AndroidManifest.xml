@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- 实时背景模糊是仅在API 33+（Android13及以上）生效的可选特性；COUI模糊功能的各个入口都会通过isRuntimeShaderSupported()进行判断 -->
+    <uses-sdk tools:overrideLibrary="io.github.suqi8.coui.kmp.blur" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
