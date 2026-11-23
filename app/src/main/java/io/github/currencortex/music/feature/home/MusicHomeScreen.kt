@@ -97,7 +97,11 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                         scope.launch { vm.container.musicSettings.setMusicPlatform(platform) }
                     }, enabled = !hideSearch)
                 }) }
-            if (!home.loading && homeLoadFailed) item(key = "retry") {
+            // Entering the home refetches in the background; a partial failure must not put a
+            // retry banner over content that is already on screen.
+            val nothingLoaded = home.daily.isEmpty() && home.forYou.isEmpty() &&
+                home.recent.isEmpty() && home.playlists.isEmpty() && home.recommendedPlaylists.isEmpty()
+            if (!home.loading && homeLoadFailed && nothingLoaded) item(key = "retry") {
                 MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))
             }
             item(key = "daily") {

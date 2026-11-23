@@ -269,7 +269,12 @@ fun QqMusicHomeScreen(
                                 },
                             )
                         }
-                        if (state.errors.isNotEmpty() && !state.loading) item(key = "retry") {
+                        // Entering the home refetches in the background; a partial failure must
+                        // not put a retry banner over content that is already on screen.
+                        val nothingLoaded = state.daily.isEmpty() && state.forYou.isEmpty() &&
+                            state.recent.isEmpty() && state.recommendedPlaylists.isEmpty() &&
+                            state.playlists.isEmpty()
+                        if (state.errors.isNotEmpty() && !state.loading && nothingLoaded) item(key = "retry") {
                             MusicTextAction("部分内容加载失败，重新加载", { refresh++ }, enabled = !state.loading)
                         }
                         item(key = "daily") {
