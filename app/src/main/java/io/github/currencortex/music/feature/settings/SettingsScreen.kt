@@ -158,7 +158,7 @@ fun SettingsScreen(
             colors.orange, onAppearance),
         SettingsDestination("desktop_lyrics", "桌面悬浮歌词", "实时预览、字幕样式与窗口控制",
             COUIIcons.ScreenMirroring, colors.azure, onDesktopLyrics),
-        SettingsDestination("playback", "播放", "音质、歌曲衔接、预加载与播放行为", COUIIcons.Play,
+        SettingsDestination("playback", "播放", "音质、下载文件、歌曲衔接、预加载与播放行为", COUIIcons.Play,
             colors.green, onPlayback),
         SettingsDestination("network", "音源与网络", "音乐音源、歌词来源与服务器", COUIIcons.CloudFill,
             colors.blue, onNetwork),

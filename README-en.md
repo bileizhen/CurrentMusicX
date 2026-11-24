@@ -64,7 +64,7 @@ Track, quality, member effects, and recommendation availability depend on the se
 - **Player controls.** Background playback, notification, lock screen, and Bluetooth controls. Use a queue, repeat, shuffle, Heartbeat mode, a sleep timer, and music videos. Long-press the mini player to scroll the open playlist to the current track.
 - **Lyrics and effects.** Automatic matching across six sources, word-by-word highlighting, translations, and romanization. Choose Monet animation, flowing smoke, stardust, or perspective effects. Apply per-track offsets, import several formats, and export FIA or LRC. An optional Bluetooth lyrics switch mirrors the current line to the notification, lock screen, and Bluetooth car display; Lyricon status-bar lyrics publish word-timed lines to the Lyricon (词幕) module.
 - **流声音频系统 and transitions.** Use **Settings → Sound Effects → 流声音频系统** for the 10-band EQ, dynamic EQ, virtual bass, and haptic drive. Original standard and smart effects, AI Mood Tuner, AI Tuning Master, and speaker presets are also available, with smart transitions or fades.
-- **Downloads and sharing.** Select quality and destination, track background progress, cancel, or retry. Downloads can include tags, artwork, and lyrics. Generate posters, playback links, and QR codes.
+- **Downloads and sharing.** Select quality and destination, track background progress, cancel, or retry. Downloads include tags, artwork, and lyrics, with optional companion LRC and artwork files. Generate posters, playback links, and QR codes.
 - **Quality tiers.** Hi-Res (`hires`), HD Premium (`jyeffect`), and Premium Spatial (`vivid`) have separate labels. Higher Quality and Dolby Atmos are also selectable. The tier is a request to the source. Actual files and device output depend on the source, track, and account entitlements.
 
 ### Your library and shared listening
@@ -209,7 +209,7 @@ Some vendor native libraries still fall short of the 16 KiB page-size requiremen
 <details>
 <summary>Where are downloaded tracks, artwork, and lyrics stored?</summary>
 
-Choose a directory and grant the app access when downloading. The app writes tags, artwork, and lyrics into the audio file and saves companion LRC and artwork files. Supported formats include MP3, FLAC, M4A, Vorbis OGG, and WAV. Raw AAC is wrapped in M4A without re-encoding. Embedded lyrics and word-by-word rendering depend on the other player's format support.
+Choose a directory and grant the app access when downloading. The app writes tags, artwork, and lyrics into the audio file and saves companion LRC and artwork files by default; turn either off under **Settings → Playback → Download files**, or per download in its dialog, to avoid duplicate files. Supported formats include MP3, FLAC, M4A, Vorbis OGG, and WAV. Raw AAC is wrapped in M4A without re-encoding. Embedded lyrics and word-by-word rendering depend on the other player's format support.
 
 </details>
 

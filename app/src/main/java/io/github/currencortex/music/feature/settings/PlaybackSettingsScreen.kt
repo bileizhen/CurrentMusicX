@@ -59,6 +59,14 @@ import kotlin.math.roundToInt
                     summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq))
             }
         } }
+        item("download_files") { SettingsSection("下载文件", MusicIcons.Download,
+            footer = "歌词与封面始终写入歌曲文件；关闭后不再生成同名的独立文件，下载时也可临时调整。") {
+            SettingsSwitch("保存歌词文件", settings.downloadLyricsFile, vm::downloadLyricsFile,
+                summary = "另存同名 LRC 文件", modifier = Modifier.testTag("download_lyrics_file"))
+            SettingsDivider()
+            SettingsSwitch("保存封面文件", settings.downloadCoverFile, vm::downloadCoverFile,
+                summary = "另存同名封面图片", modifier = Modifier.testTag("download_cover_file"))
+        } }
         item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
             Column(Modifier.testTag("listening_source_setting").semantics { selectableGroup() }) {
                 ListeningSource.entries.forEachIndexed { index, source ->

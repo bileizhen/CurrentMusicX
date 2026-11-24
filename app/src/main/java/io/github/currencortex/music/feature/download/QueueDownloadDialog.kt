@@ -4,6 +4,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -20,18 +22,34 @@ import io.github.suqi8.coui.kmp.basic.Text
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
     val qualities = songs.map { settings.downloadQualityFor(it.musicSource) }.distinct()
     var error by remember { mutableStateOf<String?>(null) }
+    // Per-batch overrides; the persistent defaults live under Settings → Playback → Download files.
+    var saveLyricsFileOverride by remember { mutableStateOf<Boolean?>(null) }
+    var saveCoverFileOverride by remember { mutableStateOf<Boolean?>(null) }
+    val saveLyricsFile = saveLyricsFileOverride ?: settings.downloadLyricsFile
+    val saveCoverFile = saveCoverFileOverride ?: settings.downloadCoverFile
     val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) try { container.songDownloads.setDirectory(uri); error = null }
         catch (_: Exception) { error = "此文件夹不可写，请重新选择" }
     }
-    LaunchedEffect(show) { if (show) error = null }
+    LaunchedEffect(show) {
+        if (show) {
+            error = null; saveLyricsFileOverride = null; saveCoverFileOverride = null
+        }
+    }
     MusicOverlayDialog(show = show, title = "下载 ${songs.size} 首歌曲", onDismissRequest = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("下载音质：${qualities.joinToString { it.label }}")
-            MusicDestinationRow("保存位置", { folder.launch(directory) }, summary = directory?.let { android.net.Uri.decode(it.lastPathSegment.orEmpty()) }
-                ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹")
-            Text("按当前下载设置加入任务，已在下载的歌曲会保留原任务。")
-            error?.let { Text(it) }
+            Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("下载音质：${qualities.joinToString { it.label }}")
+                MusicDestinationRow("保存位置", { folder.launch(directory) }, summary = directory?.let { android.net.Uri.decode(it.lastPathSegment.orEmpty()) }
+                    ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹")
+                SettingsSwitch("保存歌词文件", saveLyricsFile, { saveLyricsFileOverride = it },
+                    summary = "另存同名 LRC 文件；歌词始终写入歌曲文件", modifier = Modifier.testTag("queue_download_lyrics_file"))
+                SettingsSwitch("保存封面文件", saveCoverFile, { saveCoverFileOverride = it },
+                    summary = "另存同名封面图片；封面始终写入歌曲文件", modifier = Modifier.testTag("queue_download_cover_file"))
+                Text("按当前下载选项加入任务，已在下载的歌曲会保留原任务。")
+                error?.let { Text(it) }
+            }
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MusicDialogButton("取消", onDismiss, modifier = Modifier.weight(1f))
                 MusicDialogButton("开始下载", {
@@ -48,8 +66,10 @@ import io.github.suqi8.coui.kmp.basic.Text
                             val quality = settings.downloadQualityFor(song.musicSource)
                             if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
                                 container.songDownloads.start(song, quality, account, server, container.qqAudioIdentity(access),
-                                    navidromeRevision = qq.revision.toString())
-                            else container.songDownloads.start(song, quality, account, server, access.identity, uid)
+                                    navidromeRevision = qq.revision.toString(),
+                                    lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
+                            else container.songDownloads.start(song, quality, account, server, access.identity, uid,
+                                lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
                         }
                         onDismiss()
                     } catch (e: Exception) { error = e.message ?: "部分下载任务未能创建，请重试" }
