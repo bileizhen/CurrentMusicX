@@ -58,6 +58,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val postDraftStore = io.github.currencortex.music.data.profile.PostDraftStore(context.applicationContext, storageSuffix, appScope)
     internal val feedbackStore = io.github.currencortex.music.data.feedback.FeedbackSubmissionStore(context, storageSuffix)
     internal val feedbackMediaStore = io.github.currencortex.music.data.feedback.FeedbackMediaStore(context, storageSuffix)
     private val settingsStore = PreferenceDataStoreFactory.create(
@@ -403,6 +404,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
+    internal val postsRepository = io.github.currencortex.music.data.profile.PostsRepository(apiClient, ::projectSession)
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
     private val neteaseAvatarImporter by lazy {

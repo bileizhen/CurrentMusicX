@@ -22,7 +22,12 @@ enum class ErrorKind(val message: String) {
     NeteaseSongAlreadyInPlaylist("该歌曲已存在"),
     NeteaseRateLimited("网易云操作过于频繁，请稍后重试")
 }
-class ApiException(val kind: ErrorKind, val status: Int = 0, val userMessage: String? = null) : IOException(userMessage ?: kind.message)
+class ApiException(
+    val kind: ErrorKind,
+    val status: Int = 0,
+    val userMessage: String? = null,
+    val missingRoute: Boolean = false,
+) : IOException(userMessage ?: kind.message)
 sealed interface AppResult<out T> {
     data class Success<T>(val value: T) : AppResult<T>
     data class Failure(val kind: ErrorKind, val status: Int = 0, val message: String = kind.message) : AppResult<Nothing>
