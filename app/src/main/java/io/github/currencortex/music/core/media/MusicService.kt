@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.Futures
 import io.github.currencortex.music.CurrentMusicApplication
 import io.github.currencortex.music.MainActivity
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.local.QueueSnapshotEntity
 import io.github.currencortex.music.data.lx.LxPlatform
@@ -234,6 +235,13 @@ class MusicService : MediaSessionService() {
     override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
+        // Media3 falls back to a generic circular play badge; show the app mark instead so the
+        // media notification and MIUI/HyperOS media cards stay visually consistent with the app.
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply {
+                setSmallIcon(R.drawable.ic_notification)
+            }
+        )
         desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHosts.acquire(this, container)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
