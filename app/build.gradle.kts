@@ -223,6 +223,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.11.0")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     implementation("androidx.compose.material:material-icons-core:1.7.8")
+    // Publishes the playing song and timed lyrics to Lyricon (词幕) for status-bar display.
+    implementation("io.github.proify.lyricon:provider:0.1.70")
 
     implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.1.0")
     implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.1.0")
