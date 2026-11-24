@@ -25,6 +25,8 @@ import kotlin.coroutines.resumeWithException
 
 data class SongDownloadProgress(val phase: String, val received: Long = 0, val total: Long = -1)
 data class SongDownloadResult(val saved: SavedSongDownload, val warning: String, val quality: String)
+/** Lyrics and artwork are always embedded; these flags only control the companion files. */
+data class SongDownloadOptions(val lyricsFile: Boolean = true, val coverFile: Boolean = true)
 
 class SongDownloadEngine(
     private val cache: File,
@@ -39,6 +41,7 @@ class SongDownloadEngine(
         .readTimeout(45, TimeUnit.SECONDS).build(),
 ) {
     suspend fun download(song: Song, quality: AudioQuality, tree: Uri?, attempt: String,
+        options: SongDownloadOptions = SongDownloadOptions(),
         progress: suspend (SongDownloadProgress) -> Unit): SongDownloadResult = withContext(Dispatchers.IO) {
         require(attempt.matches(Regex("[a-zA-Z0-9-]+")))
         require(!song.video) { "视频暂不支持歌曲下载" }
@@ -77,8 +80,8 @@ class SongDownloadEngine(
             progress(SongDownloadProgress("写入歌曲信息"))
             SongTagWriter.write(audio, info, lrc, cover)
             val files = mutableListOf(SongDownloadFile(audio, AudioDownloadFormat.mime(audio.extension)))
-            if (lrc.isNotBlank()) files += SongDownloadFile(File(folder, "lyrics.lrc").apply { writeText(lrc, Charsets.UTF_8) }, "application/octet-stream")
-            if (cover != null) files += SongDownloadFile(File(folder, "cover.jpg").apply { writeBytes(cover.bytes) }, "image/jpeg")
+            if (options.lyricsFile && lrc.isNotBlank()) files += SongDownloadFile(File(folder, "lyrics.lrc").apply { writeText(lrc, Charsets.UTF_8) }, "application/octet-stream")
+            if (options.coverFile && cover != null) files += SongDownloadFile(File(folder, "cover.jpg").apply { writeBytes(cover.bytes) }, "image/jpeg")
             progress(SongDownloadProgress("保存到下载文件夹"))
             val saved = store.save(SongDownloadNames.base(info), files, tree)
             SongDownloadResult(saved, warnings.joinToString("；"), source.qualityLabel)
