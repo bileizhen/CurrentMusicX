@@ -43,6 +43,7 @@ internal data class PostChanges(
     private val likes: Map<Long, Like> = emptyMap(),
     private val deletions: Map<Long, Long> = emptyMap(),
     private val creations: Map<Long, Long> = emptyMap(),
+    private val commentEdits: Map<Long, Map<Any?, Long>> = emptyMap(),
 ) {
     data class Like(val revision: Long, val liked: Boolean, val count: Int)
 
@@ -58,7 +59,8 @@ internal data class PostChanges(
     fun recordDeletion(expected: RequestSession, id: Long): PostChanges {
         val current = forSession(expected)
         val next = revision + 1
-        return current.copy(revision = next, likes = current.likes - id, deletions = current.deletions + (id to next))
+        return current.copy(revision = next, likes = current.likes - id, deletions = current.deletions + (id to next),
+            commentEdits = current.commentEdits - id)
     }
 
     fun recordCreation(expected: RequestSession, authorId: Long): PostChanges {
@@ -70,6 +72,24 @@ internal data class PostChanges(
     fun createdAfter(expected: RequestSession, since: Long, authorId: Long?): Boolean =
         expected == session && if (authorId == null) creations.values.any { it > since }
         else (creations[authorId] ?: 0) > since
+
+    fun recordCommentEdit(expected: RequestSession, postId: Long, source: Any?): PostChanges {
+        val current = forSession(expected)
+        if (postId in current.deletions) return current
+        val next = revision + 1
+        // A reader only needs the latest edit from a source other than itself.
+        val previous = current.commentEdits[postId].orEmpty().filterKeys { it != source }.maxByOrNull { it.value }
+        val sources = buildMap {
+            previous?.let { put(it.key, it.value) }
+            put(source, next)
+        }
+        return current.copy(revision = next, commentEdits = current.commentEdits + (postId to sources))
+    }
+
+    fun threadsEditedElsewhere(expected: RequestSession, since: Long, source: Any): Set<Long> =
+        if (expected == session) commentEdits.filterValues { latest ->
+            latest.any { (editor, revision) -> editor != source && revision > since }
+        }.keys else emptySet()
 
     fun deletedAfter(expected: RequestSession, since: Long): Set<Long> =
         if (expected == session) deletions.filterValues { it > since }.keys else emptySet()
@@ -189,15 +209,18 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         require(id > 0 && after >= 0)
         return api.decode(request("GET", "posts/$id/comments", mapOf("after" to after.toString(), "limit" to "30")))
     }
-    suspend fun comment(id: Long, content: String, replyTo: Long?, expected: RequestSession): Long {
+    internal suspend fun comment(id: Long, content: String, replyTo: Long?, expected: RequestSession, source: Any? = null): Long {
         require(id > 0 && content.postCharacterCount() in 1..POST_COMMENT_LIMIT)
-        return api.decode<CreatedPost>(request("POST", "posts/$id/comments", body = buildJsonObject {
+        val commentId = api.decode<CreatedPost>(request("POST", "posts/$id/comments", body = buildJsonObject {
             put("content", content.trim())
             if (replyTo != null) put("replyTo", replyTo)
         }, expected = expected)).id
+        mutations.update { if (expected == session()) it.recordCommentEdit(expected, id, source) else it }
+        return commentId
     }
-    suspend fun deleteComment(id: Long, expected: RequestSession) {
-        require(id > 0)
+    internal suspend fun deleteComment(postId: Long, id: Long, expected: RequestSession, source: Any) {
+        require(postId > 0 && id > 0)
         request("DELETE", "posts/comments/$id", expected = expected)
+        mutations.update { if (expected == session()) it.recordCommentEdit(expected, postId, source) else it }
     }
 }

@@ -31,6 +31,7 @@ internal class PostsViewModel(
     val state = MutableStateFlow(PostsState(detailId = linkedPostId, detailLoading = linkedPostId != null))
     private fun session() = container.projectSession()
     private val repository = container.postsRepository
+    private val commentSource = Any()
     private var draftOwner: PostAccount? = null
     private var publication: Publication? = null
     private var activeSession: RequestSession? = null
@@ -102,8 +103,11 @@ internal class PostsViewModel(
 
     private fun applyPostChanges(changes: PostChanges, expected: RequestSession, since: Long) {
         val deleted = changes.deletedAfter(expected, since)
-        val feedChanged = deleted.isNotEmpty() || changes.createdAfter(expected, since, authorId)
-        val detailDeleted = state.value.detailId?.let(deleted::contains) == true
+        val editedThreads = changes.threadsEditedElsewhere(expected, since, commentSource)
+        val before = state.value
+        val feedChanged = deleted.isNotEmpty() || changes.createdAfter(expected, since, authorId) ||
+            (editedThreads.isNotEmpty() && (before.loading || before.posts.any { it.id in editedThreads }))
+        val detailDeleted = before.detailId?.let(deleted::contains) == true
         if (detailDeleted) {
             detailTask?.cancel()
             commentTask?.cancel()
@@ -122,6 +126,9 @@ internal class PostsViewModel(
                 commentsError = null, nextAfter = null) else updated
         }
         if (requested && feedChanged) reload()
+        before.detailId?.takeIf { !detailDeleted && it in editedThreads }?.let {
+            loadDetail(it, before.focusComments, refreshing = true)
+        }
     }
     fun ensureLoaded() { requested = true; if (!state.value.loaded && !state.value.loading) reload() }
     fun postLink(id: Long): String = repository.link(id)
@@ -135,11 +142,18 @@ internal class PostsViewModel(
         feedTask = viewModelScope.launch {
             container.sessionRestored.await()
             when (val result = appResult { repository.list(if (more) before.offset else 0, authorId) }) {
-                is AppResult.Success -> if (token == generation) state.update { it.copy(
-                    posts = (if (more) it.posts + result.value.posts else result.value.posts).distinctBy(CommunityPost::id),
-                    total = result.value.total, offset = (if (more) before.offset else 0) + result.value.posts.size,
-                    done = result.value.posts.isEmpty() || (if (more) before.offset else 0) + result.value.posts.size >= result.value.total,
-                    loaded = true, loading = false) }
+                is AppResult.Success -> if (token == generation) state.update { current ->
+                    current.copy(
+                        posts = (if (more) current.posts + result.value.posts else result.value.posts).distinctBy(CommunityPost::id),
+                        detail = current.detail?.let { detail ->
+                            val listPost = result.value.posts.find { it.id == detail.id }
+                            if (current.detailShareable || listPost == null) detail else detail.copy(commentCount = listPost.commentCount)
+                        },
+                        total = result.value.total, offset = (if (more) before.offset else 0) + result.value.posts.size,
+                        done = result.value.posts.isEmpty() || (if (more) before.offset else 0) + result.value.posts.size >= result.value.total,
+                        loaded = true, loading = false,
+                    )
+                }
                 is AppResult.Failure -> if (token == generation) state.update {
                     it.copy(loading = false, loaded = true, error = result.kind.message, failedMore = more)
                 }
@@ -289,12 +303,15 @@ internal class PostsViewModel(
         draft.copy(attachments = draft.attachments.filterNot { it.type == card.type && it.id == card.id })
     }
 
-    fun detail(id: Long?, focusComments: Boolean = false) {
+    fun detail(id: Long?, focusComments: Boolean = false) = loadDetail(id, focusComments)
+
+    private fun loadDetail(id: Long?, focusComments: Boolean, refreshing: Boolean = false) {
         detailTask?.cancel()
         commentTask?.cancel()
         state.update { it.copy(detailId = id, detail = null, detailLoading = id != null, detailShareable = false, detailError = null, focusComments = focusComments,
             comments = emptyList(), commentsLoading = false, commentsError = null, nextAfter = null, lastLoadedCommentId = 0, commentRetryAfter = 0,
-            postedCommentId = null, message = null) }
+            postedCommentId = if (refreshing) it.postedCommentId else null,
+            message = if (refreshing) it.message else null) }
         if (id == null) return
         val expected = session()
         if (linkedPostId != null && !CurrentMusicServer.builtIn(expected.server)) {
@@ -309,7 +326,11 @@ internal class PostsViewModel(
             when (result) {
                 is AppResult.Success -> {
                     state.update { current ->
-                        val post = result.value.post
+                        val detail = result.value
+                        val currentCount = current.posts.find { it.id == id }?.commentCount
+                        val post = if (refreshing && !detail.shareable && currentCount != null) {
+                            detail.post.copy(commentCount = currentCount)
+                        } else detail.post
                         current.copy(detail = post, detailLoading = false, detailShareable = result.value.shareable,
                             posts = current.posts.map { if (it.id == id) post else it })
                     }
@@ -341,7 +362,7 @@ internal class PostsViewModel(
         if (commentOwner == null || commentOwner != owner()?.key || state.value.detail?.id != id) return
         val account = container.accountRepository.state.value.account ?: return
         if (!state.value.commentsLoading && content.postCharacterCount() in 1..POST_COMMENT_LIMIT) {
-            action("评论已发布", { repository.comment(id, content, replyTo?.id, it) }) { commentId ->
+            action("评论已发布", { repository.comment(id, content, replyTo?.id, it, commentSource) }) { commentId ->
                 updatePost(id) { post -> post.copy(commentCount = post.commentCount + 1) }
                 if (state.value.detail?.id == id) {
                     val comment = PostComment(commentId, content.trim(), ProfileUser(
@@ -366,7 +387,7 @@ internal class PostsViewModel(
     }
     fun delete(comment: PostComment) {
         val id = state.value.detail?.id ?: return
-        if (!state.value.commentsLoading && canDelete(comment)) action("评论已删除", { repository.deleteComment(comment.id, it) }) {
+        if (!state.value.commentsLoading && canDelete(comment)) action("评论已删除", { repository.deleteComment(id, comment.id, it, commentSource) }) {
             updatePost(id) { post -> post.copy(commentCount = (post.commentCount - 1).coerceAtLeast(0)) }
             if (state.value.detailId == id) state.update { current ->
                 current.copy(comments = current.comments.filterNot { it.id == comment.id }
