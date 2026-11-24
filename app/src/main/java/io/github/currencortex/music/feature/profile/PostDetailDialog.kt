@@ -25,10 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.profile.POST_COMMENT_LIMIT
 import io.github.currencortex.music.data.profile.PostComment
@@ -54,20 +54,27 @@ internal fun PostDetailDialog(vm: PostsViewModel, state: PostsState, navigate: (
     }
 }
 
-@Composable
-internal fun rememberLinkedPostViewModel(
-    container: AppContainer,
-    postId: Long,
-    linkRequestId: String?,
-): PostsViewModel {
-    val owner = remember(container, postId, linkRequestId) {
-        object : ViewModelStoreOwner {
-            override val viewModelStore = ViewModelStore()
-        }
+internal class LinkedPostViewModels : ViewModel() {
+    private class Entry(val requestId: String?, val store: ViewModelStore, val viewModel: PostsViewModel)
+    private val entries = mutableStateMapOf<String, Entry>()
+
+    operator fun get(route: String): PostsViewModel? = entries[route]?.viewModel
+
+    fun open(container: AppContainer, route: String, postId: Long, requestId: String? = null) {
+        val current = entries[route]
+        if (current != null && (requestId == null || current.requestId == requestId || current.viewModel.state.value.busy)) return
+        val store = ViewModelStore()
+        val provider = ViewModelProvider.create(store, viewModelFactory { PostsViewModel(container, linkedPostId = postId) })
+        val viewModel = provider[PostsViewModel::class]
+        entries[route] = Entry(requestId, store, viewModel)
+        current?.store?.clear()
     }
-    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
-    return viewModel(viewModelStoreOwner = owner,
-        factory = viewModelFactory { PostsViewModel(container, linkedPostId = postId) })
+
+    fun retain(routes: Set<String>) {
+        entries.keys.filterNot(routes::contains).forEach { entries.remove(it)?.store?.clear() }
+    }
+
+    override fun onCleared() = retain(emptySet())
 }
 
 @Composable
@@ -105,15 +112,16 @@ private fun PostDetailPage(
     val canComment = signedIn && commentOwner != null
     var deletingPost by remember(id, commentOwner) { mutableStateOf(false) }
     var deletingComment by remember(id, commentOwner) { mutableStateOf<PostComment?>(null) }
-    val (input, replyState) = key(id, commentOwner) {
+    val (input, replyState, sentState) = key(id, commentOwner) {
         val text = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
         val target = rememberSaveable(stateSaver = replyTargetSaver) { mutableStateOf<PostReplyTarget?>(null) }
-        text to target
+        val handled = rememberSaveable { mutableLongStateOf(state.postedCommentId ?: 0L) }
+        Triple(text, target, handled)
     }
     var replyTo by replyState
 
-    // The first composition for a thread must not clear its restored input.
-    var lastSent by remember(id, commentOwner) { mutableStateOf(state.postedCommentId) }
+    // A send can finish between the old Activity saving the composer and the new one restoring it.
+    var lastSent by sentState
     LaunchedEffect(id, commentOwner, state.postedCommentId) {
         val sent = state.postedCommentId
         if (sent != null && lastSent != sent) {
