@@ -184,15 +184,15 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("search_result_original_${song.id}"))
 }
 
-/** Reuses the selected heart destination and the existing playlist picker. */
-@Composable internal fun SearchResultLibraryActions(vm: LibraryViewModel, song: Song, showLike: Boolean = true) {
+/** Reuses the selected heart destination; the list button appends the song to the play queue. */
+@Composable internal fun SearchResultLibraryActions(vm: LibraryViewModel, song: Song, showLike: Boolean = true,
+    onAddToQueue: (Song) -> Unit) {
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val nativeLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val qqKnownLikes by vm.container.qqMusic.knownLikeState.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
     val liking by vm.primaryLikeBusy.collectAsStateWithLifecycle()
-    val busy by vm.busy.collectAsStateWithLifecycle()
     val liked = when {
         song.musicSource == MusicSource.QQ_MUSIC -> song.id in qqLikes
         song.musicSource == MusicSource.NETEASE ->
@@ -211,8 +211,8 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                 vm.togglePrimaryLike(song, desiredLiked = true.takeIf { qqStateUnknown })
             }
     }
-    SearchResultIconAction(playlistAddIcon, "加入歌单：${song.name}", Modifier.testTag("search_playlist_${song.id}"),
-        enabled = !busy, grouped = true) { vm.choosePlaylist(song) }
+    SearchResultIconAction(playlistAddIcon, "添加到播放列表：${song.name}", Modifier.testTag("search_playlist_${song.id}"),
+        grouped = true) { onAddToQueue(song) }
 }
 
 @Composable internal fun SearchResultsToolbar(count: Int, total: Int, onPlayAll: () -> Unit, onQueueAll: () -> Unit) {
