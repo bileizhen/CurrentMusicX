@@ -72,7 +72,7 @@ jobs:
           else
             echo "Required Android SDK packages are already installed."
           fi
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       # Cache compiler outputs rather than copying AGP's timestamp-sensitive .cxx tree.
       # The NDK's Android toolchain uses ANDROID_CCACHE as a compiler launcher.
       - name: Prepare native compiler cache
