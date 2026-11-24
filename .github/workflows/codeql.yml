@@ -80,7 +80,7 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
       - name: Set up Gradle caching
         if: matrix.language == 'java-kotlin'
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
