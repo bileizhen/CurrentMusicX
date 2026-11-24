@@ -23,7 +23,7 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val lyricsOffsetMs: Long = 0,
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
                          val neteaseMainLibrary: Boolean = true,
-                         val allowConcurrentPlayback: Boolean = false,
+                         val allowConcurrentPlayback: Boolean = true,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
                          val crossfadeSeconds: Int = 5,
                          val lyricsSource: LyricsSource = LyricsSource.AUTO,
@@ -215,7 +215,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: false, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false,
             LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p)).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
+        p[concurrentPlayback] ?: true, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
             p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
@@ -227,7 +227,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[bluetoothLyrics] ?: false)
     }
     // Read the persisted value directly, without the StateFlow's initial defaults.
-    val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
+    val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: true }.distinctUntilChanged()
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     val serverSelection = store.data.map {
