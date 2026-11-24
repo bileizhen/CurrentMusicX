@@ -30,6 +30,9 @@ import io.github.suqi8.coui.kmp.basic.TextField
     SettingsUiScope {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
+    val library by vm.libraryPreferences.collectAsStateWithLifecycle()
+    val libraryError by vm.libraryError.collectAsStateWithLifecycle()
+    LaunchedEffect(vm) { vm.refreshLibraryPreferences() }
     val provider by vm.audioProvider.collectAsStateWithLifecycle()
     val audioState by vm.audioState.collectAsStateWithLifecycle()
     val catalog by vm.serverAudioCatalog.collectAsStateWithLifecycle()
@@ -41,6 +44,20 @@ import io.github.suqi8.coui.kmp.basic.TextField
     var removeServerSource by remember { mutableStateOf(false) }
     DisposableEffect(vm) { onDispose { vm.closeServerAudioCatalog() } }
     SettingsPage("音源与网络", "network_settings") {
+        if (library != null || libraryError != null) item("library_sources") {
+            SettingsSection("歌单与收藏来源", MusicIcons.Headphones) {
+                val labels = mapOf("auto" to "自动", "native" to "App 歌单", "aggregate" to "流声聚合歌单")
+                for ((platform, name) in listOf("netease" to "网易云音乐", "kugou" to "酷狗概念版")) {
+                    val selected = library?.providers?.get(platform)?.mode ?: continue
+                    SettingsOptionsRow(name, labels.getValue(selected), labels.map { (mode, label) ->
+                        SettingsOption("library_${platform}_$mode", label, selected == mode,
+                            onSelect = { vm.setLibraryMode(platform, mode) })
+                    })
+                }
+                libraryError?.let { text -> SettingsPreference("刷新歌单来源", text, onClick = { vm.refreshLibraryPreferences() }) }
+            }
+        }
+
         item("source") { SettingsSection("音乐音源", MusicIcons.Headphones) {
             val serverSource = provider.serverSource
             val options = AudioProvider.entries.filter { it != AudioProvider.SERVER || serverSource != null }

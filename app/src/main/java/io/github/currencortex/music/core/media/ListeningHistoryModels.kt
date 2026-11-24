@@ -49,6 +49,7 @@ internal fun listeningHistorySong(song: Song): ListeningHistorySong {
         MusicSource.EMBY -> listOf(song.emby?.identity.orEmpty(), song.emby?.id.orEmpty())
         MusicSource.LOCAL -> listOf(song.localUri.ifBlank { song.id.toString() })
         MusicSource.NETEASE -> listOf(song.id.toString())
+        MusicSource.KUGOU -> listOf(song.externalIds.kugouId ?: song.id.toString())
         MusicSource.QQ_MUSIC -> listOf(song.externalIds.qqMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.APPLE_MUSIC -> listOf(song.externalIds.appleMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.SPOTIFY -> listOf(song.externalIds.spotifyId?.takeIf { it.isNotBlank() } ?: song.id.toString())

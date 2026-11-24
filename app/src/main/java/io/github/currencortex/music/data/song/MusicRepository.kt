@@ -31,6 +31,7 @@ class MusicRepository(private val api: ApiClient,
     }
     suspend fun detail(song: Song): Song = when (song.musicSource) {
         MusicSource.QQ_MUSIC -> requireNotNull(qqMusic).detail(song)
+        MusicSource.KUGOU -> song
         MusicSource.EMBY -> requireNotNull(emby).detail(song)
         MusicSource.LOCAL -> song
         MusicSource.NAVIDROME -> requireNotNull(navidrome).detail(song)
@@ -38,6 +39,11 @@ class MusicRepository(private val api: ApiClient,
     }
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.QQ_MUSIC) appResult {
         requireNotNull(qqMusic).lyrics(song)
+    } else if (song.musicSource == MusicSource.KUGOU) appResult {
+        val raw = api.request("POST", "kugou/v1/track.lyrics", body = buildJsonObject {
+            put("id", requireNotNull(song.externalIds.kugouId))
+        }, projectOnly = true)
+        parseDocument(raw.jsonObject)
     } else if (song.musicSource == MusicSource.EMBY) appResult {
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
     } else if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
@@ -47,6 +53,22 @@ class MusicRepository(private val api: ApiClient,
             val access = audioAccess()
             return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
                 else requireNotNull(qqMusic).source(song, quality)
+        }
+        if (song.musicSource == MusicSource.KUGOU) {
+            val value = quality.value.takeIf { it in setOf("standard", "exhigh", "lossless") } ?: "auto"
+            val result = api.request("POST", "kugou/v1/playback.resolve", body = buildJsonObject {
+                put("id", requireNotNull(song.externalIds.kugouId)); put("quality", value)
+            }, authenticated = true, expectedSession = session, projectOnly = true).jsonObject
+            val url = result["url"]?.jsonPrimitive?.contentOrNull?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.Parse)
+            val base = api.publicSession().server.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.Parse)
+            if (!url.isHttps || url.host != base.host || url.port != base.port || url.username.isNotEmpty() ||
+                url.password.isNotEmpty() || !url.encodedPath.startsWith(base.encodedPath.trimEnd('/') + "/kugou/media/")) {
+                throw ApiException(ErrorKind.Parse)
+            }
+            return AudioSource(url.toString(), result["quality"]?.jsonPrimitive?.contentOrNull.orEmpty(), 0, 0,
+                format = result["format"]?.jsonPrimitive?.contentOrNull.orEmpty(), source = "kugou",
+                bitrate = result["bitrate"]?.jsonPrimitive?.longOrNull ?: 0,
+                validForSeconds = result["expiresIn"]?.jsonPrimitive?.longOrNull ?: 30)
         }
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)

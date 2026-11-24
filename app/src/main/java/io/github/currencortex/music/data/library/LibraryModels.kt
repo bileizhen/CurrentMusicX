@@ -15,7 +15,7 @@ data class Daily(val songs: List<Song>, val forYou: List<Song>, val artists: Lis
 }
 data class Playlist(val id: Long, val name: String, val description: String, val cover: String, val source: String,
     val ownerId: Long, val count: Int, val songs: List<Song>, val nativeOwned: Boolean = false, val nativeLiked: Boolean = false, val remoteId: String = "",
-    val nativeSubscribed: Boolean = false, val nativeSubscriptionKnown: Boolean = true, val playCount: Long = 0) {
+    val nativeSubscribed: Boolean = false, val nativeSubscriptionKnown: Boolean = true, val playCount: Long = 0, val revision: Long? = null) {
     fun editable(accountId: Long) = source !in setOf("ncm", "netease") && ownerId == accountId && accountId > 0
 }
 @Serializable data class PlaylistsDto(val playlists: List<PlaylistDto> = emptyList())

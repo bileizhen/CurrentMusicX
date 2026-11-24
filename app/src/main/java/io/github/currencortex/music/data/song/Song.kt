@@ -20,7 +20,7 @@ import kotlinx.serialization.SerialName
         .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
     val displayNames get() = listOf(name) + alternateNames
 }
-@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY,
+@Serializable enum class MusicSource { NETEASE, KUGOU, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY,
     /** Persisted by the removed external-service feature; filtered when restoring a saved queue. */
     SERVICE }
 @Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
@@ -28,7 +28,7 @@ import kotlinx.serialization.SerialName
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
     val sampleRate: Int = 0, val channels: Int = 0)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
-    val appleMusicId: String? = null, val spotifyId: String? = null)
+    val appleMusicId: String? = null, val spotifyId: String? = null, val kugouId: String? = null)
 @Serializable data class LyricContextDto(val t: Long? = null, val txt: String = "", val matched: Boolean = false)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
                                 val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,

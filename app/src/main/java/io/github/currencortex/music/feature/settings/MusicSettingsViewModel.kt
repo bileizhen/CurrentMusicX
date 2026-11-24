@@ -22,6 +22,21 @@ internal data class ServerAudioCatalogState(val server: String, val busy: Boolea
 
 class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
+    val libraryPreferences = MutableStateFlow<io.github.currencortex.music.data.library.ProjectLibraryPreferences?>(null)
+    val libraryError = MutableStateFlow<String?>(null)
+    fun refreshLibraryPreferences() = viewModelScope.launch {
+        when (val result = appResult { container.libraryRepository.sourcePreferences() }) {
+            is AppResult.Success -> { libraryPreferences.value = result.value; libraryError.value = null }
+            is AppResult.Failure -> { libraryPreferences.value = null; libraryError.value = result.message }
+        }
+    }
+    fun setLibraryMode(platform: String, mode: String) = viewModelScope.launch {
+        when (val result = appResult { container.libraryRepository.setLibraryMode(platform, mode) }) {
+            is AppResult.Success -> { libraryPreferences.value = result.value; libraryError.value = null }
+            is AppResult.Failure -> libraryError.value = result.message
+        }
+    }
+
     val state = MutableStateFlow(NetworkSettingsState())
     val cacheBytes = container.audioCache.bytes
     val cacheState = MutableStateFlow(AudioCacheSettingsState())

@@ -258,10 +258,14 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
         Triple(preferred && bound?.bound == true, bound?.profile?.uid ?: 0, bound?.stale == true)
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
+    suspend fun resolveNetease(): Boolean = current.sourcePreferences()?.providers?.get("netease")?.let {
+        it.source == "native"
+    } ?: (settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound)
     val likesUseNetease = binding.state.map { it?.let { value -> value.bound && !value.stale } == true }
         .stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveLikeNetease(): Boolean = binding.cachedStatus().let { it.bound && !it.stale }
+    suspend fun resolveLikeNetease(): Boolean = current.sourcePreferences()?.providers?.get("netease")?.let {
+        it.source == "native"
+    } ?: binding.cachedStatus().let { it.bound && !it.stale }
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
         // Imported NetEase playlists are snapshots with CurrentMusic IDs. Once the live
@@ -275,12 +279,17 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
         val snapshots = (saved as? AppResult.Success)?.value.orEmpty().filterNot {
             live != null && it.source in setOf("ncm", "netease")
         }
-        val combined = snapshots + live.orEmpty()
+        val combined = live.orEmpty() + snapshots
         if (combined.isEmpty() && live == null) {
             if (saved is AppResult.Failure) throw ApiException(saved.kind, saved.status)
             if (native is AppResult.Failure) throw ApiException(native.kind, native.status)
         }
         combined.distinctBy { it.source to it.id }
     }
-    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveLikeNetease()) netease.likedPlaylist(fresh) else null
+    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? {
+        if (resolveLikeNetease()) return netease.likedPlaylist(fresh)
+        if (!current.hasCurrentMusicAccount) return null
+        val songs = current.likedSongs(fresh)
+        return Playlist(0, "我喜欢的音乐", "流声聚合歌单", "", "aggregate", 0, songs.size, songs, nativeLiked = true)
+    }
 }

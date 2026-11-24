@@ -17,6 +17,33 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     val statuses = MutableStateFlow<Map<Long, SongStatus>>(emptyMap())
     val revision = MutableStateFlow(0L)
     private val mutationMutex = Mutex()
+    private val project = ProjectLibrary(api, accountId)
+    suspend fun sourcePreferences() = if (hasCurrentMusicAccount) project.preferences(session()) else null
+    suspend fun setLibraryMode(platform: String, mode: String) = project.setMode(session(), platform, mode).also { invalidate() }
+    suspend fun setProjectLike(song: Song, desired: Boolean?, source: String? = null): Boolean {
+        val expected = session()
+        val selected = mutationMutex.withLock { project.changeLike(expected, song, desired, source) }
+        if (expected == session()) {
+            statuses.update { it + (song.id to SongStatus(liked = selected)) }
+            invalidate()
+        }
+        return selected
+    }
+    suspend fun refreshProjectStatuses(songs: List<Song>): Boolean {
+        if (!hasCurrentMusicAccount) return false
+        val expected = session()
+        if (project.preferences(expected) == null) return false
+        val fresh = project.statuses(expected, songs)
+        if (expected == session()) statuses.update { it + fresh }
+        return true
+    }
+    suspend fun reorder(playlist: Playlist, songs: List<Song>) {
+        project.edit(session(), playlist, "PUT", "/order", buildJsonObject {
+            put("tracks", JsonArray(songs.map { projectTrackRef(it).json() }))
+        })
+        invalidate()
+    }
+
     private val reads = SessionReadCache(session, { revision.value })
     val hasCurrentMusicAccount get() = accountId() > 0 && session().token != null
     fun clearReads() = reads.clear()
@@ -44,9 +71,20 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         else api.netease?.let { native -> api.decode<SongListDto>(native.recent(expectedRevision = it.neteaseRevision)) }
             ?: read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))).songs.map(SongDto::toDomain)
     }
-    suspend fun likedSongs(fresh: Boolean = false): List<Song> = backgroundRead("likes", fresh) { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
-    suspend fun playlists(): List<Playlist> = backgroundRead("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }
-    suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = backgroundRead("playlist/$id", fresh) { read<PlaylistDto>("playlists/$id", it).domain() }
+    suspend fun likedSongs(fresh: Boolean = false): List<Song> = backgroundRead("likes", fresh) {
+        if (project.preferences(it) != null) project.favorites(it) else read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain)
+    }
+    suspend fun playlists(): List<Playlist> = backgroundRead("playlists") {
+        if (project.preferences(it) != null) project.playlists(it) else read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain)
+    }
+    suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = backgroundRead("playlist/$id", fresh) {
+        val projected = if (project.preferences(it) == null) null else try {
+            project.detail(it, id)
+        } catch (error: ApiException) {
+            if (error.status == 404) null else throw error
+        }
+        projected ?: read<PlaylistDto>("playlists/$id", it).domain()
+    }
     suspend fun refreshStatus(ids: List<Long>) {
         if (accountId() == 0L) return
         val expected = session()
@@ -90,41 +128,61 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun create(name: String, description: String) {
         require(name.trim().isNotEmpty())
         val expected = session()
-        api.request("POST", "playlists", body = buildJsonObject { put("name", name.trim()); put("description", description) }, authenticated = true, expectedSession = expected)
+        if (project.preferences(expected) != null) project.create(expected, name.trim(), description)
+        else api.request("POST", "playlists", body = buildJsonObject { put("name", name.trim()); put("description", description) }, authenticated = true, expectedSession = expected)
         revision.update { it + 1 }
     }
-    private suspend fun editable(id: Long, expected: RequestSession) {
-        if (expected != session() || !playlist(id, fresh = true).editable(accountId()) || expected != session()) throw ApiException(ErrorKind.Forbidden)
+    private suspend fun editable(id: Long, expected: RequestSession): Playlist {
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val playlist = playlist(id, fresh = true)
+        if (!playlist.editable(accountId()) || expected != session()) throw ApiException(ErrorKind.Forbidden)
+        return playlist
     }
     suspend fun rename(id: Long, name: String) {
-        require(name.trim().isNotEmpty()); val expected = session(); editable(id, expected)
-        api.request("PUT", "playlists/$id", body = buildJsonObject { put("name", name.trim()) }, authenticated = true, expectedSession = expected)
-        revision.update { it + 1 }
+        require(name.trim().isNotEmpty())
+        val expected = session()
+        val playlist = editable(id, expected)
+        val values = buildJsonObject { put("name", name.trim()) }
+        if (playlist.revision != null) project.edit(expected, playlist, "PUT", values = values)
+        else api.request("PUT", "playlists/$id", body = values, authenticated = true, expectedSession = expected)
+        invalidate()
     }
     suspend fun delete(id: Long) {
-        val expected = session(); editable(id, expected); api.request("DELETE", "playlists/$id", authenticated = true, expectedSession = expected); revision.update { it + 1 }
+        val expected = session()
+        val playlist = editable(id, expected)
+        if (playlist.revision != null) project.edit(expected, playlist, "DELETE")
+        else api.request("DELETE", "playlists/$id", authenticated = true, expectedSession = expected)
+        invalidate()
     }
-    suspend fun add(id: Long, songs: List<Song>) {
-        require(songs.none { it.musicSource == MusicSource.QQ_MUSIC }) { "QQ 音乐歌曲只能加入 QQ 歌单" }
-        val expected = session(); editable(id, expected)
-        api.request("POST", "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(songs.map(::metadata))) }, authenticated = true, expectedSession = expected)
-        revision.update { it + 1 }
-    }
-    suspend fun remove(id: Long, song: Song) {
-        val expected = session(); editable(id, expected)
-        api.request("DELETE", "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(listOf(metadata(song)))) }, authenticated = true, expectedSession = expected)
-        revision.update { it + 1 }
+    suspend fun add(id: Long, songs: List<Song>) = editTracks(id, songs, "POST")
+    suspend fun remove(id: Long, song: Song) = editTracks(id, listOf(song), "DELETE")
+    private suspend fun editTracks(id: Long, songs: List<Song>, method: String) {
+        val expected = session()
+        var playlist = editable(id, expected)
+        if (playlist.revision != null) {
+            for (batch in songs.chunked(50)) {
+                val revision = project.edit(expected, playlist, method, "/tracks", buildJsonObject {
+                    put("tracks", JsonArray(batch.map { projectTrackRef(it).json() }))
+                })
+                playlist = playlist.copy(revision = revision)
+            }
+        } else {
+            require(songs.all { it.musicSource == MusicSource.NETEASE }) { "旧服务器仅支持网易云歌曲" }
+            api.request(method, "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(songs.map(::metadata))) },
+                authenticated = true, expectedSession = expected)
+        }
+        invalidate()
     }
     suspend fun recordPlay(song: Song, expected: RequestSession = session()) {
         // CurrentMusic statistics must also be updated when the music library uses native Netease.
-        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource != MusicSource.QQ_MUSIC) {
+        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource == MusicSource.NETEASE) {
             val body = JsonObject(metadata(song) + ("platform" to JsonPrimitive("x")))
             api.request("POST", "plays/${song.id}", body = body, authenticated = true, expectedSession = expected)
             revision.update { it + 1 }
         }
     }
     suspend fun listen(song: Song, milliseconds: Long, expected: RequestSession = session()) {
-        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource != MusicSource.QQ_MUSIC && milliseconds > 0) api.request("POST", "plays/${song.id}",
+        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource == MusicSource.NETEASE && milliseconds > 0) api.request("POST", "plays/${song.id}",
             body = buildJsonObject { put("ms", milliseconds); put("platform", "x") },
             authenticated = true, expectedSession = expected)
     }

@@ -259,6 +259,7 @@ class SongLyricsStore(private val directory: File) {
             }
             val external = when (song.musicSource) {
                 MusicSource.NETEASE -> song.externalIds.neteaseId
+                MusicSource.KUGOU -> song.externalIds.kugouId
                 MusicSource.QQ_MUSIC -> song.externalIds.qqMusicId
                 MusicSource.APPLE_MUSIC -> song.externalIds.appleMusicId
                 MusicSource.SPOTIFY -> song.externalIds.spotifyId

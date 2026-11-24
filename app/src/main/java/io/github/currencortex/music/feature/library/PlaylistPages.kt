@@ -547,7 +547,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                                 liked = localMusic == null && when (song.musicSource) {
                                     io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> song.id in qqLikes
                                     io.github.currencortex.music.data.song.MusicSource.NETEASE ->
-                                        io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
+                                        statuses[song.id]?.liked ?: (io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes)
                                     io.github.currencortex.music.data.song.MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
                                     io.github.currencortex.music.data.song.MusicSource.EMBY -> embyLikes[song.id] == true
                                     else -> statuses[song.id]?.liked == true
@@ -586,6 +586,13 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 sortOpen = false
                 scope.launch { vm.container.settings.edit { it.copy(playlistOrders = it.playlistOrders + (vm.route to index)) } }
             }, modifier = Modifier.testTag("playlist_order_$index"))
+        }
+        val currentPlaylist = state.playlist
+        if (currentPlaylist?.revision != null && query.isBlank() && songs.size == state.songs.size && order != 0) {
+            MusicDestinationRow("将当前排序保存到云端", {
+                sortOpen = false
+                library.action("云端曲序已更新") { vm.container.libraryRepository.reorder(currentPlaylist, songs); vm.reload(force = true) }
+            }, chevron = false)
         }
     }
     if (menuOpen) MusicChoiceDialog("${collectionKind}操作", onDismiss = { menuOpen = false }) {

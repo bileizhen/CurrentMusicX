@@ -149,7 +149,8 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                 val current = if (container.accountRepository.token == null) AppResult.Success(emptyList())
                     else appResult { container.libraryRepository.playlists().filter { it.editable(container.accountRepository.state.value.account?.id ?: 0) } }
                 val native = appResult {
-                    if (container.bindingRepository.cachedStatus().bound) container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned }
+                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE && container.primaryLibrary.resolveNetease())
+                        container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned }
                     else emptyList()
                 }
                 if (expected != container.musicSession()) return@launch
@@ -259,6 +260,16 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                         return@appResult container.navidrome.toggleLike(song)
                     }
                     if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
+                    val projectPlatform = when (song.musicSource) {
+                        io.github.currencortex.music.data.song.MusicSource.NETEASE -> "netease"
+                        io.github.currencortex.music.data.song.MusicSource.KUGOU -> "kugou"
+                        else -> null
+                    }
+                    val target = projectPlatform?.let { container.libraryRepository.sourcePreferences()?.providers?.get(it)?.source }
+                    if (target != null) {
+                        restore = { container.libraryRepository.setProjectLike(song, true, target); Unit }
+                        return@appResult container.libraryRepository.setProjectLike(song, desiredLiked, target)
+                    }
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE) {
                         val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
                         val uid = container.neteaseSongActions.boundUid(expected)
@@ -331,6 +342,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun refreshSearchLikes(songs: List<Song>) = viewModelScope.launch { appResult {
+        container.libraryRepository.refreshProjectStatuses(songs)
         val qq = songs.filter { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC }
         if (qq.isNotEmpty() && container.qqMusic.state.value.loggedIn) container.qqMusic.refreshLiked(qq)
         val online = songs.filter { !it.privateLibrary && it.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE }
@@ -338,6 +350,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
     } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
+        container.libraryRepository.refreshProjectStatuses(songs)
         val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
             io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) }
         if (legacySongs.isEmpty()) return@appResult
