@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome app mark used as the media notification's small icon.
+  The paths mirror ic_launcher_monochrome, scaled to a 24dp viewport with 2dp padding so the
+  note stays legible in the status bar and in MIUI/HyperOS media cards.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:translateX="-6.212824"
+        android:translateY="-4.793997"
+        android:scaleX="0.02728513"
+        android:scaleY="0.02728513">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M682,299C682,269 704,249 732,249C759,249 780,272 806,296C842,330 877,356 914,381C949,404 951,443 930,467C905,497 873,485 846,471L812,449C800,440 791,447 791,463L791,778L682,778Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M384,777a205,205 0,1 0,410 0a205,205 0,1 0,-410 0" />
+    </group>
+</vector>
