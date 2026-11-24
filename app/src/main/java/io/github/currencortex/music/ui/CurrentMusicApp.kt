@@ -963,9 +963,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     val id = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
                                     val vm = linkedPostViews[route]
                                     if (vm != null) {
-                                        LinkedPostScreen(vm, ::navigateLibrary) {
-                                            if (backStack.lastOrNull() == route) navigateBack()
-                                        }
+                                        LinkedPostScreen(vm, ::navigateLibrary,
+                                            onBack = { if (backStack.lastOrNull() == route) navigateBack() },
+                                            onDeleted = {
+                                                if (backStack.lastOrNull() == route) backStack = backStack.dropLast(1)
+                                            })
                                     } else if (id != null && route in backStack) {
                                         LaunchedEffect(route, linkedPostViews) { linkedPostViews.open(container, route, id) }
                                     }

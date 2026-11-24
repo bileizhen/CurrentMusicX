@@ -78,11 +78,15 @@ internal class LinkedPostViewModels : ViewModel() {
 }
 
 @Composable
-internal fun LinkedPostScreen(vm: PostsViewModel, navigate: (String) -> Unit, onBack: () -> Unit) {
+internal fun LinkedPostScreen(vm: PostsViewModel, navigate: (String) -> Unit, onBack: () -> Unit, onDeleted: () -> Unit) {
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
+    val active = LocalMusicPageActive.current
+    LaunchedEffect(active, state.linkedPostDeleted) {
+        if (active && state.linkedPostDeleted) onDeleted()
+    }
     val close = { if (!state.busy) onBack() }
-    PostDetailPage(vm, state, navigate, account.account != null, close, onDeleted = onBack)
+    PostDetailPage(vm, state, navigate, account.account != null, close)
 }
 
 private val replyTargetSaver = listSaver<PostReplyTarget?, Any>(
@@ -98,7 +102,6 @@ private fun PostDetailPage(
     navigate: (String) -> Unit,
     signedIn: Boolean,
     onBack: () -> Unit,
-    onDeleted: () -> Unit = {},
 ) {
     val id = state.detailId ?: return
     val post = state.detail
@@ -236,7 +239,7 @@ private fun PostDetailPage(
     }
     if (deletingPost && post != null) ConfirmPostDeletion("删除帖子？", { deletingPost = false }, "post_confirm_delete") {
         deletingPost = false
-        vm.delete(post, onDeleted)
+        vm.delete(post)
     }
     deletingComment?.let { comment ->
         ConfirmPostDeletion("删除评论？", { deletingComment = null }, "post_comment_confirm_delete") {

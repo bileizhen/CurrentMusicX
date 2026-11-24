@@ -17,7 +17,7 @@ internal data class PostsState(val posts: List<CommunityPost> = emptyList(), val
     val attachmentError: String? = null, val attachmentSearched: Boolean = false,
     val attachmentOffset: Int = 0, val attachmentMore: Boolean = false, val attachmentRetryMore: Boolean = false,
     val detailId: Long? = null, val detail: CommunityPost? = null, val detailLoading: Boolean = false,
-    val detailShareable: Boolean = false,
+    val detailShareable: Boolean = false, val linkedPostDeleted: Boolean = false,
     val detailError: String? = null, val focusComments: Boolean = false, val postedCommentId: Long? = null, val commentOwner: String? = null,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null, val nextAfter: Long? = null, val lastLoadedCommentId: Long = 0,
@@ -75,6 +75,7 @@ internal class PostsViewModel(
                     publication = null
                     state.value = PostsState(
                         commentOwner = account?.key,
+                        linkedPostDeleted = previous.linkedPostDeleted,
                         editor = editingSameAccount,
                         draft = if (editingSameAccount) previous.draft else PostDraft(),
                         draftRestored = editingSameAccount && previous.draftRestored,
@@ -85,7 +86,7 @@ internal class PostsViewModel(
                         },
                     )
                     if (requested) reload()
-                    if (linkedPostId != null) detail(linkedPostId)
+                    if (linkedPostId != null && !previous.linkedPostDeleted) detail(linkedPostId)
                 }
         }
         var observed = repository.changes.value.revision
@@ -170,10 +171,13 @@ internal class PostsViewModel(
             updatePost(post.id) { it.copy(likedByMe = on, likeCount = count) }
         }
     }
-    fun delete(post: CommunityPost, onDeleted: () -> Unit = {}) {
+    fun delete(post: CommunityPost) {
         if (post.canDelete) action("帖子已删除", { repository.delete(post.id, it) }) {
-            if (state.value.detailId == post.id) detail(null)
-            onDeleted()
+            if (linkedPostId == post.id) {
+                state.update { it.copy(linkedPostDeleted = true) }
+            } else if (state.value.detailId == post.id) {
+                detail(null)
+            }
         }
     }
     fun editor(open: Boolean) {
