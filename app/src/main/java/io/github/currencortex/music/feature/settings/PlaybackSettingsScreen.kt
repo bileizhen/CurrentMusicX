@@ -83,6 +83,11 @@ import kotlin.math.roundToInt
                 summary = "在系统媒体卡片、锁屏和蓝牙车机显示当前歌词，关闭后显示歌名",
                 modifier = Modifier.testTag("bluetooth_lyrics"))
         } }
+        item("lyricon_lyrics") { SettingsSection("词幕状态栏歌词", MusicIcons.BottomBar) {
+            SettingsSwitch("向词幕推送歌词", settings.lyriconStatusBar, vm::lyriconStatusBar,
+                summary = "配合词幕（Lyricon）在状态栏显示逐字歌词；需安装词幕并启用模块",
+                modifier = Modifier.testTag("lyricon_status_bar_lyrics"))
+        } }
         item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update) {
             Column(Modifier.testTag("playback_transition").semantics { selectableGroup() }) {
                 modes.entries.forEachIndexed { index, (mode, title) ->

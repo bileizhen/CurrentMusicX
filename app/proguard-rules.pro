@@ -75,3 +75,8 @@
 # implementations/serializers. Retain those rules rather than disabling shrinking
 # for the entire database/model package. SerialName/wire field strings are preserved
 # by generated serializers, independently of obfuscated Kotlin symbol names.
+
+# Lyricon's provider SDK ships without consumer rules. Its AIDL stubs are bound by
+# System UI and its models cross that Binder boundary, so keep the small SDK intact
+# instead of relying on whole-program analysis of a cross-process API.
+-keep class io.github.proify.lyricon.** { *; }
