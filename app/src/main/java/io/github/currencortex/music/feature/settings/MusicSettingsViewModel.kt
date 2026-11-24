@@ -182,6 +182,11 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { container.errorNotices.show("蓝牙歌词设置保存失败，请重试") }
     }
+    fun lyriconStatusBar(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setLyriconStatusBar(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("词幕歌词设置保存失败，请重试") }
+    }
     fun lyricsSource(value: io.github.currencortex.music.data.settings.LyricsSource) = viewModelScope.launch {
         try { container.musicSettings.setLyricsSource(value) }
         catch (e: CancellationException) { throw e }

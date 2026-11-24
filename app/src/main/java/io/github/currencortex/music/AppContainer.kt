@@ -609,6 +609,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             musicSettings.state.map { it.server to it.lyricsSource }.distinctUntilChanged()) { song, account, netease, navidrome, lyricsSettings ->
             io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, lyricsSettings))
         }, songLyrics.state), lyricsRepository::load, playerScope, songLyrics.state)
+    private val lyriconBridge = io.github.currencortex.music.feature.lyrics.data.LyriconBridge(
+        context.applicationContext, musicSettings.state, playerController.state, playbackLyrics.state, playerScope)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
@@ -808,6 +810,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         originalSoundEffects.close()
         smartTuning.close()
         equalizer.close()
+        lyriconBridge.close()
         roomSession.disconnect()
         listenTogether.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
