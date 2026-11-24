@@ -37,11 +37,13 @@ class SongDownloadManager(context: Context, namespace: String = "") {
     fun observe(song: Song, owner: String = "") = combine(work.getWorkInfosForUniqueWorkFlow(key(song, owner)), hidden) { items, removed ->
         items.lastOrNull { it.id.toString() !in removed }
     }
-    fun start(song: Song, quality: AudioQuality, accountId: Long, server: String, provider: String, neteaseUid: Long = -1, navidromeRevision: String = "") {
+    fun start(song: Song, quality: AudioQuality, accountId: Long, server: String, provider: String, neteaseUid: Long = -1,
+        navidromeRevision: String = "", lyricsFile: Boolean = true, coverFile: Boolean = true) {
         val request = OneTimeWorkRequestBuilder<SongDownloadWorker>()
             .setInputData(workDataOf("song" to ApiJson.encodeToString(song), "quality" to quality.value,
                 "directory" to directory.value?.toString(), "account" to accountId, "server" to server, "provider" to provider,
-                "netease_uid" to neteaseUid, "navidrome_revision" to navidromeRevision))
+                "netease_uid" to neteaseUid, "navidrome_revision" to navidromeRevision,
+                "lyrics_file" to lyricsFile, "cover_file" to coverFile))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .addTag("song-download").build()
         val owner = ownerKey(song, accountId, server, provider, navidromeRevision)
