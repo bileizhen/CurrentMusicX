@@ -294,7 +294,7 @@ internal class LyriconBridge(
             val shift = -offsetMs
             val lines = document.lines.mapNotNull { line ->
                 val vocals = line.backgroundVocals.filter { it.text.isNotBlank() }
-                val vocalText = vocals.joinToString(" ").takeIf(String::isNotBlank)
+                val vocalText = vocals.joinToString(" ") { it.text }.takeIf(String::isNotBlank)
                 val text = line.text.takeIf(String::isNotBlank) ?: vocalText ?: return@mapNotNull null
                 val begin = shifted(
                     minOf(line.startTimeMs, vocals.minOfOrNull { it.startTimeMs } ?: line.startTimeMs), shift,
