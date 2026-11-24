@@ -92,7 +92,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
         val menu = SongMenu(song, primary, onNext, onQueue, request != null, extraActions, previewAnchor = coverBounds)
         if (host == null) localMenu = menu else host(menu)
     }
-    Box(Modifier.fillMaxWidth().testTag("search_result_row_${song.id}")
+    ElasticPress(Modifier.fillMaxWidth().testTag("search_result_row_${song.id}")
         .onGloballyPositioned { coordinates ->
             val side = with(density) { 52.dp.toPx() }
             val top = if (compactActions) with(density) { 10.dp.toPx() } else (coordinates.size.height - side) / 2
@@ -100,71 +100,65 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
         }.combinedClickable(enabled = !pending, role = Role.Button,
             interactionSource = remember { MutableInteractionSource() }, indication = null,
             onClick = primary, onLongClickLabel = "预览歌曲与操作",
-            onLongClick = { if (!coverBounds.isEmpty) openMenu() })) {
+            onLongClick = { if (!coverBounds.isEmpty) openMenu() }), enabled = !pending) {
     Row(Modifier.fillMaxWidth().heightIn(min = 72.dp)
         .padding(vertical = 10.dp), verticalAlignment = if (compactActions) Alignment.Top else Alignment.CenterVertically) {
-        // The press feedback covers the cover and text only: the trailing actions of a song row
-        // keep their own elastic feedback and stay on their column while a row is pressed.
-        ElasticPress(Modifier.weight(1f), enabled = !pending) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = if (compactActions) Alignment.Top else Alignment.CenterVertically) {
-            MusicCover(song.cover, Modifier.size(52.dp).testTag("search_result_cover_${song.id}"), cornerRadius = 10.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f).padding(end = if (compactActions) 0.dp else 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val subtitle = if (pending) "正在提交点歌…" else listOf(song.artists, song.album).filter(String::isNotBlank).joinToString(" · ")
-                val subtitleBlock = @Composable {
-                    if (subtitle.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        if (song.mv > 0) Text("MV", fontSize = 9.sp, color = colors.primary,
-                            modifier = Modifier.background(colors.primary.copy(alpha = .08f)).padding(horizontal = 3.dp, vertical = 1.dp))
-                        Text(searchMatchText(subtitle, query, colors.primary.copy(alpha = .8f)), fontSize = 12.sp,
-                            color = colors.labelPrimary.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("search_result_subtitle_${song.id}"))
-                    }
-                }
-                val lyricBlock = @Composable {
-                    lyric?.let { match ->
-                        if (match.before != null || match.status == null) Text(match.before ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("search_lyric_before_${song.id}"))
-                        Text(searchMatchText(lyricMatchWindow(match.matched, query), query, colors.primary), fontSize = 12.sp,
-                            color = colors.labelPrimary.copy(alpha = .58f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("search_lyric_${song.id}"))
-                        if (match.after != null || match.status == null) Text(match.after ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("search_lyric_after_${song.id}"))
-                        val status = when (match.status) {
-                            "pending" -> "歌词前后文仍在补全"
-                            "error" -> "歌词前后文加载失败"
-                            "missing" -> "纯音乐或未收录歌词"
-                            "unmatched" -> "未能定位命中片段的前后文"
-                            "single_line" -> "完整歌词仅有一句"
-                            else -> null
-                        }
-                        status?.let { Text(it, fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f)) }
-                        if (match.retryable) Text("重试前后文", fontSize = 12.sp, color = colors.primary,
-                            modifier = Modifier.clickable(role = Role.Button, onClick = retryLyric)
-                                .testTag("retry_lyric_${song.id}").padding(vertical = 8.dp))
-                    }
-                }
-                if (compactActions) {
-                    // Header block: title and artist share the row with the actions on the right;
-                    // the lyric block sits below at full column width, independent of the buttons.
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            SearchSongTitles(song, query, active)
-                            subtitleBlock()
-                        }
-                        quickActions?.let { actions ->
-                            GlassButtonGroup(Modifier.testTag("search_quick_actions_${song.id}")) { actions() }
-                        }
-                    }
-                    lyricBlock()
-                } else {
-                    SearchSongTitles(song, query, active)
-                    subtitleBlock()
-                    lyricBlock()
+        MusicCover(song.cover, Modifier.size(52.dp).testTag("search_result_cover_${song.id}"), cornerRadius = 10.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).padding(end = if (compactActions) 0.dp else 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val subtitle = if (pending) "正在提交点歌…" else listOf(song.artists, song.album).filter(String::isNotBlank).joinToString(" · ")
+            val subtitleBlock = @Composable {
+                if (subtitle.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    if (song.mv > 0) Text("MV", fontSize = 9.sp, color = colors.primary,
+                        modifier = Modifier.background(colors.primary.copy(alpha = .08f)).padding(horizontal = 3.dp, vertical = 1.dp))
+                    Text(searchMatchText(subtitle, query, colors.primary.copy(alpha = .8f)), fontSize = 12.sp,
+                        color = colors.labelPrimary.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("search_result_subtitle_${song.id}"))
                 }
             }
-        }
+            val lyricBlock = @Composable {
+                lyric?.let { match ->
+                    if (match.before != null || match.status == null) Text(match.before ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("search_lyric_before_${song.id}"))
+                    Text(searchMatchText(lyricMatchWindow(match.matched, query), query, colors.primary), fontSize = 12.sp,
+                        color = colors.labelPrimary.copy(alpha = .58f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("search_lyric_${song.id}"))
+                    if (match.after != null || match.status == null) Text(match.after ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("search_lyric_after_${song.id}"))
+                    val status = when (match.status) {
+                        "pending" -> "歌词前后文仍在补全"
+                        "error" -> "歌词前后文加载失败"
+                        "missing" -> "纯音乐或未收录歌词"
+                        "unmatched" -> "未能定位命中片段的前后文"
+                        "single_line" -> "完整歌词仅有一句"
+                        else -> null
+                    }
+                    status?.let { Text(it, fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f)) }
+                    if (match.retryable) Text("重试前后文", fontSize = 12.sp, color = colors.primary,
+                        modifier = Modifier.clickable(role = Role.Button, onClick = retryLyric)
+                            .testTag("retry_lyric_${song.id}").padding(vertical = 8.dp))
+                }
+            }
+            if (compactActions) {
+                // Header block: title and artist share the row with the actions on the right;
+                // the lyric block sits below at full column width, independent of the buttons.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SearchSongTitles(song, query, active)
+                        subtitleBlock()
+                    }
+                    quickActions?.let { actions ->
+                        GlassButtonGroup(Modifier.testTag("search_quick_actions_${song.id}")) { actions() }
+                    }
+                }
+                lyricBlock()
+            } else {
+                SearchSongTitles(song, query, active)
+                subtitleBlock()
+                lyricBlock()
+            }
         }
         if (!compactActions) {
             quickActions?.let { actions ->
