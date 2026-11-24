@@ -268,6 +268,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.data.qqmusic.QqDirectMusicClient(
             apiHttpClient ?: ApiClient.defaultHttpClient(),
             log = { logger.info("Network", it) },
+            deviceGuid = io.github.currencortex.music.data.qqmusic.qqPlaybackGuid(context),
         ))
     val serverAudioSources = ServerAudioSources(apiClient)
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
