@@ -926,9 +926,11 @@ class QqDirectMusicClient(
     /**
      * Ask the CDN for the first bytes of a resolved stream. The vkey API only proves that QQ
      * issued a URL, not that the encoding exists; a missing file answers 404 with a JSON body,
-     * while a playable one answers 206 (or 200 when the CDN ignores `Range`). A transport
-     * failure is not treated as "missing": returning the URL leaves the player the same chance it
-     * has today, whereas dropping it would turn a flaky probe into an unavailable song.
+     * while a playable one answers 206 (or 200 when the CDN ignores `Range`).
+     *
+     * Only a client error establishes that the encoding is absent. A transport failure or a 5xx
+     * (500/502/503/504) says nothing about the file, so the URL is kept: dropping it would let a
+     * flaky probe downgrade a tier or report a playable song as unavailable.
      */
     private fun streamAvailable(url: String): Boolean {
         val call = streamProbe.newCall(Request.Builder().url(url)
@@ -937,7 +939,9 @@ class QqDirectMusicClient(
             .get().build())
         return try {
             call.timeout().timeout(6, TimeUnit.SECONDS)
-            call.execute().use { response -> response.isSuccessful }
+            call.execute().use { response ->
+                response.isSuccessful || response.code !in 400..499
+            }
         } catch (failure: IOException) {
             log("QQ direct stream probe skipped: ${failure.message.orEmpty().take(80)}")
             true
