@@ -32,10 +32,18 @@ internal enum class QqMusicStreamQuality(
     fun filename(songMid: String, mediaMid: String): String = "$prefix$songMid$mediaMid.$format"
 
     companion object {
+        /**
+         * HQ is a tier, not a format. QQ only hosts some encodings per song: OGG 320 is
+         * frequently absent (`404 file not exist` from the CDN) while MP3 320 or the 192 kbps
+         * AAC/OGG variants exist. Try the common encoding first and keep 192 kbps fallbacks so a
+         * missing 320 kbps file degrades within the tier instead of dropping to standard.
+         */
+        private val HQ_CANDIDATES = listOf(HQ_MP3_320, HQ_OGG_320, HQ_AAC_192, HQ_OGG_192)
         fun candidates(level: String, supportsDolby: Boolean, supportsDtsX: Boolean): List<QqMusicStreamQuality> =
             when (level) {
-                "auto" -> listOf(MASTER, STUDIO, HI_RES, LOSSLESS, HQ_OGG_320, HQ_MP3_320, STANDARD_MP3)
-                "higher" -> entries.filter { it.level == "exhigh" }
+                "auto" -> listOf(MASTER, STUDIO, HI_RES, LOSSLESS,
+                    HQ_MP3_320, HQ_OGG_320, HQ_AAC_192, HQ_OGG_192, STANDARD_MP3, STANDARD_AAC)
+                "higher", "exhigh" -> HQ_CANDIDATES
                 "qq_master" -> listOf(MASTER)
                 "qq_studio" -> listOf(STUDIO)
                 "qq_surround" -> listOf(SURROUND_51, SURROUND_714, SURROUND_916)
