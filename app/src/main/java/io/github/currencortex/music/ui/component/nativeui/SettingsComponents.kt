@@ -367,9 +367,19 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
 /** Options open in COUI's native spinner popup; selecting an entry saves once. */
 @Composable internal fun SettingsOptionsRow(title:String,value:String,options:List<SettingsOption>,
     modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true,valueLeading:(@Composable ()->Unit)?=null) {
-    val selectedIndex=options.indexOfFirst {it.selected}.takeIf {it>=0}?:0
+    val selected=options.indexOfFirst {it.selected}
+    // COUI renders the item at selectedIndex as the row's value, so an unanswered row would
+    // otherwise show its first option as if it were chosen. Show the caller's value instead.
+    val placeholder=if (selected<0 && options.isNotEmpty() && value.isNotBlank())
+        listOf(SettingsOption("settings_none",value,true){}) else emptyList()
+    val entries=placeholder+options
+    val selectedIndex=when {
+        selected>=0 -> selected
+        placeholder.isEmpty() -> -1
+        else -> 0
+    }
     OverlaySpinnerPreference(
-        items=options.map {option->
+        items=entries.map {option->
             DropdownItem(
                 text=option.label,
                 summary=option.summary,
@@ -382,6 +392,6 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
         summary=summary,
         enabled=enabled,
         startAction=valueLeading,
-        onSelectedIndexChange={index->options.getOrNull(index)?.onSelect()},
+        onSelectedIndexChange={index->entries.getOrNull(index)?.onSelect()},
     )
 }
