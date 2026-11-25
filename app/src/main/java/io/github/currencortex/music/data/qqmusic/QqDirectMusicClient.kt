@@ -30,6 +30,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -186,6 +187,11 @@ class QqDirectMusicClient(
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
+        .build()
+    /** Follows CDN redirects; used only for the short playback URL availability probe. */
+    private val streamProbe = http.newBuilder()
+        .followRedirects(true)
+        .followSslRedirects(true)
         .build()
     private val cgiCookieJar = MemoryCookieJar()
     private val cgiHttp = http.newBuilder().cookieJar(cgiCookieJar).build()
@@ -881,6 +887,14 @@ class QqDirectMusicClient(
             }
             val url = if (resolved.url.startsWith("http")) resolved.url
                 else STREAM_ORIGIN + resolved.url.trimStart('/')
+            // QQ hands out purls for encodings it does not actually host (for example OGG 320 on
+            // a song that only has MP3 320). Such a purl answers `404 file not exist` on the CDN,
+            // so verify the file before handing a dead URL to the player and move to the next
+            // encoding when it is missing.
+            if (!streamAvailable(url)) {
+                log("QQ direct stream ${candidate.prefix} unavailable")
+                continue
+            }
             return wrapped(buildJsonObject {
                 put("url", url)
                 put("level", candidate.level)
@@ -908,6 +922,31 @@ class QqDirectMusicClient(
         val data: JsonObject,
         val rejected: Boolean = false,
     )
+
+    /**
+     * Ask the CDN for the first bytes of a resolved stream. The vkey API only proves that QQ
+     * issued a URL, not that the encoding exists; a missing file answers 404 with a JSON body,
+     * while a playable one answers 206 (or 200 when the CDN ignores `Range`).
+     *
+     * Only a client error establishes that the encoding is absent. A transport failure or a 5xx
+     * (500/502/503/504) says nothing about the file, so the URL is kept: dropping it would let a
+     * flaky probe downgrade a tier or report a playable song as unavailable.
+     */
+    private fun streamAvailable(url: String): Boolean {
+        val call = streamProbe.newCall(Request.Builder().url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Range", "bytes=0-1")
+            .get().build())
+        return try {
+            call.timeout().timeout(6, TimeUnit.SECONDS)
+            call.execute().use { response ->
+                response.isSuccessful || response.code !in 400..499
+            }
+        } catch (failure: IOException) {
+            log("QQ direct stream probe skipped: ${failure.message.orEmpty().take(80)}")
+            true
+        }
+    }
 
     /**
      * One file's playback address. QQ answers `104009` (`msg` "<ip>;invalidq;") when it rejects the
