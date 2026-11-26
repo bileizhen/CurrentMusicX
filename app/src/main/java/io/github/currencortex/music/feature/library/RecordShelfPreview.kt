@@ -22,10 +22,18 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
     private var blocked = false
     private var active = true
     private var audioOwner: AudioRequest? = null
+    private val previewLoudness = java.util.concurrent.atomic.AtomicReference(io.github.currencortex.music.core.media.TrackLoudnessSpec())
     private val player = ExoPlayer.Builder(context.applicationContext, DockRenderersFactory(context.applicationContext, DockAudioLevel(),
         outputSampleRate = { container.audioOutput.state.value.sampleRate },
         outputSettings = { container.audioOutput.state.value },
-        outputStatus = { container.audioOutput.status.value = it }))
+        outputStatus = { container.audioOutput.status.value = it },
+        volumeNormalizationSettings = {
+            io.github.currencortex.music.core.media.VolumeNormalizationSettings.from(
+                container.musicSettings.state.value,
+                container.audioOutput.state.value.mode.bypassProcessing,
+            )
+        },
+        volumeNormalizationTrack = previewLoudness::get))
         .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
             volume = 0f
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -51,6 +59,7 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
         override val buffering get() = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady &&
             player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
         override suspend fun prepare(source: RecordPreviewSource) {
+            previewLoudness.set(source.loudnessSpec)
             player.setPreferredAudioDevice(context.getSystemService(android.media.AudioManager::class.java)
                 .preferredOutput(container.audioOutput.state.value.deviceKey))
             val item = MediaItem.Builder().setUri(source.uri).setCustomCacheKey(source.cacheKey)
@@ -78,7 +87,22 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
             val resolved = container.audioSources.resolve(request)
             val range = clip.await()
             check(request == container.audioRequest(song, request.quality))
-            RecordPreviewSource(resolved.source.url, resolved.key, range)
+            val trackKey = io.github.currencortex.music.core.media.trackLoudnessKey(song, resolved.source)
+            val cached = if (trackKey.isNotEmpty()) container.trackLoudnessStore.lookup(trackKey) else null
+            val meta = io.github.currencortex.music.core.media.LoudnessMetadataMapper.fromSongAndSource(song, resolved.source)
+                ?: container.localLoudnessTags.read(song)
+            RecordPreviewSource(
+                uri = resolved.source.url,
+                cacheKey = resolved.key,
+                clip = range,
+                loudnessSpec = io.github.currencortex.music.core.media.TrackLoudnessSpec(
+                    trackKey = trackKey,
+                    metadata = meta,
+                    cachedLufs = cached?.lufs,
+                    cachedPeak = cached?.peak,
+                    cachedGatedBlocks = cached?.gatedBlocks ?: 0,
+                ),
+            )
         }
     }, beforePlay = {
         if (pauseRevision == null) {

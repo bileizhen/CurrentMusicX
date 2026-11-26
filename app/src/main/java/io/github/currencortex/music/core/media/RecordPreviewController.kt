@@ -9,7 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-internal data class RecordPreviewSource(val uri: String, val cacheKey: String, val clip: SongPreviewClip, val fullLength: Boolean = false)
+internal data class RecordPreviewSource(
+    val uri: String,
+    val cacheKey: String,
+    val clip: SongPreviewClip,
+    val fullLength: Boolean = false,
+    val loudnessSpec: TrackLoudnessSpec = TrackLoudnessSpec(),
+)
 internal interface RecordPreviewAudio {
     var gain: Float
     val positionMs: Long
