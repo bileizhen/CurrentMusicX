@@ -23,7 +23,11 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
     private val formatState: io.github.currencortex.music.core.media.engine.AudioFormatState = io.github.currencortex.music.core.media.engine.AudioFormatState(),
     private val adaptiveSettings: () -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings = { io.github.currencortex.music.data.settings.AdaptiveAudioSettings() },
     private val hapticTimeline: MusicHapticTimeline = MusicHapticTimeline(),
-    private val adaptiveReport: (AdaptiveAudioRuntime) -> Unit = {}) : DefaultRenderersFactory(context) {
+    private val adaptiveReport: (AdaptiveAudioRuntime) -> Unit = {},
+    private val volumeNormalizationSettings: () -> VolumeNormalizationSettings = { VolumeNormalizationSettings() },
+    private val volumeNormalizationTrack: () -> TrackLoudnessSpec = { TrackLoudnessSpec() },
+    private val volumeNormalizationMeasured: (String, Float, Float, Int) -> Unit = { _, _, _, _ -> },
+    private val volumeNormalizationReport: (VolumeNormalizationRuntime) -> Unit = {}) : DefaultRenderersFactory(context) {
     override fun buildAudioRenderers(context: Context, extensionRendererMode: Int,
         mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector, enableDecoderFallback: Boolean,
         audioSink: AudioSink, eventHandler: android.os.Handler,
@@ -80,7 +84,10 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
                 diagnostics = diagnostics, primary = primary, router = router))
             // Keep the optional stage present before an engine import, so an existing
             // playback session can begin using it without recreating the player.
-            .setAudioProcessors(arrayOf(NeteaseOriginalAudioProcessor({
+            .setAudioProcessors(arrayOf(LoudnessNormalizationProcessor({
+                val settings = volumeNormalizationSettings()
+                if (processingSettings().mode.bypassProcessing) settings.copy(enabled = false) else settings
+            }, volumeNormalizationTrack, volumeNormalizationMeasured, volumeNormalizationReport), NeteaseOriginalAudioProcessor({
                 if (processingSettings().mode.bypassProcessing) null else originalPreset()
             }, originalFailure, originalProcessing), AdaptiveAudioProcessor({
                 val settings = adaptiveSettings()

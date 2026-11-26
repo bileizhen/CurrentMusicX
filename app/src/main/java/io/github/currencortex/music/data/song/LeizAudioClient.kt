@@ -38,6 +38,6 @@ class LeizAudioClient(endpoint: String = "https://api.bileizhen.top/api/netease"
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.AudioUnavailable)
         if (url.username.isNotEmpty() || url.password.isNotEmpty()) throw ApiException(ErrorKind.Parse)
         return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
-            validForSeconds = dto.expi.takeIf { it > 0 } ?: 30)
+            validForSeconds = dto.expi.takeIf { it > 0 } ?: 30, gainDb = dto.gain, peak = dto.peak)
     }
 }
