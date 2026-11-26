@@ -91,6 +91,10 @@ import kotlinx.coroutines.*
                             it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
                         } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
                     SettingsGroup(Modifier.padding(horizontal = 16.dp)) {
+                        SettingsSwitch("动态封面", config.playerDynamicCover,
+                            { value -> viewModel.edit { it.copy(playerDynamicCover = value) } },
+                            summary = "支持时展示动态封面视频，不可用时自动回退静态封面",
+                            modifier = Modifier.testTag("setting_player_dynamic_cover"))
                         SettingsSwitch("播放界面隐藏状态栏", config.playerHideStatusBar,
                             { value -> viewModel.edit { it.copy(playerHideStatusBar = value) } },
                             summary = "进入听歌界面时隐藏顶部状态栏，退出播放页后恢复",
