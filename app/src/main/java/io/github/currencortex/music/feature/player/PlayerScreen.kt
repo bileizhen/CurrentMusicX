@@ -11,6 +11,7 @@ import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.rememberScrollState
@@ -52,7 +53,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT, IMMERSION }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -108,14 +109,19 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var controlsAutoHidden by rememberSaveable { mutableStateOf(false) }
     var controlsInteraction by remember { mutableIntStateOf(0) }
     var controlsTouching by remember { mutableStateOf(false) }
-    LaunchedEffect(settings.lyricsDisplay.hideControls) {
+    LaunchedEffect(appearance.playerCoverHideControls, settings.lyricsDisplay.hideControls) {
         controlsRevealed = false
-        controlsHidden = false
-        controlsAutoHidden = false
+        if (!appearance.playerCoverHideControls && !settings.lyricsDisplay.hideControls) controlsAutoHidden = false
+        if (!settings.lyricsDisplay.hideControls) controlsHidden = false
     }
-    LaunchedEffect(pager.settledPage, queue.current?.id) {
+    LaunchedEffect(pager.settledPage) {
         controlsRevealed = false
-        controlsAutoHidden = false
+        val pageAutoHide = if (pager.settledPage == PlayerContent.COVER.ordinal) {
+            appearance.playerCoverHideControls
+        } else {
+            settings.lyricsDisplay.hideControls
+        }
+        if (!pageAutoHide) controlsAutoHidden = false
     }
     val menuHost = LocalSongMenu.current
     val songNavigation = rememberPlayerSongNavigation(queue.current, vm.container.musicRepository, settings.server) {
@@ -209,7 +215,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             pagerArtwork.immersive = immersiveCover && !widePlayer
             pagerArtwork.updateBounds()
         }
-        PlayerSystemBars(immersive = widePlayer)
+        val pageActive = LocalMusicPageActive.current
+        val hideStatusBar = appearance.playerHideStatusBar
+        PlayerSystemBars(immersive = pageActive && (widePlayer || (hideStatusBar && sheetProgress() > .05f)))
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
         // Hiding the status bar must not resize the cover midway through its flight.
@@ -218,31 +226,38 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val wideSafeInset = with(density) { maxOf(wideInsets.getLeft(density, layoutDirection),
             wideInsets.getRight(density, layoutDirection)).toDp() }
         val wideVerticalInset = with(density) { maxOf(wideInsets.getTop(density), wideInsets.getBottom(density)).toDp() }
+        val portraitTopInset = with(density) { maxOf(WindowInsets.displayCutout.getTop(density).toDp(), 8.dp) }
         LaunchedEffect(widePlayer) {
             if (widePlayer) {
                 sidePage.close()
                 pager.scrollToPage(PlayerContent.LYRICS.ordinal)
             }
         }
-        val hideControls = animateFloatAsState(
-            if ((controlsHidden || (settings.lyricsDisplay.hideControls && controlsAutoHidden)) && !controlsRevealed) 1f else 0f,
+        val coverAutoHide = appearance.playerCoverHideControls
+        val lyricsAutoHide = settings.lyricsDisplay.hideControls
+        val coverHideAmount = animateFloatAsState(
+            if (coverAutoHide && controlsAutoHidden && !controlsRevealed) 1f else 0f,
+            tween(260, easing = LinearOutSlowInEasing), label = "coverControls")
+        val lyricsHideAmount = animateFloatAsState(
+            if ((controlsHidden || (lyricsAutoHide && controlsAutoHidden)) && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
         // The neighbour page used to mount its complete Apple rail on the first drag frame.
         // Prepare it after the opening flight and other player transitions have settled,
         // while preserving the cheaper classic-page deferral and the immediate-swipe fallback.
-        val idleForLyrics by remember(pager, queueMotion, sidePage, sheetProgress, sheetDrag, hideControls) {
+        val idleForLyrics by remember(pager, queueMotion, sidePage, sheetProgress, sheetDrag, coverHideAmount, lyricsHideAmount) {
             derivedStateOf {
                 sheetProgress() >= 1f && !pager.isScrollInProgress && !queueGesture &&
                     queueMotion.progress <= .0001f && !sidePage.active && !sideDialog &&
                     overlay == PlayerOverlay.NONE && sheetDrag?.state?.dragging != true &&
-                    (hideControls.value <= .0001f || hideControls.value >= .9999f)
+                    (coverHideAmount.value <= .0001f || coverHideAmount.value >= .9999f) &&
+                    (lyricsHideAmount.value <= .0001f || lyricsHideAmount.value >= .9999f)
             }
         }
-        LaunchedEffect(settings.lyricsDisplay.hideControls, pager.settledPage, pager.isScrollInProgress, expanded,
+        LaunchedEffect(coverAutoHide, lyricsAutoHide, pager.settledPage, pager.isScrollInProgress, expanded,
             idleForLyrics, controlsRevealed, controlsHidden, controlsAutoHidden, controlsInteraction, controlsTouching,
-            overlay, queue.current?.id, widePlayer) {
-            if (!settings.lyricsDisplay.hideControls || pager.settledPage != PlayerContent.LYRICS.ordinal ||
-                pager.isScrollInProgress || !expanded || !idleForLyrics || controlsHidden || controlsAutoHidden ||
+            overlay, widePlayer) {
+            val pageAutoHide = if (pager.settledPage == PlayerContent.COVER.ordinal) coverAutoHide else lyricsAutoHide
+            if (!pageAutoHide || pager.isScrollInProgress || !expanded || !idleForLyrics || controlsHidden || controlsAutoHidden ||
                 controlsTouching || overlay != PlayerOverlay.NONE || widePlayer) return@LaunchedEffect
             delay(3_000)
             controlsAutoHidden = true
@@ -257,8 +272,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 lyricsPrepared = true
             }
         }
+        val pageFraction = { (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f) }
         val controlsVisibility = {
-            1f - hideControls.value * (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+            val p = pageFraction()
+            1f - (coverHideAmount.value * (1f - p) + lyricsHideAmount.value * p)
+        }
+        val headerVisibility = {
+            val p = pageFraction()
+            1f - coverHideAmount.value * (1f - p)
         }
         val openQueue: () -> Unit = { scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE } }
         val functions: @Composable () -> Unit = {
@@ -269,18 +290,24 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 onOptions = if (widePlayer) null else ({ overlay = PlayerOverlay.OPTIONS }))
         }
         val header: @Composable () -> Unit = {
-            Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
+            val headerAlpha = headerVisibility().coerceIn(0f, 1f)
+            val headerEnabled = headerAlpha > .5f
+            Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp)
+                .then(if (headerEnabled) Modifier else Modifier.clearAndSetSemantics {})
+                .graphicsLayer { alpha = headerAlpha },
+                verticalAlignment = Alignment.CenterVertically) {
+                PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"),
+                    enabled = headerEnabled)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     if (roaming.active) Text(if (state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
                         "猜你喜欢 · ${roaming.choice.title}" else "私人漫游 · ${roaming.choice.title}",
                         Modifier.testTag("open_roaming_modes")
-                            .clickable(role = Role.Button) { overlay = PlayerOverlay.ROAMING }
+                            .clickable(enabled = headerEnabled, role = Role.Button) { overlay = PlayerOverlay.ROAMING }
                             .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 PlayerIconButton(PlayerIcon.SHARE, "分享歌曲", { overlay = PlayerOverlay.SHARE }, Modifier.testTag("player_share"),
-                    enabled = queue.current != null)
+                    enabled = headerEnabled && queue.current != null)
             }
         }
         PlayerSidePageLayout(sidePage,
@@ -320,6 +347,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         Column(Modifier.fillMaxSize()
             .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
             .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset, vertical = wideVerticalInset)
+                else if (hideStatusBar) Modifier.padding(top = portraitTopInset).navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal))
                 else Modifier.statusBarsPadding().navigationBarsPadding()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
@@ -354,8 +383,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     }
                     PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS },
                         Modifier.align(Alignment.TopEnd).testTag("lyrics_options"))
-                } else Column(Modifier.fillMaxSize().pointerInput(settings.lyricsDisplay.hideControls) {
-                    if (settings.lyricsDisplay.hideControls) {
+                } else Column(Modifier.fillMaxSize().pointerInput(coverAutoHide || lyricsAutoHide) {
+                    if (coverAutoHide || lyricsAutoHide) {
                         try {
                             awaitPointerEventScope {
                                 while (true) {
@@ -401,13 +430,18 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
                                 active = pager.currentPage == 1 || pager.isScrollInProgress,
                                 expandLyricsWindow = controlsHidden ||
-                                    (settings.lyricsDisplay.hideControls && controlsAutoHidden && !controlsRevealed),
+                                    (lyricsAutoHide && controlsAutoHidden && !controlsRevealed),
                                 prepare = appleLyrics && lyricsPrepared)
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
                             immersive = immersiveCover, artistLink = artistLink, albumLink = albumLink,
-                            onPreviewCoordinates = { previewCoordinates = it })
+                            onPreviewCoordinates = { previewCoordinates = it },
+                            onStageTap = if (coverAutoHide) ({
+                                val hidden = controlsAutoHidden && !controlsRevealed
+                                controlsAutoHidden = !hidden
+                                controlsRevealed = hidden
+                            }) else null)
                         }
                     }
                     }
@@ -492,7 +526,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
                             animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                     })
-                if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
+                if (controlsRevealed && (if (content == PlayerContent.COVER) coverAutoHide else lyricsAutoHide) && !widePlayer)
                     MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"),
                         onClick = { controlsAutoHidden = true; controlsRevealed = false; dismiss() })
                 if (actions != null && queue.current != null) MusicDestinationRow("歌曲操作", onClick = {
@@ -505,6 +539,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else if (appearance.playerDynamicBackground) "流动背景 · 跟随歌曲封面"
                     else "封面毛玻璃 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
                     modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
+                if (!widePlayer) MusicDestinationRow("沉浸显示",
+                    summary = listOfNotNull(
+                        if (appearance.playerHideStatusBar) "隐藏状态栏" else null,
+                        if (coverAutoHide) "封面自动隐藏" else null,
+                        if (lyricsAutoHide) "歌词自动隐藏" else null
+                    ).ifEmpty { listOf("关闭") }.joinToString(" · "),
+                    modifier = Modifier.testTag("open_player_immersion"),
+                    onClick = { overlay = PlayerOverlay.IMMERSION })
                 MusicDestinationRow(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) "猜你喜欢" else "私人漫游",
                     summary = if (roaming.active) roaming.choice.title else "推荐歌曲",
                     modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
@@ -556,6 +598,26 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         settings.lyricsFont, settings.lyricsFontFile, vm::lyricsFont, vm::lyricsFontFile, currentLyric)
                 }
             }
+            PlayerOverlay.IMMERSION -> MusicDialog("沉浸显示", dismiss) {
+                Column(Modifier.fillMaxWidth()) {
+                    SettingsSwitch("隐藏状态栏", appearance.playerHideStatusBar,
+                        onCheckedChange = { checked ->
+                            scope.launch { vm.container.settings.edit { it.copy(playerHideStatusBar = checked) } }
+                        },
+                        modifier = Modifier.testTag("player_immersion_status_bar"),
+                        summary = "在全屏播放界面隐藏顶部状态栏，下拉屏幕顶部可临时查看")
+                    SettingsSwitch("封面页自动隐藏控制栏", appearance.playerCoverHideControls,
+                        onCheckedChange = { checked ->
+                            scope.launch { vm.container.settings.edit { it.copy(playerCoverHideControls = checked) } }
+                        },
+                        modifier = Modifier.testTag("player_immersion_cover_controls"),
+                        summary = "3 秒无操作自动收起顶部栏与底部控制栏，轻触封面或底部提示可呼出")
+                    SettingsSwitch("歌词页自动隐藏控制栏", settings.lyricsDisplay.hideControls,
+                        onCheckedChange = { checked -> vm.lyricsDisplay { it.copy(hideControls = checked) } },
+                        modifier = Modifier.testTag("player_immersion_lyrics_controls"),
+                        summary = "在歌词页播放时自动隐藏底部控制栏，上拉或点按可显示")
+                }
+            }
         }
     }
 }
@@ -563,11 +625,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
     active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null, showPreview: Boolean = true,
     immersive: Boolean = false, artistLink: Modifier = Modifier, albumLink: Modifier = Modifier,
-    onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
+    onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}, onStageTap: (() -> Unit)? = null) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
     val roaming by vm.container.activePersonalRoaming.state.collectAsStateWithLifecycle()
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier.fillMaxWidth()
+        .then(if (onStageTap != null) Modifier.pointerInput(onStageTap) {
+            detectTapGestures(onTap = { onStageTap() })
+        } else Modifier)) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - if (showPreview) 200.dp else 128.dp).coerceAtLeast(72.dp), 360.dp)
         Column(Modifier.fillMaxSize().then(if (immersive) Modifier else Modifier.verticalScroll(rememberScrollState())).padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

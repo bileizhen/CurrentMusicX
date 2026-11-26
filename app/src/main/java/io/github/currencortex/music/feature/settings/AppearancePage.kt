@@ -85,10 +85,22 @@ import kotlinx.coroutines.*
                 }
             }
             item("player_cover") {
-                SettingsPreviewChoiceGroup("播放封面", MusicIcons.Image, PlayerCoverStyle.entries.map { it.label },
-                    config.playerCoverStyle.ordinal, { index -> viewModel.edit {
-                        it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
-                    } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsPreviewChoiceGroup("播放封面", MusicIcons.Image, PlayerCoverStyle.entries.map { it.label },
+                        config.playerCoverStyle.ordinal, { index -> viewModel.edit {
+                            it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
+                        } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
+                    SettingsGroup(Modifier.padding(horizontal = 16.dp)) {
+                        SettingsSwitch("播放界面隐藏状态栏", config.playerHideStatusBar,
+                            { value -> viewModel.edit { it.copy(playerHideStatusBar = value) } },
+                            summary = "进入听歌界面时隐藏顶部状态栏，退出播放页后恢复",
+                            modifier = Modifier.testTag("setting_player_hide_status_bar"))
+                        SettingsSwitch("封面页自动隐藏控制面板", config.playerCoverHideControls,
+                            { value -> viewModel.edit { it.copy(playerCoverHideControls = value) } },
+                            summary = "3 秒无操作后自动隐藏顶栏与控制栏，点击画面或底部按钮恢复",
+                            modifier = Modifier.testTag("setting_player_cover_hide_controls"))
+                    }
+                }
             }
             item("font_family") {
                 AppearanceSection("字体", MusicIcons.Font) {
