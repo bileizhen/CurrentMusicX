@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import io.github.currencortex.music.R
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
@@ -35,9 +36,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 contentDescription = "用户头像", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 onError = { onImageError(it.result.throwable) })
         }
-        if (decorationUrl != null) AsyncImage(ImageRequest.Builder(LocalContext.current).data(decorationUrl).size(512).build(),
-            contentDescription = "头像挂件", contentScale = ContentScale.Fit,
-            modifier = Modifier.requiredSize(overlaySize).decorationMatte(),
-            onError = { onImageError(it.result.throwable) })
+        if (decorationUrl != null) DecorationImage(ImageRequest.Builder(LocalContext.current).data(decorationUrl)
+            .size(512).allowHardware(false).build(), contentDescription = "头像挂件", contentScale = ContentScale.Fit,
+            modifier = Modifier.requiredSize(overlaySize), onError = { onImageError(it) })
     }
 }
