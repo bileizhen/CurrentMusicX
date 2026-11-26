@@ -5,13 +5,11 @@ package io.github.currencortex.music.feature.settings
 
 import android.os.Build
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,10 +27,10 @@ import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.theme.rememberAppearanceColors
-import kotlinx.coroutines.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
+import kotlinx.coroutines.*
 
 @Composable internal fun AppearanceSettingsPage(viewModel: SettingsViewModel, onBack: () -> Unit,
     onOpenScale: () -> Unit, onPreviewLaunch: () -> Unit, onOpenFont: () -> Unit) {
@@ -87,10 +85,26 @@ import kotlin.math.roundToInt
                 }
             }
             item("player_cover") {
-                SettingsPreviewChoiceGroup("播放封面", MusicIcons.Image, PlayerCoverStyle.entries.map { it.label },
-                    config.playerCoverStyle.ordinal, { index -> viewModel.edit {
-                        it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
-                    } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsPreviewChoiceGroup("播放封面", MusicIcons.Image, PlayerCoverStyle.entries.map { it.label },
+                        config.playerCoverStyle.ordinal, { index -> viewModel.edit {
+                            it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
+                        } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
+                    SettingsGroup(Modifier.padding(horizontal = 16.dp)) {
+                        SettingsSwitch("动态封面", config.playerDynamicCover,
+                            { value -> viewModel.edit { it.copy(playerDynamicCover = value) } },
+                            summary = "支持时展示动态封面视频，不可用时自动回退静态封面",
+                            modifier = Modifier.testTag("setting_player_dynamic_cover"))
+                        SettingsSwitch("播放界面隐藏状态栏", config.playerHideStatusBar,
+                            { value -> viewModel.edit { it.copy(playerHideStatusBar = value) } },
+                            summary = "进入听歌界面时隐藏顶部状态栏，退出播放页后恢复",
+                            modifier = Modifier.testTag("setting_player_hide_status_bar"))
+                        SettingsSwitch("封面页自动隐藏控制面板", config.playerCoverHideControls,
+                            { value -> viewModel.edit { it.copy(playerCoverHideControls = value) } },
+                            summary = "3 秒无操作后自动隐藏顶栏与控制栏，点击画面或底部按钮恢复",
+                            modifier = Modifier.testTag("setting_player_cover_hide_controls"))
+                    }
+                }
             }
             item("font_family") {
                 AppearanceSection("字体", MusicIcons.Font) {
@@ -98,7 +112,7 @@ import kotlin.math.roundToInt
                     SettingsPreference(fontLabel, modifier = Modifier.testTag("setting_custom_font").then(source.modifier),
                         onClick = { source.open(onOpenFont) }, leading = {
                             Text("Aa", fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
-                        }, trailing = { Icon(MusicIcons.Forward, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant) })
+                        })
                 }
             }
             item("text_scale") { AppearanceTextScale(config, viewModel) }
@@ -192,11 +206,22 @@ import kotlin.math.roundToInt
                     it.copy(primaryColors = palette, primaryColor = if (it.primaryColor == editing) palette.first() else it.primaryColor) }
             } })
     }
-    if (showReset) MusicDialog("重置主题色？", { showReset = false }) {
-        Text("恢复默认颜色和色彩风格。")
-        MusicDialogButton("重置", onClick = { vm.edit { it.copy(monet = false, primaryColor = DefaultThemeColors.first(), primaryColors = DefaultThemeColors, colorStyle = ThemeColorStyle.VIVID) }; showReset = false },
-            modifier = Modifier.testTag("appearance_color_reset_confirm"))
-    }
+    SettingsDialog(
+        show = showReset,
+        title = "重置主题色？",
+        onDismissRequest = { showReset = false },
+        summary = "恢复默认颜色和色彩风格。",
+        positiveText = "重置",
+        onPositive = {
+            vm.edit {
+                it.copy(monet = false, primaryColor = DefaultThemeColors.first(),
+                    primaryColors = DefaultThemeColors, colorStyle = ThemeColorStyle.VIVID)
+            }
+            showReset = false
+        },
+        negativeText = "取消",
+        onNegative = { showReset = false },
+    )
 }
 
 @Composable private fun AppearanceTextScale(config: AppearanceSettings, vm: SettingsViewModel) {

@@ -2,11 +2,8 @@ package io.github.currencortex.music.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
-import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -25,11 +22,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.MusicIcons
-import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.suqi8.coui.kmp.basic.Button
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Slider
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 
@@ -92,9 +93,10 @@ import kotlin.math.roundToInt
                                 Text(if (liveEq) "实时增益 · 含动态 EQ · ±9 dB" else "手动调节 · ±6 dB",
                                     Modifier.testTag("adaptive_band_mode"), fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                             }
-                            GlassIconButton({ vm.editAdaptive { it.copy(gains = List(10) { 0f }) } }, "重置十段均衡器",
-                                Modifier.testTag("adaptive_reset"), enabled = enabled && settings.gains.any { it != 0f }, surface = false) {
-                                Icon(MusicIcons.Reset, null)
+                            IconButton(onClick = { vm.editAdaptive { it.copy(gains = List(10) { 0f }) } },
+                                modifier = Modifier.testTag("adaptive_reset"),
+                                enabled = enabled && settings.gains.any { it != 0f }) {
+                                Icon(MusicIcons.Reset, "重置十段均衡器")
                             }
                         }
                         AdaptiveEqBands(settings.gains, selectedBand, enabled, onSelect = { selectedBand = it },
@@ -224,7 +226,12 @@ import kotlin.math.roundToInt
 }
 
 @Composable private fun AudioChoice(label: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    GlassActionButton(label, onClick, modifier.semantics { this.selected = selected; role = Role.RadioButton }, primary = selected, enabled = enabled)
+    Button(
+        onClick = onClick,
+        modifier = modifier.semantics { this.selected = selected; role = Role.RadioButton },
+        enabled = enabled,
+        colors = if (selected) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
+    ) { Text(label, style = COUITheme.textStyles.buttonM) }
 }
 
 @Composable private fun AudioAdjustment(title: String, value: Float, range: ClosedFloatingPointRange<Float>,

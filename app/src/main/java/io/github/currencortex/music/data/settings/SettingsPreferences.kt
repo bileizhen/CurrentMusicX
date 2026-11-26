@@ -40,6 +40,9 @@ internal object SettingsPreferences {
     private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
     private val PLAYER_DYNAMIC_BACKGROUND = booleanPreferencesKey("player_dynamic_background")
     private val PLAYER_COVER_STYLE = stringPreferencesKey("player_cover_style")
+    private val PLAYER_DYNAMIC_COVER = booleanPreferencesKey("player_dynamic_cover")
+    private val PLAYER_HIDE_STATUS_BAR = booleanPreferencesKey("player_hide_status_bar")
+    private val PLAYER_COVER_HIDE_CONTROLS = booleanPreferencesKey("player_cover_hide_controls")
     private val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
     private val SCROLL_EDGE_HAPTIC = booleanPreferencesKey("scroll_edge_haptic")
     private val SHOW_FRAME_RATE = booleanPreferencesKey("show_frame_rate")
@@ -74,6 +77,9 @@ internal object SettingsPreferences {
         playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
         playerDynamicBackground = p[PLAYER_DYNAMIC_BACKGROUND] ?: true,
         playerCoverStyle = runCatching { PlayerCoverStyle.valueOf(p[PLAYER_COVER_STYLE].orEmpty()) }.getOrDefault(PlayerCoverStyle.CIRCLE),
+        playerDynamicCover = p[PLAYER_DYNAMIC_COVER] ?: true,
+        playerHideStatusBar = p[PLAYER_HIDE_STATUS_BAR] ?: false,
+        playerCoverHideControls = p[PLAYER_COVER_HIDE_CONTROLS] ?: false,
         developerMode = p[DEVELOPER_MODE] ?: false,
         scrollEdgeHaptic = p[SCROLL_EDGE_HAPTIC] ?: true,
         showFrameRate = p[SHOW_FRAME_RATE] ?: false,
@@ -108,6 +114,9 @@ internal object SettingsPreferences {
         p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur
         p[PLAYER_DYNAMIC_BACKGROUND] = v.playerDynamicBackground
         p[PLAYER_COVER_STYLE] = v.playerCoverStyle.name
+        p[PLAYER_DYNAMIC_COVER] = v.playerDynamicCover
+        p[PLAYER_HIDE_STATUS_BAR] = v.playerHideStatusBar
+        p[PLAYER_COVER_HIDE_CONTROLS] = v.playerCoverHideControls
         p[DEVELOPER_MODE] = v.developerMode
         p[SCROLL_EDGE_HAPTIC] = v.scrollEdgeHaptic
         p[SHOW_FRAME_RATE] = v.showFrameRate

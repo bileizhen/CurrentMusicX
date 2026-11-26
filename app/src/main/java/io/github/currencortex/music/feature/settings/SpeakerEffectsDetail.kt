@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,12 +34,13 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.OriginalSpeakerState
 import io.github.currencortex.music.data.effects.OriginalSpeakerScene
 import io.github.currencortex.music.data.song.Song
-import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
+import io.github.currencortex.music.ui.component.LocalMusicPageActive
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import io.github.currencortex.music.ui.component.musicScrollPadding
-import io.github.currencortex.music.ui.component.MusicDialog
-import kotlinx.coroutines.launch
+import io.github.currencortex.music.ui.component.nativeui.SettingsDialog
 import io.github.suqi8.coui.kmp.basic.Text
+import kotlinx.coroutines.launch
 
 /** Native presentation of the original outside detail. Browsing a scene never applies its DSP. */
 @Composable internal fun SpeakerEffectsDetail(
@@ -178,7 +178,13 @@ import io.github.suqi8.coui.kmp.basic.Text
             }
         }
     }
-    if (information) MusicDialog("外放音效说明", onDismiss = { information = false }) {
+    SettingsDialog(
+        show = information,
+        title = "外放音效说明",
+        onDismissRequest = { information = false },
+        positiveText = "知道了",
+        onPositive = { information = false },
+    ) {
         Column(Modifier.heightIn(max = 420.dp).testTag("sound_speaker_detail_information")) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 item { SpeakerInformationSection("音效介绍", "针对手机扬声器的声音特点，提供通用、浴室和睡前三种环境模式。浏览环境不会改变正在使用的音效，点击底部按钮后才会正式切换。") }

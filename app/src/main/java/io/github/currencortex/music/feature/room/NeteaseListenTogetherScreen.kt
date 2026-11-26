@@ -1,6 +1,5 @@
 package io.github.currencortex.music.feature.room
 
-import io.github.currencortex.music.ui.component.nativeui.*
 
 import android.content.ClipData
 import android.content.Intent
@@ -8,10 +7,8 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import io.github.currencortex.music.core.netease.listen.ListenTogetherOperation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,15 +29,17 @@ import io.github.currencortex.music.core.media.ListenTogetherPair
 import io.github.currencortex.music.core.media.ListenTogetherParticipant
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.netease.NeteaseAccountState
+import io.github.currencortex.music.core.netease.listen.ListenTogetherOperation
 import io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherState
 import io.github.currencortex.music.data.netease.listen.ListenTogetherInvitation
 import io.github.currencortex.music.feature.player.NeteaseSongsCollectionDialog
-import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.ui.component.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.ensureActive
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 
 private data class ListenPageSnapshot(val archive: ListenTogetherArchiveState, val fate: ListenTogetherFateState) {
     val key: String get() = when {
@@ -153,11 +152,11 @@ internal data class NeteaseListenTogetherActions(
                         fateController.close(); invitePeer = report.peer
                     } }, activeRoom = state.active,
                     busy = fate.deleting, sharing = fateSharing, error = fate.error != null)
-                deleteFate?.takeIf { visible }?.let { report -> ListenTogetherFateDeleteDialog(report,
+                ListenTogetherFateDeleteDialog(deleteFate != null && visible, deleteFate?.takeIf { visible },
                     onDismiss = { deleteFate = null }, onConfirm = { records ->
+                        deleteFate?.let { fateController.deleteConfirmed(it, records) }
                         deleteFate = null
-                        fateController.deleteConfirmed(report, records)
-                    }) }
+                    })
             } else if (archive.page != null) {
                 val collectionShown = visible && !archive.collectionSongs.isNullOrEmpty()
                 val back = { archiveController.back() }
@@ -194,14 +193,18 @@ internal data class NeteaseListenTogetherActions(
                     archiveController::dismissCollection,
                     loadPlaylists = { container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned } },
                     collect = { id, songs -> container.neteaseLibrary.addAll(id, songs); Unit })
-                invitePeer?.takeIf { visible }?.let { peer -> MusicDialog("再次一起听", onDismiss = { invitePeer = null }) {
-                    Text("创建新的双人会话后，可复制邀请链接发给${peer.nickname.ifBlank { "好友" }}。")
-                    MusicDialogActions {
-                        MusicDialogButton("取消", { invitePeer = null }, Modifier.weight(1f))
-                        MusicDialogButton("创建一起听", { invitePeer = null; archiveController.close(); controller.create() },
-                            Modifier.weight(1f), enabled = !state.active && !state.busy)
-                    }
-                } }
+                val peer = invitePeer?.takeIf { visible }
+                SettingsDialog(
+                    show = peer != null,
+                    title = "再次一起听",
+                    onDismissRequest = { invitePeer = null },
+                    summary = peer?.let { "创建新的双人会话后，可复制邀请链接发给${it.nickname.ifBlank { "好友" }}。" },
+                    positiveText = "创建一起听",
+                    onPositive = { invitePeer = null; archiveController.close(); controller.create() },
+                    positiveEnabled = !state.active && !state.busy,
+                    negativeText = "取消",
+                    onNegative = { invitePeer = null },
+                )
             } else {
                 NeteaseListenTogetherContent(state, account, playback,
                     actions = NeteaseListenTogetherActions(controller::create, controller::join, controller::resume,
@@ -330,7 +333,7 @@ internal data class NeteaseListenTogetherActions(
                     }
                     Spacer(Modifier.height(20.dp))
                     val invitation = state.invitationUrl
-                    GlassActionButton(
+                    SettingsActionButton(
                         if (copying) "正在复制…" else if (clipboardMessage == "邀请链接已复制") "已复制邀请链接" else "复制邀请链接",
                         onClick = { if (invitation != null && !copying) scope.launch {
                         copying = true
@@ -346,9 +349,9 @@ internal data class NeteaseListenTogetherActions(
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        GlassActionButton(if (state.operation == ListenTogetherOperation.REFRESH) "正在同步…" else "刷新同步",
+                        SettingsActionButton(if (state.operation == ListenTogetherOperation.REFRESH) "正在同步…" else "刷新同步",
                             actions.refresh, Modifier.weight(1f).testTag("netease_listen_refresh"), enabled = ready && !state.busy)
-                        GlassActionButton("退出一起听", { leaveConfirmation = true }, Modifier.weight(1f).testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
+                        SettingsActionButton("退出一起听", { leaveConfirmation = true }, Modifier.weight(1f).testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
                     }
                 } } }
                 item { SettingsGroup(Modifier.fillMaxWidth().testTag("netease_listen_now_playing")) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -369,21 +372,21 @@ internal data class NeteaseListenTogetherActions(
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        GlassActionButton("选择歌曲", onSearch, Modifier.weight(1f).testTag("netease_listen_search"), enabled = !state.busy)
-                        GlassActionButton("打开播放器", onPlayer, Modifier.weight(1f).testTag("netease_listen_player"), enabled = playback.song != null)
+                        SettingsActionButton("选择歌曲", onSearch, Modifier.weight(1f).testTag("netease_listen_search"), enabled = !state.busy)
+                        SettingsActionButton("打开播放器", onPlayer, Modifier.weight(1f).testTag("netease_listen_player"), enabled = playback.song != null)
                     }
                 } } }
             } else {
                 if (state.availableRoom != null) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("发现已有一起听会话", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text("恢复后在本机继续同步播放。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
-                    GlassActionButton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复…" else "恢复一起听",
+                    SettingsActionButton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复…" else "恢复一起听",
                         actions.resume, Modifier.fillMaxWidth().testTag("netease_listen_resume"), enabled = canStart)
                 } } }
                 item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("和好友听同一首歌", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                     Text("创建双人会话，复制邀请链接，与好友同步播放、暂停和切歌。", fontSize = 14.sp, color = colors.labelSecondaryVariant)
-                    GlassActionButton(if (state.operation == ListenTogetherOperation.CREATE) "正在创建…" else "创建一起听",
+                    SettingsActionButton(if (state.operation == ListenTogetherOperation.CREATE) "正在创建…" else "创建一起听",
                         actions.create, Modifier.fillMaxWidth().testTag("netease_listen_create"), primary = true, enabled = canStart)
                 } } }
                 item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -422,12 +425,16 @@ internal data class NeteaseListenTogetherActions(
         }
         }
     }
-    if (leaveConfirmation && LocalMusicPageActive.current) MusicDialog("退出双人一起听", onDismiss = { leaveConfirmation = false }) {
-        Text("退出将结束当前双人会话，并恢复本机播放队列。")
-        MusicDialogActions {
-            MusicDialogButton("取消", { leaveConfirmation = false }, Modifier.weight(1f).testTag("netease_listen_cancel_leave"))
-            MusicDialogButton("确认退出", { leaveConfirmation = false; actions.leave() },
-                Modifier.weight(1f).testTag("netease_listen_confirm_leave"), destructive = true, enabled = !state.busy)
-        }
-    }
+    SettingsDialog(
+        show = leaveConfirmation && LocalMusicPageActive.current,
+        title = "退出双人一起听",
+        onDismissRequest = { leaveConfirmation = false },
+        summary = "退出将结束当前双人会话，并恢复本机播放队列。",
+        positiveText = "确认退出",
+        onPositive = { leaveConfirmation = false; actions.leave() },
+        positiveEnabled = !state.busy,
+        negativeText = "取消",
+        onNegative = { leaveConfirmation = false },
+        destructive = true,
+    )
 }

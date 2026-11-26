@@ -20,17 +20,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.support.*
-import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.ui.util.showMusicMessage
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextField
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @Composable fun OfficialDonationScreen(vm: DonationViewModel, onBack: () -> Unit, onLogin: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -60,12 +59,12 @@ import java.time.format.DateTimeFormatter
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("请先登录 CurrentMusic 账号", fontSize = 17.sp)
                     Text("登录后确认账号、获取官方捐赠码，并查看仅本人可见的捐赠记录。", fontSize = 14.sp)
-                    GlassActionButton("登录 CurrentMusic", onLogin, Modifier.testTag("donation_login"), primary = true)
+                    SettingsActionButton("登录 CurrentMusic", onLogin, Modifier.testTag("donation_login"), primary = true)
                 }
             }
         } else {
             item("refresh") {
-                GlassActionButton(if (state.loading) "正在读取…" else "刷新账号与记录", vm::refresh,
+                SettingsActionButton(if (state.loading) "正在读取…" else "刷新账号与记录", vm::refresh,
                     Modifier.testTag("donation_refresh"), enabled = !state.loading && !state.busy)
             }
             state.message?.let { message -> item("success") { SettingsHint(message) } }
@@ -75,7 +74,7 @@ import java.time.format.DateTimeFormatter
                 item("steps") { SettingsHint("第 ${state.step + 1} 步 / 3 · ${listOf("确认账号", "扫码捐赠", "登记交易单号")[state.step]}") }
                 when (state.step) {
                     0 -> item("account") {
-                        SettingsSection("确认捐赠账号", MusicIcons.Heart) {
+                        SettingsSection("确认捐赠账号") {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("用户名：${info.profile.username}")
                                 Text("昵称：${info.profile.nickname.orEmpty().ifBlank { "未设置" }}")
@@ -83,13 +82,13 @@ import java.time.format.DateTimeFormatter
                                 Text("手机号：${info.profile.phone.orEmpty().ifBlank { "未绑定" }}")
                                 info.profile.created_at?.let { Text("注册时间：${donationDate(it)}") }
                                 Text("以上信息来自当前账号，将随捐赠记录交由站长核对。", fontSize = 13.sp)
-                                GlassActionButton("确认账号，查看捐赠码", vm::confirmAccount,
+                                SettingsActionButton("确认账号，查看捐赠码", vm::confirmAccount,
                                     Modifier.testTag("donation_confirm_account"), primary = true)
                             }
                         }
                     }
                     1 -> item("qr") {
-                        SettingsSection("扫码捐赠", MusicIcons.Image) {
+                        SettingsSection("扫码捐赠") {
                             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (state.qrLoading) SettingsHint("正在获取官方捐赠码…")
@@ -103,13 +102,13 @@ import java.time.format.DateTimeFormatter
                                         contentScale = ContentScale.Fit, onSuccess = { decoded = true },
                                         onError = { decodeFailed = true; decoded = false })
                                     if (decodeFailed) SettingsHint("捐赠码无法显示，请重新获取", error = true)
-                                    GlassActionButton("保存捐赠码", {
+                                    SettingsActionButton("保存捐赠码", {
                                         if (!fileBusy && vm.beginQrSave(bytes)) {
                                             try { save.launch("currentmusic-official-donation.jpg") }
                                             catch (_: Exception) { vm.takePendingQrSave(); context.showMusicError("未找到可以保存图片的应用") }
                                         }
                                     }, Modifier.testTag("donation_save_qr"), enabled = decoded && !fileBusy && pendingSave == null)
-                                    GlassActionButton("分享捐赠码", {
+                                    SettingsActionButton("分享捐赠码", {
                                         if (!fileBusy) {
                                             fileBusy = true
                                             scope.launch {
@@ -122,18 +121,18 @@ import java.time.format.DateTimeFormatter
                                         }
                                     }, enabled = decoded && !fileBusy)
                                 }
-                                if (state.qr == null || decodeFailed) GlassActionButton("重新获取捐赠码", vm::loadQr,
+                                if (state.qr == null || decodeFailed) SettingsActionButton("重新获取捐赠码", vm::loadQr,
                                     enabled = !state.qrLoading)
                                 Text("请使用对应支付应用扫码。金额由你自行决定；同一部手机可保存图片后从扫一扫的相册选择。", fontSize = 14.sp)
                                 Text("支付完成后，请在账单详情中找到交易单号，返回这里登记。", fontSize = 13.sp)
-                                GlassActionButton("已完成扫码，登记捐赠", vm::showForm,
+                                SettingsActionButton("已完成扫码，登记捐赠", vm::showForm,
                                     Modifier.testTag("donation_show_form"), primary = true, enabled = decoded)
-                                GlassActionButton("返回确认账号", vm::previous)
+                                SettingsActionButton("返回确认账号", vm::previous)
                             }
                         }
                     }
                     2 -> item("form") {
-                        SettingsSection("登记捐赠", MusicIcons.Heart) {
+                        SettingsSection("登记捐赠") {
                             Column(Modifier.fillMaxWidth().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text("捐赠账号：${info.profile.username}")
                                 TextField(state.input.amount, { vm.edit(state.input.copy(amount = it.take(16))) },
@@ -150,16 +149,16 @@ import java.time.format.DateTimeFormatter
                                     modifier = Modifier.fillMaxWidth().testTag("donation_note"))
                                 Text("提交的是你填写的金额与交易单号，仅供站长核对；提交成功不代表支付已被自动验证。", fontSize = 13.sp)
                                 state.error?.let { SettingsHint(it, error = true) }
-                                GlassActionButton(if (state.busy) "正在提交…" else "提交捐赠记录", vm::submit,
+                                SettingsActionButton(if (state.busy) "正在提交…" else "提交捐赠记录", vm::submit,
                                     Modifier.testTag("donation_submit"), primary = true,
                                     enabled = !state.busy && state.input.amount.isNotBlank() && state.input.transaction.isNotBlank())
-                                GlassActionButton("返回查看捐赠码", vm::previous, enabled = !state.busy)
+                                SettingsActionButton("返回查看捐赠码", vm::previous, enabled = !state.busy)
                             }
                         }
                     }
                 }
                 item("history_header") {
-                    SettingsSection("本人捐赠记录", MusicIcons.Heart) {
+                    SettingsSection("本人捐赠记录") {
                         SettingsHint("已登记 ${info.mine.count} 次 · 累计 ¥${donationMoney(info.mine.totalCents)}")
                         if (info.mine.items.isEmpty()) SettingsHint("暂无捐赠记录")
                     }

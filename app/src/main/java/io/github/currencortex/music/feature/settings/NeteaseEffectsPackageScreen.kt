@@ -6,11 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -21,7 +18,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.NeteaseEngineLibraries
 import io.github.currencortex.music.core.update.UpdateSource
 import io.github.currencortex.music.data.effects.NeteaseEffectsAssetRepository
-import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 
@@ -71,7 +67,7 @@ internal fun NeteaseEffectsPackageScreen(vm: SoundEffectsViewModel, onBack: () -
                                     SettingsHint(transfer.message.orEmpty() + (progress?.let { " $it%" } ?: ""),
                                         Modifier.testTag("sound_engine_import_status"))
                                 } else if (!installed && supported) {
-                                    GlassActionButton(
+                                    SettingsActionButton(
                                         if (transfer.failed) "重试下载 · $downloadSize" else "下载 · $downloadSize",
                                         vm::downloadOriginalEffects, Modifier.testTag("sound_download_engine"), primary = true)
                                 }
@@ -104,22 +100,26 @@ internal fun NeteaseEffectsPackageScreen(vm: SoundEffectsViewModel, onBack: () -
                 }
                 if (hasComponents && !transfer.loading) item {
                     SettingsGroup {
-                        if (confirmRemoval) {
-                            SettingsPreference("移除网易云音效包？", "删除已下载的引擎和界面素材，并关闭网易云音效。")
-                            Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                GlassActionButton("取消", { confirmRemoval = false }, Modifier.weight(1f))
-                                GlassActionButton("确认移除", {
-                                    confirmRemoval = false
-                                    showImport = false
-                                    vm.removeOriginalEffects()
-                                }, Modifier.weight(1f).testTag("confirm_remove_netease_effects"), destructive = true)
-                            }
-                        } else {
+                        if (!confirmRemoval) {
                             SettingsPreference("移除音效包", modifier = Modifier.testTag("remove_netease_effects"),
                                 onClick = { confirmRemoval = true })
                         }
                     }
                 }
     }
+    SettingsDialog(
+        show = confirmRemoval,
+        title = "移除网易云音效包？",
+        onDismissRequest = { confirmRemoval = false },
+        summary = "删除已下载的引擎和界面素材，并关闭网易云音效。",
+        positiveText = "确认移除",
+        onPositive = {
+            confirmRemoval = false
+            showImport = false
+            vm.removeOriginalEffects()
+        },
+        negativeText = "取消",
+        onNegative = { confirmRemoval = false },
+        destructive = true,
+    )
 }

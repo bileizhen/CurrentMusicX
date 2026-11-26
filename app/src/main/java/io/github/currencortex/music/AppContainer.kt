@@ -104,6 +104,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val soundEffectsSettings = io.github.currencortex.music.data.settings.SoundEffectsSettingsRepository(settingsStore, appScope)
     val adaptiveAudio = io.github.currencortex.music.data.settings.AdaptiveAudioSettingsRepository(settingsStore, appScope)
     val adaptiveAudioRuntime = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.core.media.AdaptiveAudioRuntime())
+    internal val trackLoudnessStore = TrackLoudnessStore(context.applicationContext, storageSuffix)
+    internal val localLoudnessTags = LocalLoudnessTagReader(context.applicationContext)
+    val volumeNormalizationRuntime = kotlinx.coroutines.flow.MutableStateFlow(VolumeNormalizationRuntime())
     val musicHapticsSupported by lazy {
         @Suppress("DEPRECATION")
         val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
@@ -274,6 +277,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val serverAudioSources = ServerAudioSources(apiClient)
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
         lx = lxSources, emby = emby, qqMusic = qqMusic, serverAudioSources = serverAudioSources)
+    val dynamicCovers = io.github.currencortex.music.data.song.DynamicCoverRepository(
+        api = apiClient,
+        qqMusic = qqMusic,
+        httpClient = apiHttpClient ?: ApiClient.defaultHttpClient(),
+        allowExternalLookup = storageNamespace.isEmpty(),
+    )
     internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
         qqAudioIdentity(qqMusic.audioIdentity, access)
 
@@ -820,5 +829,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()
         audioCache.close()
+        trackLoudnessStore.close()
     }
 }

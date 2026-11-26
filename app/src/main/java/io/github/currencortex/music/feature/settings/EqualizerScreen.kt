@@ -1,18 +1,8 @@
 package io.github.currencortex.music.feature.settings
 
-import io.github.currencortex.music.ui.component.nativeui.*
-
-import io.github.suqi8.coui.kmp.basic.Slider
-
-import io.github.currencortex.music.ui.component.nativeui.SettingsChoiceButton
-
-import io.github.currencortex.music.ui.component.nativeui.SettingsPage
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,10 +16,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.Slider
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import kotlin.math.roundToInt
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable fun EqualizerScreen(vm: EqualizerViewModel, onBack: (() -> Unit)? = null) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -52,7 +47,7 @@ import java.util.Locale
                 SettingsSwitch("开启均衡器", settings.enabled, vm::enabled, summary = status,
                     enabled = runtime.supported, modifier = Modifier.testTag("equalizer_enabled"))
             } }
-            item { SettingsSection("预设与曲线", MusicIcons.Headphones) {
+            item { SettingsSection("预设与曲线") {
                 SettingsOptionsRow("预设", settings.preset.label,
                     EqualizerPreset.entries.filter { it != EqualizerPreset.CUSTOM }.map { preset ->
                         SettingsOption("equalizer_preset_${preset.name.lowercase()}", preset.label, settings.preset == preset,
@@ -80,7 +75,7 @@ import java.util.Locale
                 }
                 }
             } }
-            item { SettingsSection("频段调节", MusicIcons.Scale) { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            item { SettingsSection("频段调节") { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 EqualizerSettings.FREQUENCIES.forEachIndexed { index, frequency ->
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (frequency >= 1000) String.format(Locale.ROOT, "%.1f kHz", frequency / 1000f) else "$frequency Hz",

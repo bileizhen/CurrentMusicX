@@ -1,11 +1,5 @@
 package io.github.currencortex.music.feature.settings
 
-import io.github.currencortex.music.ui.component.nativeui.*
-
-import io.github.currencortex.music.ui.component.nativeui.SettingsPage
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
-import io.github.currencortex.music.ui.component.nativeui.SettingsOption
 
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -16,26 +10,31 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
+import io.github.currencortex.music.core.media.engine.BitPerfectEvidence
 import io.github.currencortex.music.core.media.outputKey
 import io.github.currencortex.music.core.media.outputLabel
-import io.github.currencortex.music.data.settings.AudioOutputSettings
-import io.github.currencortex.music.data.settings.AudioOutputMode
 import io.github.currencortex.music.data.settings.AudioBufferPolicy
-import io.github.currencortex.music.core.media.engine.BitPerfectEvidence
+import io.github.currencortex.music.data.settings.AudioOutputMode
+import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsOption
+import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import io.github.suqi8.coui.kmp.basic.*
-import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun AudioOutputScreen(container: AppContainer) {
     SettingsUiScope {
@@ -87,7 +86,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     )
     var capabilitiesOpen by remember { mutableStateOf(false) }
     SettingsPage("音频输出", "audio_output_settings") {
-        item("mode") { SettingsSection("输出方式", MusicIcons.Headphones) {
+        item("mode") { SettingsSection("输出方式") {
             SettingsOptionsRow("输出模式", settings.mode.label, AudioOutputMode.entries.map { mode ->
                 SettingsOption("output_mode_${mode.name}", mode.label, settings.mode == mode,
                     summary = modeDescriptions.getValue(mode), onSelect = { save { container.audioOutput.setMode(mode) } })
@@ -103,7 +102,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             if (settings.mode == AudioOutputMode.BIT_PERFECT)
                 SettingsHint(bitPerfectDevices ?: "正在读取 USB 逐位输出能力…", Modifier.testTag("bit_perfect_capability"))
         } }
-        item("format") { SettingsSection("音频格式", MusicIcons.File) {
+        item("format") { SettingsSection("音频格式") {
             SettingsOptionsRow("输出采样率", if (settings.mode.bypassProcessing || settings.sampleRate == 0) "跟随音源" else "${settings.sampleRate} Hz",
                 supportedRates.map { rate -> SettingsOption("output_rate_$rate", if (rate == 0) "跟随音源" else "$rate Hz",
                     settings.sampleRate == rate, onSelect = { save { container.audioOutput.setSampleRate(rate) } }) },
@@ -126,7 +125,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     marginStartType = io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType.Small)
                 NeteaseUsbOutputSettings(settings) { key -> save { container.audioOutput.setUsbDevice(key) } }
             }
-        } else item("device") { SettingsSection("输出设备", MusicIcons.Device) {
+        } else item("device") { SettingsSection("输出设备") {
             SettingsOptionsRow("首选设备", selectedDevice?.outputLabel() ?: if (settings.deviceKey.isEmpty()) "跟随系统" else "设备未连接",
                 listOf(SettingsOption("output_device_system", "跟随系统", settings.deviceKey.isEmpty(),
                     onSelect = { save { container.audioOutput.setDevice("") } })) + devices.map { device ->
@@ -134,7 +133,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         onSelect = { save { container.audioOutput.setDevice(device.outputKey()) } })
                 }, Modifier.testTag("output_device"))
         } }
-        item("live_diagnostics") { SettingsSection("播放诊断", MusicIcons.Headphones) {
+        item("live_diagnostics") { SettingsSection("播放诊断") {
             val rows = listOf(
                 "引擎请求模式" to diagnostics.requestedMode.label,
                 "实际音频后端" to (diagnostics.backend ?: "系统未提供"),
@@ -168,7 +167,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 SettingsPreference(title, value, Modifier.testTag("audio_diagnostic_$index"))
             }
         } }
-        item("diagnostics") { SettingsSection("设备与诊断", MusicIcons.Info) {
+        item("diagnostics") { SettingsSection("设备与诊断") {
             SettingsPreference("设备报告的能力", if (capabilitiesOpen) "收起设备信息" else "采样率与系统首选配置",
                 Modifier.testTag("output_capabilities"), onClick = { capabilitiesOpen = !capabilitiesOpen },
                 trailing = { Icon(MusicIcons.Forward, null, Modifier.size(18.dp).rotate(if (capabilitiesOpen) 90f else 0f)) })

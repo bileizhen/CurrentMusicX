@@ -30,6 +30,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -187,6 +188,11 @@ class QqDirectMusicClient(
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
         .build()
+    /** Follows CDN redirects; used only for the short playback URL availability probe. */
+    private val streamProbe = http.newBuilder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
     private val cgiCookieJar = MemoryCookieJar()
     private val cgiHttp = http.newBuilder().cookieJar(cgiCookieJar).build()
     private data class AndroidDevice(
@@ -245,6 +251,7 @@ class QqDirectMusicClient(
                 route == "search/suggest" -> suggestions(query)
                 route == "search/hot" -> hotSearch()
                 route == "song/detail" -> songDetail(query)
+                route == "song/dynamic/cover" -> songDynamicCover(query)
                 route == "song/qualities" -> songQualities(query)
                 route == "song/favorite-count" -> songFavoriteCount(query)
                 route == "song/url" -> songUrl(query, credential)
@@ -817,6 +824,63 @@ class QqDirectMusicClient(
         return wrapped(buildJsonObject { put("songs", JsonArray(tracks)) })
     }
 
+    private fun songDynamicCover(query: Map<String, String>): JsonObject {
+        val songMid = query["songMid"].orEmpty().trim()
+        val rawAlbumMid = query["albumMid"].orEmpty().trim()
+        val albumMid = rawAlbumMid.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) } ?: run {
+            if (!songMid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
+            val detail = cgi("music.trackInfo.UniformRuleCtrl", "CgiGetTrackInfo", buildJsonObject {
+                put("ctx", 0)
+                put("client", 1)
+                put("mids", buildJsonArray { add(JsonPrimitive(songMid)) })
+                put("types", buildJsonArray { add(JsonPrimitive(0)) })
+                put("modify_stamp", buildJsonArray { add(JsonPrimitive(0)) })
+            }, null)
+            val track = detail.array("tracks", "track_info", "songs", "songlist", "list")
+                .firstOrNull() as? JsonObject
+            (track?.get("album") as? JsonObject)?.firstText("mid", "albumMid", "albumMID")
+                ?: track?.firstText("albumMid", "albummid", "albumMID")
+                ?: ""
+        }.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val albumData = cgi("music.musichallAlbum.AlbumInfoServer", "GetAlbumDetail",
+            buildJsonObject { put("albumMid", albumMid) }, null)
+        val basic = (albumData["basicInfo"] as? JsonObject) ?: (albumData["album"] as? JsonObject) ?: albumData
+        val vid = basic.firstText("dynamicCoverVid", "dynamic_cover_vid")
+            .takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val streamData = cgi("music.stream.MvUrlProxy", "GetMvUrls", buildJsonObject {
+            put("vids", buildJsonArray { add(JsonPrimitive(vid)) })
+            put("request_type", 10003)
+            put("guid", playbackGuid)
+            put("videoformat", 1)
+            put("format", 264)
+            put("dolby", 0)
+            put("use_new_domain", 1)
+            put("use_ipv6", 1)
+        }, null)
+        val vidObj = (streamData[vid] as? JsonObject)
+            ?: (streamData.values.firstOrNull { it is JsonObject } as? JsonObject)
+        val mp4Entries = vidObj?.array("mp4").orEmpty().mapNotNull { it as? JsonObject }
+        val bestEntry = mp4Entries
+            .filter { entry ->
+                entry.firstLong("code") == 0L &&
+                    entry.array("freeflow_url").any { (it as? JsonPrimitive)?.contentOrNull?.startsWith("http") == true }
+            }
+            .maxByOrNull { entry -> entry.firstLong("filetype") }
+        val urls = bestEntry?.array("freeflow_url")
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+            .orEmpty()
+        val videoUrl = (urls.firstOrNull { it.startsWith("https://") }
+            ?: urls.firstOrNull { it.startsWith("http://") }).orEmpty()
+        return wrapped(buildJsonObject {
+            put("vid", vid)
+            put("videoUrl", videoUrl)
+        })
+    }
+
     private fun songQualities(query: Map<String, String>): JsonObject {
         val mid = query["mid"].orEmpty()
         if (!mid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
@@ -881,6 +945,14 @@ class QqDirectMusicClient(
             }
             val url = if (resolved.url.startsWith("http")) resolved.url
                 else STREAM_ORIGIN + resolved.url.trimStart('/')
+            // QQ hands out purls for encodings it does not actually host (for example OGG 320 on
+            // a song that only has MP3 320). Such a purl answers `404 file not exist` on the CDN,
+            // so verify the file before handing a dead URL to the player and move to the next
+            // encoding when it is missing.
+            if (!streamAvailable(url)) {
+                log("QQ direct stream ${candidate.prefix} unavailable")
+                continue
+            }
             return wrapped(buildJsonObject {
                 put("url", url)
                 put("level", candidate.level)
@@ -908,6 +980,31 @@ class QqDirectMusicClient(
         val data: JsonObject,
         val rejected: Boolean = false,
     )
+
+    /**
+     * Ask the CDN for the first bytes of a resolved stream. The vkey API only proves that QQ
+     * issued a URL, not that the encoding exists; a missing file answers 404 with a JSON body,
+     * while a playable one answers 206 (or 200 when the CDN ignores `Range`).
+     *
+     * Only a client error establishes that the encoding is absent. A transport failure or a 5xx
+     * (500/502/503/504) says nothing about the file, so the URL is kept: dropping it would let a
+     * flaky probe downgrade a tier or report a playable song as unavailable.
+     */
+    private fun streamAvailable(url: String): Boolean {
+        val call = streamProbe.newCall(Request.Builder().url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Range", "bytes=0-1")
+            .get().build())
+        return try {
+            call.timeout().timeout(6, TimeUnit.SECONDS)
+            call.execute().use { response ->
+                response.isSuccessful || response.code !in 400..499
+            }
+        } catch (failure: IOException) {
+            log("QQ direct stream probe skipped: ${failure.message.orEmpty().take(80)}")
+            true
+        }
+    }
 
     /**
      * One file's playback address. QQ answers `104009` (`msg` "<ip>;invalidq;") when it rejects the
