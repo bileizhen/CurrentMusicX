@@ -36,7 +36,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 onError = { onImageError(it.result.throwable) })
         }
         if (decorationUrl != null) AsyncImage(ImageRequest.Builder(LocalContext.current).data(decorationUrl).size(512).build(),
-            contentDescription = "头像挂件", contentScale = ContentScale.Fit, modifier = Modifier.requiredSize(overlaySize),
+            contentDescription = "头像挂件", contentScale = ContentScale.Fit,
+            modifier = Modifier.requiredSize(overlaySize).decorationMatte(),
             onError = { onImageError(it.result.throwable) })
     }
 }

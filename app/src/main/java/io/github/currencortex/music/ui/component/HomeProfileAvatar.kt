@@ -115,7 +115,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         onSuccess = { settled = true; failed = false }, onError = { settled = true; failed = true })
                 }
                 if (decorationUrl != null) AsyncImage(rememberDecorationRequest(decorationUrl), null,
-                    Modifier.align(Alignment.Center).requiredSize(42.dp * boundedDecorationScale(decorationScale)).testTag("home_avatar_frame"),
+                    Modifier.align(Alignment.Center).requiredSize(42.dp * boundedDecorationScale(decorationScale))
+                        .decorationMatte().testTag("home_avatar_frame"),
                     contentScale = ContentScale.Fit, onSuccess = { frameLoaded = true }, onError = { frameLoaded = false })
             }
         }
@@ -143,6 +144,7 @@ internal fun boundedDecorationScale(scale: Double) = scale.takeIf { it.isFinite(
         if (url != null) AsyncImage(rememberAvatarRequest(url), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         if (decorationUrl != null) AsyncImage(rememberDecorationRequest(decorationUrl), null,
-            Modifier.requiredSize(64.dp * boundedDecorationScale(decorationScale)).testTag("flying_avatar_frame"), contentScale = ContentScale.Fit)
+            Modifier.requiredSize(64.dp * boundedDecorationScale(decorationScale)).decorationMatte()
+                .testTag("flying_avatar_frame"), contentScale = ContentScale.Fit)
     }
 }
