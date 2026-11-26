@@ -1,51 +1,44 @@
 package io.github.currencortex.music.feature.room
 
-import io.github.currencortex.music.ui.component.SpringLazyColumn
 
-import io.github.currencortex.music.ui.component.MusicChoiceDialog
-
-import io.github.currencortex.music.ui.component.MusicDialogButton
-
-import io.github.currencortex.music.ui.component.musicScrollPadding
+import android.content.ClipData
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.res.painterResource
-import io.github.currencortex.music.R
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.testTag
-import android.content.ClipData
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.data.room.*
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.network.RequestSession
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.ui.component.MusicCover
-import io.github.currencortex.music.ui.component.MusicTextAction
+import io.github.currencortex.music.data.room.*
 import io.github.currencortex.music.ui.component.MusicCategoryTabs
-import io.github.currencortex.music.ui.component.MusicSearchBar
-import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.MusicChoiceDialog
+import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicDestinationRow
+import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.ui.component.MusicDialogButton
+import io.github.currencortex.music.ui.component.MusicSearchBar
+import io.github.currencortex.music.ui.component.MusicTextAction
+import io.github.currencortex.music.ui.component.SpringLazyColumn
+import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.util.collectAsPageState
+import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import io.github.suqi8.coui.kmp.basic.*
 
 @Composable fun RoomScreen(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onDialogActive: (Boolean) -> Unit = {}, onBinding: (() -> Unit)? = null) {
@@ -100,7 +93,7 @@ import io.github.suqi8.coui.kmp.basic.*
                     top = topInset + 8.dp, bottom = 24.dp)),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item {
-                    SettingsSection("与好友一起", io.github.currencortex.music.ui.component.MusicIcons.Headphones) {
+                    SettingsSection("与好友一起") {
                         MusicDestinationRow("网易云双人一起听", onNative, Modifier.testTag("open_netease_listen_together"),
                             summary = if (native.active) "正在一起听 · 查看会话" else "和网易云好友同步听歌")
                     }
@@ -120,10 +113,10 @@ import io.github.suqi8.coui.kmp.basic.*
                 item {
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GlassActionButton("查找", { vm.search(query.trim()) }, enabled = !busy, fillWidth = false)
-                        GlassActionButton("创建房间", { create = true }, primary = true,
+                        SettingsActionButton("查找", { vm.search(query.trim()) }, enabled = !busy, fillWidth = false)
+                        SettingsActionButton("创建房间", { create = true }, primary = true,
                             enabled = account.account != null && !busy, fillWidth = false)
-                        GlassActionButton(if (browser.loading) "刷新中" else "刷新", { vm.load() },
+                        SettingsActionButton(if (browser.loading) "刷新中" else "刷新", { vm.load() },
                             enabled = !browser.loading && !busy, fillWidth = false)
                     }
                     if (account.account == null) SettingsHint("登录 CurrentMusic 账号后可创建房间。")
@@ -145,7 +138,7 @@ import io.github.suqi8.coui.kmp.basic.*
                             Modifier.padding(horizontal = 16.dp, vertical = 8.dp), enabled = !busy)
                     }
                 }
-                if (browser.more) item { GlassActionButton("加载更多", { vm.load(more = true) }, enabled = !browser.loading) }
+                if (browser.more) item { SettingsActionButton("加载更多", { vm.load(more = true) }, enabled = !browser.loading) }
                 if (!browser.loading && browser.rooms.isEmpty() && browser.error == null) item {
                     SettingsGroup { SettingsPreference(if (browser.scope == RoomScope.MINE) "暂无我的房间" else "暂无公开房间",
                         if (browser.scope == RoomScope.MINE) "你创建的房间和已归档房间会显示在这里。" else "创建一个房间，或使用好友的六位房间号加入。") }
@@ -215,27 +208,55 @@ import io.github.suqi8.coui.kmp.basic.*
     }
     if (create) RoomForm("创建房间", { if (!busy) create = false }, saving = busy, error = browser.error) { name, pw, public, free, approval, locked ->
         vm.create(name, pw.orEmpty(), public, free, approval, locked) }
-    deleteRoom?.let { (room, expected) -> MusicDialog("永久删除房间", onDismiss = { deleteRoom = null }) {
-        Text("将永久删除「${room.name}」（#${room.code}）及其成员、点歌队列、事件与封禁记录。此操作无法恢复。")
-        MusicDialogButton("永久删除", onClick = { deleteRoom = null; vm.deleteOwned(room, expected) }, enabled = !busy,
-            modifier = Modifier.testTag("confirm_delete_room"))
-    } }
-    passwordRoom?.let { room ->
-        var password by remember(room.id) { mutableStateOf("") }
-        MusicDialog("加入 ${room.name}", onDismiss = { vm.passwordRoom.value = null }) {
-            TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            browser.error?.let { Text(it, fontSize = 13.sp) }
-            MusicDialogButton(if (busy) "正在加入…" else "加入", onClick = { vm.join(room, password) }, enabled = !busy)
-        }
+    SettingsDialog(
+        show = deleteRoom != null,
+        title = "永久删除房间",
+        onDismissRequest = { deleteRoom = null },
+        summary = deleteRoom?.let { (room) ->
+            "将永久删除「${room.name}」（#${room.code}）及其成员、点歌队列、事件与封禁记录。此操作无法恢复。"
+        },
+        positiveText = "永久删除",
+        onPositive = { deleteRoom?.let { (room, expected) -> vm.deleteOwned(room, expected) }; deleteRoom = null },
+        positiveEnabled = !busy,
+        negativeText = "取消",
+        onNegative = { deleteRoom = null },
+        destructive = true,
+    )
+    var password by remember(passwordRoom?.id) { mutableStateOf("") }
+    SettingsDialog(
+        show = passwordRoom != null,
+        title = passwordRoom?.let { "加入 ${it.name}" }.orEmpty(),
+        onDismissRequest = { vm.passwordRoom.value = null },
+        positiveText = if (busy) "正在加入…" else "加入",
+        onPositive = { passwordRoom?.let { vm.join(it, password) } },
+        positiveEnabled = !busy,
+        negativeText = "取消",
+        onNegative = { vm.passwordRoom.value = null },
+    ) {
+        TextField(password, { password = it }, label = "房间密码",
+            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        browser.error?.let { Text(it, Modifier.padding(top = 8.dp), fontSize = 13.sp) }
     }
-    if (exit) MusicDialog("退出一起听", onDismiss = { exit = false }) {
-        Text("退出后恢复本地队列，保持暂停。")
-        MusicDialogButton("退出房间", onClick = { exit = false; vm.leave() }, modifier = Modifier.testTag("confirm_leave_room"))
-    }
-    if (close) MusicDialog("归档房间", onDismiss = { close = false }) {
-        Text("播放将停止，所有成员都会离开。房间号、队列和进度会保留，你可以从“我的房间”恢复。")
-        MusicDialogButton("归档房间", onClick = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) })
-    }
+    SettingsDialog(
+        show = exit,
+        title = "退出一起听",
+        onDismissRequest = { exit = false },
+        summary = "退出后恢复本地队列，保持暂停。",
+        positiveText = "退出房间",
+        onPositive = { exit = false; vm.leave() },
+        negativeText = "取消",
+        onNegative = { exit = false },
+    )
+    SettingsDialog(
+        show = close,
+        title = "归档房间",
+        onDismissRequest = { close = false },
+        summary = "播放将停止，所有成员都会离开。房间号、队列和进度会保留，你可以从“我的房间”恢复。",
+        positiveText = "归档房间",
+        onPositive = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) },
+        negativeText = "取消",
+        onNegative = { close = false },
+    )
 }
 @Composable private fun RoomTransport(label: String, icon: Int, onClick: () -> Unit, enabled: Boolean, primary: Boolean = false) {
     Column(Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally,

@@ -1,29 +1,29 @@
 package io.github.currencortex.music.ui.component
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.disabled
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
@@ -44,6 +44,8 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
 @Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     destructive: Boolean = false) {
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        // GlassActionButton renders a COUI capsule on settings pages and the app's glass pill
+        // everywhere else, so product pages keep the action they were designed with.
         io.github.currencortex.music.ui.component.nativeui.GlassActionButton(label,onClick,modifier,
             destructive=destructive,enabled=enabled,fillWidth=false)
         return
@@ -73,10 +75,16 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
     val ink = COUITheme.colorScheme.labelPrimary
     val source=rememberPageNavigationSource(title,summary.orEmpty())
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current&&!dialog) {
+        // Settings pages get COUI's native chevron; product pages keep the app's own "›" glyph
+        // (and suppress the row's built-in arrow when the caller asked for none).
+        val settingsPage = io.github.currencortex.music.ui.component.nativeui.LocalCouiSettingsPage.current
+        val trailing: (@Composable () -> Unit)? = when {
+            settingsPage -> if (chevron) null else ({})
+            else -> ({ if (chevron) Text("›", fontSize = 22.sp, color = ink.copy(alpha = .4f)) })
+        }
         io.github.currencortex.music.ui.component.nativeui.SettingsPreference(title,summary,
             modifier.then(if(chevron)source.modifier else Modifier),enabled,
-            onClick={if(chevron)source.open(onClick)else onClick()},
-            trailing={if(chevron)Text("›",fontSize=22.sp,color=ink.copy(alpha=.4f))})
+            onClick={if(chevron)source.open(onClick)else onClick()}, trailing = trailing)
         return
     }
     Row(modifier.then(if(!dialog&&chevron)source.modifier else Modifier).fillMaxWidth().then(if (dialog) Modifier.drawBehind {

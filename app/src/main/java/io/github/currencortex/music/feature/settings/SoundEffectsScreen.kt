@@ -1,42 +1,29 @@
 package io.github.currencortex.music.feature.settings
 
-import io.github.currencortex.music.ui.component.nativeui.*
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
-import io.github.suqi8.coui.kmp.squircle.squircleSurface
-import io.github.suqi8.coui.kmp.squircle.squircleBorder
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -46,19 +33,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
-import io.github.currencortex.music.data.effects.NeteaseSoundEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.effects.NativeEffectTile
-import io.github.currencortex.music.data.settings.EqualizerPreset
+import io.github.currencortex.music.data.effects.NeteaseSoundEffect
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleBorder
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.abs
 import kotlinx.serialization.json.*
 
 /** Original presets and local EQ share one visible selection, with independent verified apply paths. */
@@ -168,8 +157,7 @@ import kotlinx.serialization.json.*
                         transfer.loading -> transfer.progress?.let { "下载中 · $it%" } ?: "正在准备"
                         installed -> "已安装"
                         else -> "可选下载"
-                    }, Modifier.testTag("open_netease_engine"), onClick = onPackage,
-                        trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                    }, Modifier.testTag("open_netease_engine"), onClick = onPackage)
                 }
             }
             }
@@ -380,34 +368,53 @@ import kotlinx.serialization.json.*
 
         }
     }
-    if (installed) tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
-        Text(tile.description, fontSize = 14.sp)
-        MusicTextAction("使用", { vm.useTile(tile); tileDetails = null })
-        MusicTextAction("返回音效页", { tileDetails = null })
-    } }
-    if (installed) selectedEffect?.let { effect ->
-        val unavailable = vm.originalUnavailableReason(effect)
-        MusicDialog(effect.name, onDismiss = { selectedEffect = null }) {
-            Text(effect.description, fontSize = 15.sp)
-            Text(unavailable ?: if (effect.legacyMemberOriginal)
-                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“设置 → 账号”登录。选择会保存，重启后重新核验。"
-                else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。",
-                color = colors.labelSecondaryVariant, fontSize = 13.sp)
-            MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
-                vm.useOriginal(effect)
-                selectedEffect = null
-            }, Modifier.testTag("sound_use_original"))
-            launchError?.let { Text(it, color = colors.labelSecondaryVariant, fontSize = 13.sp) }
-            MusicTextAction("前往网易云音效", {
-                try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("orpheus://effect")).setPackage("com.netease.cloudmusic"))
-                    launchError = null
-                } catch (_: ActivityNotFoundException) { launchError = "请先安装网易云音乐客户端" }
-                catch (_: SecurityException) { launchError = "暂时无法打开网易云音乐" }
-            }, Modifier.testTag("sound_open_netease"))
-            MusicTextAction("返回音效页", { selectedEffect = null }, Modifier.testTag("sound_official_close"))
-        }
-    }
+    // Both dialogs stay composed so their exit animation plays; `show` drives visibility.
+    val tile = tileDetails?.takeIf { installed }
+    SettingsDialog(
+        show = tile != null,
+        title = tile?.name.orEmpty(),
+        onDismissRequest = { tileDetails = null },
+        summary = tile?.description,
+        positiveText = "使用",
+        onPositive = { tile?.let(vm::useTile); tileDetails = null },
+        negativeText = "返回音效页",
+        onNegative = { tileDetails = null },
+    )
+    val effect = selectedEffect?.takeIf { installed }
+    val unavailable = effect?.let(vm::originalUnavailableReason)
+    SettingsDialog(
+        show = effect != null,
+        title = effect?.name.orEmpty(),
+        onDismissRequest = { selectedEffect = null },
+        summary = effect?.let { current ->
+            buildString {
+                append(current.description)
+                append("\n\n")
+                append(unavailable ?: if (current.legacyMemberOriginal)
+                    "此音效需要有效的网易云${if (current.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“设置 → 账号”登录。选择会保存，重启后重新核验。"
+                    else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。")
+                launchError?.let { append("\n\n$it") }
+            }
+        },
+        positiveText = when {
+            unavailable != null -> "重新检查并使用"
+            effect?.legacyMemberOriginal == true -> "核验权益并使用"
+            effect != null && original.selectedId == effect.id -> "重新载入原版音效"
+            else -> "使用原版音效"
+        },
+        onPositive = {
+            effect?.let(vm::useOriginal)
+            selectedEffect = null
+        },
+        negativeText = "前往网易云音效",
+        onNegative = {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("orpheus://effect")).setPackage("com.netease.cloudmusic"))
+                launchError = null
+            } catch (_: ActivityNotFoundException) { launchError = "请先安装网易云音乐客户端" }
+            catch (_: SecurityException) { launchError = "暂时无法打开网易云音乐" }
+        },
+    )
 }
 
 @Composable private fun OfficialSoundCard(effect: NeteaseSoundEffect, modifier: Modifier, chosen: Boolean,

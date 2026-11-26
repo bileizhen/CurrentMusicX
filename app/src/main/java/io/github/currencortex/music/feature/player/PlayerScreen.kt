@@ -584,8 +584,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             } else PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PlayerSongText(song?.name ?: "还没有选择歌曲", albumLink, role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                PlayerSongText(song?.artists.orEmpty(), artistLink, role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // A long title scrolls instead of wrapping, so the cover block keeps its height.
+                PlayerMarqueeText(song?.name ?: "还没有选择歌曲", albumLink, role = pagerRole, color = Color.White,
+                    fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                PlayerMarqueeText(song?.artists.orEmpty(), artistLink, role = pagerRole, subtitle = true,
+                    fontSize = 18.sp, color = Color.White.copy(alpha = .55f))
             }
             if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 .onGloballyPositioned(onPreviewCoordinates), active)
@@ -618,9 +621,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 24.dp, Alignment.CenterVertically)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                Text(queue.current?.name ?: "还没有选择歌曲", albumLink,
-                    color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PlayerMarqueeText(queue.current?.name ?: "还没有选择歌曲", albumLink,
+                    color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(queue.current?.artists.orEmpty(), Modifier.padding(top = 6.dp).then(artistLink),
                     color = Color.White.copy(alpha = .55f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

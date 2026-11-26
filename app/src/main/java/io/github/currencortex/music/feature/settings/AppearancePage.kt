@@ -5,13 +5,11 @@ package io.github.currencortex.music.feature.settings
 
 import android.os.Build
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,10 +27,10 @@ import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.theme.rememberAppearanceColors
-import kotlinx.coroutines.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
+import kotlinx.coroutines.*
 
 @Composable internal fun AppearanceSettingsPage(viewModel: SettingsViewModel, onBack: () -> Unit,
     onOpenScale: () -> Unit, onPreviewLaunch: () -> Unit, onOpenFont: () -> Unit) {
@@ -98,7 +96,7 @@ import kotlin.math.roundToInt
                     SettingsPreference(fontLabel, modifier = Modifier.testTag("setting_custom_font").then(source.modifier),
                         onClick = { source.open(onOpenFont) }, leading = {
                             Text("Aa", fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
-                        }, trailing = { Icon(MusicIcons.Forward, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant) })
+                        })
                 }
             }
             item("text_scale") { AppearanceTextScale(config, viewModel) }
@@ -192,11 +190,22 @@ import kotlin.math.roundToInt
                     it.copy(primaryColors = palette, primaryColor = if (it.primaryColor == editing) palette.first() else it.primaryColor) }
             } })
     }
-    if (showReset) MusicDialog("重置主题色？", { showReset = false }) {
-        Text("恢复默认颜色和色彩风格。")
-        MusicDialogButton("重置", onClick = { vm.edit { it.copy(monet = false, primaryColor = DefaultThemeColors.first(), primaryColors = DefaultThemeColors, colorStyle = ThemeColorStyle.VIVID) }; showReset = false },
-            modifier = Modifier.testTag("appearance_color_reset_confirm"))
-    }
+    SettingsDialog(
+        show = showReset,
+        title = "重置主题色？",
+        onDismissRequest = { showReset = false },
+        summary = "恢复默认颜色和色彩风格。",
+        positiveText = "重置",
+        onPositive = {
+            vm.edit {
+                it.copy(monet = false, primaryColor = DefaultThemeColors.first(),
+                    primaryColors = DefaultThemeColors, colorStyle = ThemeColorStyle.VIVID)
+            }
+            showReset = false
+        },
+        negativeText = "取消",
+        onNegative = { showReset = false },
+    )
 }
 
 @Composable private fun AppearanceTextScale(config: AppearanceSettings, vm: SettingsViewModel) {

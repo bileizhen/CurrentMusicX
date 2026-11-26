@@ -8,9 +8,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.network.SourceAvailabilityStatus
 import io.github.currencortex.music.data.lx.LxPlatform
@@ -37,7 +37,7 @@ import io.github.suqi8.coui.kmp.basic.TextField
     }
     val selected = sources.firstOrNull { it.id == provider.lxSourceId }
     fun timeSuffix(id: String): String = resolveTimes[platform to id]?.let { "，取链 $it ms" } ?: ""
-    SettingsSection("落雪音源", MusicIcons.File) {
+    SettingsSection("落雪音源") {
         if (sources.isNotEmpty()) {
             SettingsOptionsRow(if (provider.lxSmartSwitch) "默认音源" else "当前音源", selected?.name ?: "请选择", sources.map { source ->
                 SettingsOption("lx_source_${source.id}", source.name, source.id == provider.lxSourceId,
@@ -77,15 +77,18 @@ import io.github.suqi8.coui.kmp.basic.TextField
         }
         state.message?.let { SettingsHint(it) }
     }
-    if (urlOpen) LxSourceUrlDialog(onDismiss = { urlOpen = false }, onImport = vm::importLxUrl)
-    removal?.let { id ->
-        MusicChoiceDialog("移除音源？", { removal = null }, footer = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MusicDialogButton("取消", { removal = null }, Modifier.weight(1f))
-                MusicDialogButton("移除", { vm.removeLxSource(id); removal = null }, Modifier.weight(1f).testTag("lx_remove_confirm"))
-            }
-        }) { SettingsHint("移除后请重新选择或导入落雪音源。") }
-    }
+    LxSourceUrlDialog(urlOpen, onDismiss = { urlOpen = false }, onImport = vm::importLxUrl)
+    SettingsDialog(
+        show = removal != null,
+        title = "移除音源？",
+        onDismissRequest = { removal = null },
+        summary = "移除后请重新选择或导入落雪音源。",
+        positiveText = "移除",
+        onPositive = { removal?.let(vm::removeLxSource); removal = null },
+        negativeText = "取消",
+        onNegative = { removal = null },
+        destructive = true,
+    )
 }
 
 @Composable private fun LxHealthBadge(id: String, platform: LxPlatform, status: SourceAvailabilityStatus?) {
@@ -94,17 +97,22 @@ import io.github.suqi8.coui.kmp.basic.TextField
         "${platform.label}音源：${availability.label}")
 }
 
-@Composable private fun LxSourceUrlDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
-    // The link may include a private source key. Never put it in saved instance state.
+@Composable private fun LxSourceUrlDialog(show: Boolean, onDismiss: () -> Unit, onImport: (String) -> Unit) {
+    // The link may include a private source key. Never put it in saved instance state; clear
+    // it on every open so a cancelled link does not linger in the field.
     var value by remember { mutableStateOf("") }
-    MusicChoiceDialog("链接导入音源", onDismiss, footer = {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MusicDialogButton("取消", onDismiss, Modifier.weight(1f))
-            MusicDialogButton("导入", { onImport(value); onDismiss() }, Modifier.weight(1f).testTag("lx_url_confirm"),
-                enabled = value.isNotBlank())
-        }
-    }) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LaunchedEffect(show) { if (show) value = "" }
+    SettingsDialog(
+        show = show,
+        title = "链接导入音源",
+        onDismissRequest = onDismiss,
+        positiveText = "导入",
+        onPositive = { onImport(value); onDismiss() },
+        positiveEnabled = value.isNotBlank(),
+        negativeText = "取消",
+        onNegative = onDismiss,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(value, { value = it }, singleLine = true, label = "脚本下载链接",
                 modifier = Modifier.fillMaxWidth().testTag("lx_url_input"))
             SettingsHint("填写返回 .js 脚本内容的 HTTP 或 HTTPS 链接。导入时会检查音源声明的接口。")

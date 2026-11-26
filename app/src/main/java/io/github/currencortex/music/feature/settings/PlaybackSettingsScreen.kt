@@ -13,23 +13,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.data.settings.ListeningSource
+import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.player.AudioQualitySheet
 import io.github.currencortex.music.feature.player.qqAudioQualities
 import io.github.currencortex.music.feature.player.qualityLabel
-import io.github.currencortex.music.ui.component.MusicDestinationRow
-import io.github.currencortex.music.ui.component.LyricsStyleSelector
 import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
 import io.github.currencortex.music.ui.component.LyricsSizeSlider
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.data.settings.LyricsStyle
-import io.github.currencortex.music.core.media.PlaybackNetworkKind
-import io.github.currencortex.music.ui.component.MusicIcons
+import io.github.currencortex.music.ui.component.LyricsStyleSelector
+import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsDialog
 import io.github.suqi8.coui.kmp.basic.Slider
 import kotlin.math.roundToInt
 
@@ -44,7 +43,7 @@ import kotlin.math.roundToInt
     var seconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     val modes = mapOf(MusicTransitionMode.OFF to "关闭", MusicTransitionMode.SMART to "智能过渡", MusicTransitionMode.CROSSFADE to "淡入淡出")
     SettingsPage("播放", "playback_settings") {
-        item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
+        item("quality") { SettingsSection("音质") {
             Column {
                 MusicDestinationRow("移动网络播放", { mobileQualityOpen = true },
                     Modifier.testTag("mobile_playback_quality"),
@@ -59,7 +58,7 @@ import kotlin.math.roundToInt
                     summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq))
             }
         } }
-        item("download_files") { SettingsSection("下载文件", MusicIcons.Download,
+        item("download_files") { SettingsSection("下载文件",
             footer = "歌词与封面始终写入歌曲文件；关闭后不再生成同名的独立文件，下载时也可临时调整。") {
             SettingsSwitch("保存歌词文件", settings.downloadLyricsFile, vm::downloadLyricsFile,
                 summary = "另存同名 LRC 文件", modifier = Modifier.testTag("download_lyrics_file"))
@@ -67,7 +66,7 @@ import kotlin.math.roundToInt
             SettingsSwitch("保存封面文件", settings.downloadCoverFile, vm::downloadCoverFile,
                 summary = "另存同名封面图片", modifier = Modifier.testTag("download_cover_file"))
         } }
-        item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
+        item("listening") { SettingsSection("听歌足迹") {
             Column(Modifier.testTag("listening_source_setting").semantics { selectableGroup() }) {
                 ListeningSource.entries.forEachIndexed { index, source ->
                     if(index > 0) SettingsDivider()
@@ -78,7 +77,7 @@ import kotlin.math.roundToInt
                 }
             }
         } }
-        item("lyrics") { SettingsSection("歌词样式", MusicIcons.File) {
+        item("lyrics") { SettingsSection("歌词样式") {
             LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle)
             if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
                 SettingsDivider()
@@ -86,17 +85,17 @@ import kotlin.math.roundToInt
                     Modifier.testTag("open_apple_lyrics_settings"), summary = "字号、间距、动画速度与光效")
             }
         } }
-        item("bluetooth_lyrics") { SettingsSection("蓝牙歌词", MusicIcons.Device) {
+        item("bluetooth_lyrics") { SettingsSection("蓝牙歌词") {
             SettingsSwitch("显示蓝牙歌词", settings.bluetoothLyrics, vm::bluetoothLyrics,
                 summary = "在系统媒体卡片、锁屏和蓝牙车机显示当前歌词，关闭后显示歌名",
                 modifier = Modifier.testTag("bluetooth_lyrics"))
         } }
-        item("lyricon_lyrics") { SettingsSection("词幕状态栏歌词", MusicIcons.BottomBar) {
+        item("lyricon_lyrics") { SettingsSection("词幕状态栏歌词") {
             SettingsSwitch("向词幕推送歌词", settings.lyriconStatusBar, vm::lyriconStatusBar,
                 summary = "配合词幕（Lyricon）在状态栏显示逐字歌词；需安装词幕并启用模块",
                 modifier = Modifier.testTag("lyricon_status_bar_lyrics"))
         } }
-        item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update) {
+        item("transition") { SettingsSection("歌曲衔接") {
             Column(Modifier.testTag("playback_transition").semantics { selectableGroup() }) {
                 modes.entries.forEachIndexed { index, (mode, title) ->
                     if (index > 0) SettingsDivider()
@@ -124,14 +123,14 @@ import kotlin.math.roundToInt
                 })
             }
         } }
-        item("background") { SettingsSection("播放行为", MusicIcons.Play) {
+        item("background") { SettingsSection("播放行为") {
             SettingsSwitch("允许与其他应用同时播放", settings.allowConcurrentPlayback, vm::concurrentPlayback,
                 summary = "允许音乐与其他应用的声音同时播放", modifier = Modifier.testTag("allow_concurrent_playback"))
             SettingsDivider()
             SettingsSwitch("恢复播放队列", settings.restoreQueue, vm::restore,
                 summary = "重新打开应用时回到上次的播放位置", modifier = Modifier.testTag("restore_queue"))
         } }
-        item("preload") { SettingsSection("预加载", MusicIcons.Download) {
+        item("preload") { SettingsSection("预加载") {
             SettingsSwitch("预加载下一首", settings.preloadAudio, vm::preload, modifier = Modifier.testTag("preload_audio"))
             SettingsDivider()
             SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
@@ -149,7 +148,13 @@ import kotlin.math.roundToInt
         vm::wirelessQuality, { wirelessQualityOpen = false }, title = "无线网络播放音质", isQq = isQq, available = available)
     if (downloadQualityOpen) AudioQualitySheet(settings.downloadQualityFor(qualitySource), vm::downloadQuality,
         { downloadQualityOpen = false }, title = "下载音质", isQq = isQq, available = available)
-    if (appleLyricsOpen) MusicDialog("Apple Music 歌词", { appleLyricsOpen = false }) {
+    SettingsDialog(
+        show = appleLyricsOpen,
+        title = "Apple Music 歌词",
+        onDismissRequest = { appleLyricsOpen = false },
+        positiveText = "完成",
+        onPositive = { appleLyricsOpen = false },
+    ) {
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
             .testTag("apple_lyrics_settings")) {
             LyricsSizeSlider(settings.lyricsFontSize, vm::lyricsFontSize)

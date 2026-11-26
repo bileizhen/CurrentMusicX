@@ -17,9 +17,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -37,9 +37,9 @@ import io.github.currencortex.music.ui.component.DecoratedAvatar
 import io.github.currencortex.music.ui.component.LocalPageContainerSource
 import io.github.currencortex.music.ui.component.PageContainerOrigin
 import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.rootMotionItems
 import io.github.currencortex.music.ui.component.springChainSettingsItems
-import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
@@ -47,15 +47,13 @@ import io.github.suqi8.coui.kmp.blur.TopAppBarGlowDefaults
 import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.*
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
-import io.github.suqi8.coui.kmp.effect.springChain
-import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
-import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 
 private data class SettingsDestination(
@@ -576,14 +574,7 @@ private fun SettingsCategoryCard(
 ) {
     Column {
         if (title != null) PreferenceCategory(title = title)
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                .squircleSurface(
-                    color = COUITheme.colorScheme.cardBackground,
-                    cornerRadius = 24.dp,
-                    weight = SquircleDefaults.Weight,
-                ),
-        ) {
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             CardListGroup(content = content)
         }
     }
@@ -594,13 +585,7 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: CardListGroupScope.() -> Unit,
 ) {
-    Column(
-        modifier = modifier.squircleSurface(
-            color = COUITheme.colorScheme.cardBackground,
-            cornerRadius = 24.dp,
-            weight = SquircleDefaults.Weight,
-        ),
-    ) {
+    Card(modifier = modifier) {
         CardListGroup(content = content)
     }
 }
