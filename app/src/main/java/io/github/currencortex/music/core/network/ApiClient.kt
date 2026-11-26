@@ -23,6 +23,12 @@ class ApiClient(
     val routeServer: (String) -> String = { it },
 ) {
     companion object {
+        private val postDetailPath = Regex("posts/[0-9]+")
+        private val legacyMissingRoute = Regex(
+            """(?:未知接口(?:\s+.*)?|(?:404\s+)?(?:not found|page not found|route not found|endpoint not found)\.?|cannot get /.*)""",
+            RegexOption.IGNORE_CASE,
+        )
+
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
             .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build()
@@ -218,21 +224,28 @@ class ApiClient(
             if (code == 401 && authenticated && !path.startsWith("qqmusic/") && !errorText.contains("绑定")) onUnauthorized(session)
             // Account validation is user-facing upstream text, not a generic HTTP failure.
             // Other routes and server failures retain their existing bounded error mapping.
-            val accountError = if (code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
+            val postDetailNotFound = code == 404 && request.method == "GET" && postDetailPath.matches(path)
+            val errorPayload = if (postDetailNotFound || code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
                     "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
                     "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
                     "auth/register", "auth/email/code", "auth/phone/code",
                     "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password")))
-                runCatching {
-                    val error = ApiJson.parseToJsonElement(errorText).jsonObject
-                    ((error["error"] ?: error["message"]) as? JsonPrimitive)
-                        ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
-                }.getOrNull() else null
+                runCatching { ApiJson.parseToJsonElement(errorText) as? JsonObject }.getOrNull() else null
+            val errorMessage = ((errorPayload?.get("error") ?: errorPayload?.get("message")) as? JsonPrimitive)
+                ?.takeIf(JsonPrimitive::isString)?.content?.trim()?.takeIf(String::isNotEmpty)?.take(240)
+            // Legacy dispatchers and reverse proxies often return a generic 404 for an unknown route.
+            // Keep domain-specific API errors (such as a deleted post) available to the caller.
+            val errorCode = (errorPayload?.get("code") as? JsonPrimitive)?.contentOrNull
+            val missingRoute = postDetailNotFound && when (errorCode?.lowercase()) {
+                "route_not_found", "unknown_route", "endpoint_not_found" -> true
+                null, "", "404", "not_found" -> errorMessage == null || legacyMissingRoute.matches(errorMessage)
+                else -> false
+            }
             throw ApiException(when (code) {
                 401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
                 403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
                 in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-            }, code, accountError)
+            }, code, errorMessage, missingRoute)
         }
         return if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
     }

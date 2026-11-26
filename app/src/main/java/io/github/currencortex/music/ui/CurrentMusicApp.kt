@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.network.AppResult
+import io.github.currencortex.music.core.network.CurrentMusicServer
+import io.github.currencortex.music.ui.util.openExternalLink
 import io.github.currencortex.music.ui.component.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -364,9 +366,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var playerDialogOpen by remember { mutableStateOf(false) }
         var playerEffectsOpen by rememberSaveable { mutableStateOf(false) }
         var playerEffectsPresented by remember { mutableStateOf(false) }
+        val linkedPostViews: LinkedPostViewModels = viewModel()
         fun navigateBack() {
             if (roomDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
+                val route = backStack.last()
+                if (linkedPostViews[route]?.state?.value?.busy == true) return
                 if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
@@ -473,6 +478,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         selected = HOME_TAB
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
+                    is io.github.currencortex.music.core.links.MusicWebLink.Post -> {
+                        if (CurrentMusicServer.builtIn(container.projectSession().server)) {
+                            val route = "user/post/${target.id}"
+                            linkedPostViews.open(container, route, target.id, request.id)
+                            navigateLibrary(route)
+                        } else openExternalLink(context, target.webUrl.toString(), excludeCurrentApp = true)
+                    }
                     is io.github.currencortex.music.core.links.MusicWebLink.ListenTogether -> {
                         listenInvitationUrl = target.invitation.shareUrl()
                         listenInvitationId = request.id
@@ -620,6 +632,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             pageTransitionRunning = true
             kotlinx.coroutines.delay(450)
             pageTransitionRunning = false
+        }
+        LaunchedEffect(backStack, pageTransitionRunning) {
+            if (!pageTransitionRunning) linkedPostViews.retain(backStack.toSet())
         }
         val currentPagePosition = (pageStack.lastOrNull() as? MusicPageKey)?.position ?: 0
         val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = predictiveBack && !playerPresented)
@@ -943,6 +958,27 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     io.github.currencortex.music.feature.playlistimport.PlaylistImportScreen(vm, ::navigateBack,
                                         onLogin = { navigateLibrary("user/binding") },
                                         onPlaylist = { id -> container.neteaseLibrary.invalidate(); navigateLibrary("lib/ncmplaylist/$id") })
+                                }
+                                route.startsWith("user/post/") -> {
+                                    val id = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
+                                    val vm = linkedPostViews[route]
+                                    if (vm != null) {
+                                        LinkedPostScreen(vm, ::navigateLibrary,
+                                            onBack = { if (backStack.lastOrNull() == route) navigateBack() },
+                                            onDeleted = {
+                                                if (backStack.lastOrNull() == route) backStack = backStack.dropLast(1)
+                                            })
+                                    } else if (id != null && route in backStack) {
+                                        LaunchedEffect(route, linkedPostViews) { linkedPostViews.open(container, route, id) }
+                                    }
+                                }
+                                route.startsWith("user/posts/") -> {
+                                    val author = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
+                                    if (author != null) {
+                                        val vm: PostsViewModel = viewModel(key = route,
+                                            factory = viewModelFactory { PostsViewModel(container, author) })
+                                        ProfilePostsScreen(vm, ::navigateLibrary, ::navigateBack)
+                                    }
                                 }
                                 route.startsWith("user/profile/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull() ?: 0L

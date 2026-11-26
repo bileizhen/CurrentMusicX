@@ -1,6 +1,12 @@
 package io.github.currencortex.music.data.profile
 
 import io.github.currencortex.music.core.network.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -8,30 +14,157 @@ import kotlinx.serialization.json.*
     val sub: String = "", val pic: String = "")
 @Serializable data class CommunityPost(val id: Long, val content: String = "", val author: ProfileUser = ProfileUser(),
     val attachments: List<PostAttachment> = emptyList(), val createdAt: Long = 0,
-    val likeCount: Int = 0, val commentCount: Int = 0, val likedByMe: Boolean = false, val canDelete: Boolean = false)
+    val likeCount: Int = 0, val commentCount: Int = 0, val likedByMe: Boolean = false, val canDelete: Boolean = false,
+    val title: String = "")
 @Serializable data class PostsPage(val posts: List<CommunityPost> = emptyList(), val total: Int = 0)
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class PostReplyTarget(val id: Long, @JsonNames("user_id") val userId: Long, val nickname: String = "")
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable data class PostComment(val id: Long, val content: String = "", val author: ProfileUser = ProfileUser(),
-    val createdAt: Long = 0, val canDelete: Boolean = false)
-@Serializable data class PostComments(val comments: List<PostComment> = emptyList())
+    val createdAt: Long = 0, val canDelete: Boolean = false, @JsonNames("reply_to") val replyTo: PostReplyTarget? = null)
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable data class PostComments(val comments: List<PostComment> = emptyList(), @JsonNames("next_after") val nextAfter: Long? = null)
+@Serializable private data class PostDetails(val post: CommunityPost)
+internal data class PostDetail(val post: CommunityPost, val shareable: Boolean)
+@Serializable private data class CreatedPost(val id: Long)
+@Serializable private data class PostLike(val likeCount: Int)
 data class PostAttachmentPage(val items: List<PostAttachment>, val nextOffset: Int, val hasMore: Boolean)
 
+internal const val POST_TITLE_LIMIT = 80
+internal const val POST_CONTENT_LIMIT = 5000
+internal const val POST_COMMENT_LIMIT = 500
+internal fun String.postCharacterCount(): Int = trim().let { it.codePointCount(0, it.length) }
+internal fun String.validPostTitle(): Boolean = codePointCount(0, length) <= POST_TITLE_LIMIT &&
+    none { it in "\n\r\u000B\u000C\u001C\u001D\u001E\u0085\u2028\u2029" }
+
+internal data class PostChanges(
+    val revision: Long = 0,
+    private val session: RequestSession? = null,
+    private val likes: Map<Long, Like> = emptyMap(),
+    private val deletions: Map<Long, Long> = emptyMap(),
+    private val creations: Map<Long, Long> = emptyMap(),
+    private val commentEdits: Map<Long, Map<Any?, Long>> = emptyMap(),
+) {
+    data class Like(val revision: Long, val liked: Boolean, val count: Int)
+
+    fun forSession(expected: RequestSession): PostChanges =
+        if (expected == session) this else PostChanges(revision, expected)
+
+    fun recordLike(expected: RequestSession, id: Long, liked: Boolean, count: Int): PostChanges {
+        val current = forSession(expected)
+        val next = revision + 1
+        return current.copy(revision = next, likes = current.likes + (id to Like(next, liked, count)))
+    }
+
+    fun recordDeletion(expected: RequestSession, id: Long): PostChanges {
+        val current = forSession(expected)
+        val next = revision + 1
+        return current.copy(revision = next, likes = current.likes - id, deletions = current.deletions + (id to next),
+            commentEdits = current.commentEdits - id)
+    }
+
+    fun recordCreation(expected: RequestSession, authorId: Long): PostChanges {
+        val current = forSession(expected)
+        val next = revision + 1
+        return current.copy(revision = next, creations = current.creations + (authorId to next))
+    }
+
+    fun createdAfter(expected: RequestSession, since: Long, authorId: Long?): Boolean =
+        expected == session && if (authorId == null) creations.values.any { it > since }
+        else (creations[authorId] ?: 0) > since
+
+    fun recordCommentEdit(expected: RequestSession, postId: Long, source: Any?): PostChanges {
+        val current = forSession(expected)
+        if (postId in current.deletions) return current
+        val next = revision + 1
+        // A reader only needs the latest edit from a source other than itself.
+        val previous = current.commentEdits[postId].orEmpty().filterKeys { it != source }.maxByOrNull { it.value }
+        val sources = buildMap {
+            previous?.let { put(it.key, it.value) }
+            put(source, next)
+        }
+        return current.copy(revision = next, commentEdits = current.commentEdits + (postId to sources))
+    }
+
+    fun threadsEditedElsewhere(expected: RequestSession, since: Long, source: Any): Set<Long> =
+        if (expected == session) commentEdits.filterValues { latest ->
+            latest.any { (editor, revision) -> editor != source && revision > since }
+        }.keys else emptySet()
+
+    fun deletedAfter(expected: RequestSession, since: Long): Set<Long> =
+        if (expected == session) deletions.filterValues { it > since }.keys else emptySet()
+
+    fun isDeleted(id: Long, expected: RequestSession): Boolean = expected == session && id in deletions
+
+    fun applyTo(post: CommunityPost, expected: RequestSession, since: Long): CommunityPost {
+        if (expected != session) return post
+        val change = likes[post.id]?.takeIf { it.revision > since } ?: return post
+        return post.copy(likedByMe = change.liked, likeCount = change.count)
+    }
+}
+
 class PostsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
+    private val mutations = MutableStateFlow(PostChanges())
+    private val postWrites = List(16) { Mutex() }
+    internal val changes = mutations.asStateFlow()
+    internal fun resetForCurrentSession() = mutations.update { it.forSession(session()) }
+
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
-        body: JsonElement? = null): JsonElement {
-        val expected = session()
+        body: JsonElement? = null, expected: RequestSession = session()): JsonElement {
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         if (method != "GET" && expected.token.isNullOrBlank()) throw ApiException(ErrorKind.Unauthorized)
         val result = api.request(method, path, query, body, authenticated = !expected.token.isNullOrBlank(), expectedSession = expected,
             retryConnection = method == "GET")
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result
     }
-    suspend fun list(offset: Int = 0): PostsPage = api.decode(request("GET", "posts",
-        mapOf("offset" to offset.coerceAtLeast(0).toString(), "limit" to "20")))
-    suspend fun create(content: String, attachments: List<PostAttachment> = emptyList()) {
-        require(content.isNotBlank() && attachments.size <= 5 && validMusicAttachments(attachments).size == attachments.size)
-        request("POST", "posts", body = buildJsonObject {
-            put("content", content.trim()); put("attachments", ApiJson.encodeToJsonElement(validMusicAttachments(attachments)))
-        })
+    suspend fun list(offset: Int = 0, author: Long? = null, expected: RequestSession = session()): PostsPage {
+        val since = changes.value.revision
+        val page = api.decode<PostsPage>(request("GET", "posts", buildMap {
+            put("offset", offset.coerceAtLeast(0).toString())
+            put("limit", "20")
+            if (author != null) put("author", author.toString())
+        }, expected = expected))
+        val latest = changes.value
+        val posts = page.posts.filterNot { latest.isDeleted(it.id, expected) }.map { latest.applyTo(it, expected, since) }
+        return page.copy(posts = posts, total = (page.total - (page.posts.size - posts.size)).coerceAtLeast(0))
+    }
+    internal suspend fun detail(id: Long, cached: CommunityPost? = null, publishedBy: Long? = null): PostDetail {
+        require(id > 0)
+        val expected = session()
+        val since = changes.value.revision
+        val detail = try {
+            PostDetail(api.decode<PostDetails>(request("GET", "posts/$id", expected = expected)).post, shareable = true)
+        } catch (error: ApiException) {
+            if (!error.missingRoute) throw error
+            // A cached item can predate changes already recorded when this request started.
+            val post = cached?.takeIf { it.id == id }?.let { changes.value.applyTo(it, expected, since = 0) }
+                ?: publishedBy?.let { author -> list(author = author, expected = expected).posts.find { it.id == id } }
+                ?: throw error
+            PostDetail(post, shareable = false)
+        }
+        val latest = changes.value
+        if (latest.isDeleted(id, expected)) throw ApiException(ErrorKind.NotFound)
+        return detail.copy(post = latest.applyTo(detail.post, expected, since))
+    }
+    fun link(id: Long): String {
+        require(id > 0)
+        val endpoint = ServerUrl.endpoint(api.routeServer(session().server), "posts/$id", emptyMap())
+        val basePath = endpoint.encodedPath.removeSuffix("/posts/$id").removeSuffix("/cm").trimEnd('/')
+        return endpoint.newBuilder().encodedPath("$basePath/app/").fragment("/post/$id").build().toString()
+    }
+    suspend fun create(content: String, attachments: List<PostAttachment>, title: String, authorId: Long,
+        expected: RequestSession): Long {
+        val music = validMusicAttachments(attachments)
+        require(content.postCharacterCount() in 1..POST_CONTENT_LIMIT && title.validPostTitle() &&
+            attachments.size <= 5 && music.size == attachments.size)
+        val id = api.decode<CreatedPost>(request("POST", "posts", body = buildJsonObject {
+            if (title.isNotBlank()) put("title", title.trim())
+            put("content", content.trim())
+            put("attachments", ApiJson.encodeToJsonElement(music))
+        }, expected = expected)).id
+        mutations.update { if (expected == session()) it.recordCreation(expected, authorId) else it }
+        return id
     }
     suspend fun searchAttachments(query: String, type: String, offset: Int = 0): PostAttachmentPage {
         require(type in setOf("song", "album", "artist", "playlist") && query.isNotBlank() && offset >= 0)
@@ -56,16 +189,38 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         val more = ((result["hasMore"] as? JsonObject)?.get(type) as? JsonPrimitive)?.booleanOrNull ?: (raw.size == 30)
         return PostAttachmentPage(cards, offset + raw.size, raw.isNotEmpty() && more)
     }
-    suspend fun like(id: Long, on: Boolean) {
-        require(id > 0); request("POST", "posts/$id/like", body = buildJsonObject { put("on", on) })
+    suspend fun like(id: Long, on: Boolean, expected: RequestSession): Int {
+        require(id > 0)
+        return postWrites[(id % postWrites.size).toInt()].withLock {
+            val count = api.decode<PostLike>(request("POST", "posts/$id/like",
+                body = buildJsonObject { put("on", on) }, expected = expected)).likeCount
+            mutations.update { if (expected == session()) it.recordLike(expected, id, on, count) else it }
+            count
+        }
     }
-    suspend fun delete(id: Long) { require(id > 0); request("DELETE", "posts/$id") }
-    suspend fun comments(id: Long): List<PostComment> {
-        require(id > 0); return api.decode<PostComments>(request("GET", "posts/$id/comments")).comments
+    suspend fun delete(id: Long, expected: RequestSession) {
+        require(id > 0)
+        postWrites[(id % postWrites.size).toInt()].withLock {
+            request("DELETE", "posts/$id", expected = expected)
+            mutations.update { if (expected == session()) it.recordDeletion(expected, id) else it }
+        }
     }
-    suspend fun comment(id: Long, content: String) {
-        require(id > 0 && content.isNotBlank())
-        request("POST", "posts/$id/comments", body = buildJsonObject { put("content", content.trim()) })
+    suspend fun comments(id: Long, after: Long = 0): PostComments {
+        require(id > 0 && after >= 0)
+        return api.decode(request("GET", "posts/$id/comments", mapOf("after" to after.toString(), "limit" to "30")))
     }
-    suspend fun deleteComment(id: Long) { require(id > 0); request("DELETE", "posts/comments/$id") }
+    internal suspend fun comment(id: Long, content: String, replyTo: Long?, expected: RequestSession, source: Any? = null): Long {
+        require(id > 0 && content.postCharacterCount() in 1..POST_COMMENT_LIMIT)
+        val commentId = api.decode<CreatedPost>(request("POST", "posts/$id/comments", body = buildJsonObject {
+            put("content", content.trim())
+            if (replyTo != null) put("replyTo", replyTo)
+        }, expected = expected)).id
+        mutations.update { if (expected == session()) it.recordCommentEdit(expected, id, source) else it }
+        return commentId
+    }
+    internal suspend fun deleteComment(postId: Long, id: Long, expected: RequestSession, source: Any) {
+        require(postId > 0 && id > 0)
+        request("DELETE", "posts/comments/$id", expected = expected)
+        mutations.update { if (expected == session()) it.recordCommentEdit(expected, postId, source) else it }
+    }
 }

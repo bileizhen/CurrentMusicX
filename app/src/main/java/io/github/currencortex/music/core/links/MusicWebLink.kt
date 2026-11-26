@@ -7,6 +7,7 @@ import io.github.currencortex.music.data.netease.listen.ListenTogetherInvitation
 sealed interface MusicWebLink {
     data object Home : MusicWebLink
     data class Song(val id: Long) : MusicWebLink
+    data class Post(val id: Long, val webUrl: HttpUrl) : MusicWebLink
     data class Page(val route: String) : MusicWebLink
     data class ShortLink(val url: HttpUrl) : MusicWebLink
     data class ListenTogether(val invitation: ListenTogetherInvitation) : MusicWebLink
@@ -36,6 +37,10 @@ sealed interface MusicWebLink {
                 val parts = route.split('/')
                 if (parts.size != 3 || parts[0].isNotEmpty()) return null
                 val id = positiveId(parts[2]) ?: return null
+                if (parts[1] == "post") {
+                    return Post(id, url.newBuilder().scheme("https").encodedPath("/app/")
+                        .query(null).fragment("/post/$id").build())
+                }
                 return target(parts[1], id, project = true)
             }
             if (url.host !in neteaseHosts) return null
