@@ -98,8 +98,10 @@ import io.github.suqi8.coui.kmp.basic.TextField
 }
 
 @Composable private fun LxSourceUrlDialog(show: Boolean, onDismiss: () -> Unit, onImport: (String) -> Unit) {
-    // The link may include a private source key. Never put it in saved instance state.
+    // The link may include a private source key. Never put it in saved instance state; clear
+    // it on every open so a cancelled link does not linger in the field.
     var value by remember { mutableStateOf("") }
+    LaunchedEffect(show) { if (show) value = "" }
     SettingsDialog(
         show = show,
         title = "链接导入音源",

@@ -108,6 +108,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var address by rememberSaveable { mutableStateOf(saved) }
     var error by remember { mutableStateOf<String?>(null) }
+    // The dialog stays composed while hidden; reopening starts from the saved address and
+    // clears any cancelled edit or error.
+    LaunchedEffect(show) { if (show) { address = saved; error = null } }
     SettingsDialog(
         show = show,
         title = "自定义服务器",

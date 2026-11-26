@@ -199,7 +199,9 @@ private val masterDiyOptions = listOf(
 @Composable private fun MasterPreferencesSheet(show: Boolean, selected: Set<String>, saving: Boolean,
     onDismiss: () -> Unit, onSave: (Set<String>) -> Unit) {
     var draft by remember { mutableStateOf(selected) }
-    LaunchedEffect(selected) { draft = selected }
+    // The sheet stays composed while hidden, so `selected` alone does not rerun when it is
+    // reopened after Cancel; key on `show` as well so a dismissed edit is discarded.
+    LaunchedEffect(show, selected) { if (show) draft = selected }
     io.github.currencortex.music.ui.component.nativeui.SettingsDialog(
         show = show,
         title = "DIY偏好设置",
