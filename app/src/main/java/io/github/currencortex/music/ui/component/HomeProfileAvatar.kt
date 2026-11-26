@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
@@ -114,8 +115,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                             .testTag(if (settled && !failed) "home_avatar_image" else "home_avatar_pending"),
                         onSuccess = { settled = true; failed = false }, onError = { settled = true; failed = true })
                 }
-                if (decorationUrl != null) AsyncImage(rememberDecorationRequest(decorationUrl), null,
-                    Modifier.align(Alignment.Center).requiredSize(42.dp * boundedDecorationScale(decorationScale)).testTag("home_avatar_frame"),
+                if (decorationUrl != null) DecorationImage(rememberDecorationRequest(decorationUrl), null,
+                    Modifier.align(Alignment.Center).requiredSize(42.dp * boundedDecorationScale(decorationScale))
+                        .testTag("home_avatar_frame"),
                     contentScale = ContentScale.Fit, onSuccess = { frameLoaded = true }, onError = { frameLoaded = false })
             }
         }
@@ -130,7 +132,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 internal fun boundedDecorationScale(scale: Double) = scale.takeIf { it.isFinite() }?.coerceIn(1.0, 2.5)?.toFloat() ?: 1f
 @Composable internal fun rememberDecorationRequest(url: String): ImageRequest {
     val context = LocalContext.current
-    return remember(context, url) { ImageRequest.Builder(context).data(url).size(512).build() }
+    return remember(context, url) { ImageRequest.Builder(context).data(url).size(512).allowHardware(false).build() }
 }
 
 @Composable internal fun AvatarFlightPicture(url: String?, modifier: Modifier,
@@ -142,7 +144,8 @@ internal fun boundedDecorationScale(scale: Double) = scale.takeIf { it.isFinite(
         if (url == null) Icon(Icons.Default.Person, null, Modifier.size(32.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
         if (url != null) AsyncImage(rememberAvatarRequest(url), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
-        if (decorationUrl != null) AsyncImage(rememberDecorationRequest(decorationUrl), null,
-            Modifier.requiredSize(64.dp * boundedDecorationScale(decorationScale)).testTag("flying_avatar_frame"), contentScale = ContentScale.Fit)
+        if (decorationUrl != null) DecorationImage(rememberDecorationRequest(decorationUrl), null,
+            Modifier.requiredSize(64.dp * boundedDecorationScale(decorationScale)).testTag("flying_avatar_frame"),
+            contentScale = ContentScale.Fit)
     }
 }
