@@ -104,7 +104,8 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
         likes.update { it + (local to raw.obj("UserData").flag("IsFavorite")) }
         return Song(local, raw.text("Name"), artists(raw), raw.text("Album"), cover(raw, access), raw.number("RunTimeTicks") / 10_000,
             musicSource = MusicSource.EMBY, emby = EmbyTrackRef(remote, access.identity, source.text("Id"), format,
-                stream?.number("SampleRate")?.toInt() ?: 0, stream?.number("Channels")?.toInt() ?: 0))
+                stream?.number("SampleRate")?.toInt() ?: 0, stream?.number("Channels")?.toInt() ?: 0,
+                normalizationGainDb = (raw["NormalizationGain"] as? JsonPrimitive)?.floatOrNull?.takeIf(Float::isFinite)))
     }
     /** Every collection is bounded, including albums, artists, playlists and favorites. */
     suspend fun browse(kind: String = "albums", parent: String = "", query: String = "", offset: Int = 0): EmbyPage {
@@ -113,7 +114,7 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
         val type = when (kind) { "albums", "artist" -> "MusicAlbum"; "artists" -> "MusicArtist"; "playlists" -> "Playlist"; else -> "Audio" }
         val params = mutableListOf("Recursive" to "true", "IncludeItemTypes" to type, "StartIndex" to "$offset",
             "Limit" to "$PAGE_SIZE", "EnableTotalRecordCount" to "true", "EnableUserData" to "true",
-            "Fields" to "MediaSources,MediaStreams", "SortBy" to if (kind == "album") "ParentIndexNumber,IndexNumber,SortName" else "SortName",
+            "Fields" to "MediaSources,MediaStreams,NormalizationGain", "SortBy" to if (kind == "album") "ParentIndexNumber,IndexNumber,SortName" else "SortName",
             "SortOrder" to "Ascending")
         if (kind == "artist") params += "ArtistIds" to parent
         else if (parent.isNotBlank() && kind != "playlist") params += "ParentId" to parent

@@ -87,9 +87,16 @@ class NavidromeRepository(private val vault: TokenStore, scope: CoroutineScope) 
         val remote = raw.string("id"); require(remote.isNotEmpty())
         val local = id(remote, access)
         likes.update { it + (local to raw.string("starred").isNotBlank()) }
+        val rg = raw["replayGain"] as? JsonObject
+        fun JsonObject.float(key: String) = (get(key) as? JsonPrimitive)?.floatOrNull?.takeIf(Float::isFinite)
+        val baseGain = rg?.float("baseGain") ?: 0f
         return Song(local, raw.string("title").ifBlank { raw.string("name") }, raw.string("artist"), raw.string("album"),
             cover(raw, access), (((raw["duration"] as? JsonPrimitive)?.doubleOrNull ?: 0.0) * 1000).toLong(), musicSource = MusicSource.NAVIDROME,
-            navidrome = NavidromeTrackRef(remote, access.identity, raw.string("suffix"), raw.number("samplingRate").toInt(), raw.number("channelCount").toInt()))
+            navidrome = NavidromeTrackRef(remote, access.identity, raw.string("suffix"), raw.number("samplingRate").toInt(), raw.number("channelCount").toInt(),
+                trackGainDb = rg?.float("trackGain")?.let { it + baseGain },
+                albumGainDb = rg?.float("albumGain")?.let { it + baseGain },
+                trackPeak = rg?.float("trackPeak"),
+                albumPeak = rg?.float("albumPeak")))
     }
     suspend fun albums(offset: Int = 0, type: String = "newest"): List<NavidromeEntry> {
         val access = client.current()

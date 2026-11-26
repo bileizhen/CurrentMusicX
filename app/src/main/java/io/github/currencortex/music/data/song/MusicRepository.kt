@@ -254,7 +254,8 @@ class MusicRepository(private val api: ApiClient,
         return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
             validForSeconds = dto.expi.takeIf { it > 0 } ?: if (dto.level == "matched" || dto.source == "netease-match") 120 else 300,
             source = dto.source, requestedLevel = dto.requestedLevel, matchSource = dto.matchSource,
-            bitrate = dto.br, bits = dto.bits, size = dto.size, durationMs = dto.durationMs, expectedDurationMs = dto.expectedDurationMs)
+            bitrate = dto.br, bits = dto.bits, size = dto.size, durationMs = dto.durationMs, expectedDurationMs = dto.expectedDurationMs,
+            gainDb = dto.gain, peak = dto.peak)
     }
 }
 
