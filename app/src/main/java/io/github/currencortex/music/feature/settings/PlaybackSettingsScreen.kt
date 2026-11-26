@@ -18,6 +18,7 @@ import io.github.currencortex.music.data.settings.ListeningSource
 import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
+import io.github.currencortex.music.data.settings.VolumeNormalizationTarget
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.player.AudioQualitySheet
 import io.github.currencortex.music.feature.player.qqAudioQualities
@@ -34,6 +35,8 @@ import kotlin.math.roundToInt
 
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val audioOutput by vm.audioOutput.collectAsStateWithLifecycle()
+    val normalizationRuntime by vm.volumeNormalizationRuntime.collectAsStateWithLifecycle()
     val isQq = settings.musicPlatform == MusicPlatform.QQ_MUSIC
     val qualitySource = if (isQq) MusicSource.QQ_MUSIC else null
     var mobileQualityOpen by rememberSaveable { mutableStateOf(false) }
@@ -56,6 +59,44 @@ import kotlin.math.roundToInt
                 MusicDestinationRow("下载", { downloadQualityOpen = true },
                     Modifier.testTag("download_quality"),
                     summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq))
+            }
+        } }
+        item("volume_normalization") { SettingsSection("音量均衡",
+            footer = "平衡不同歌曲间的响度差异；支持内嵌响度标签、网易云/自建曲库元数据以及无标签歌曲实时自适应均衡。") {
+            SettingsSwitch("开启音量均衡", settings.volumeNormalizationEnabled, vm::volumeNormalizationEnabled,
+                summary = "平衡不同歌曲响度，避免切歌时声音忽大忽小",
+                modifier = Modifier.testTag("volume_normalization_enabled"))
+            AnimatedVisibility(settings.volumeNormalizationEnabled,
+                enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                Column {
+                    if (audioOutput.mode.bypassProcessing) {
+                        SettingsHint("当前音频输出模式（${audioOutput.mode.label}）已跳过音频处理，音量均衡暂不生效",
+                            modifier = Modifier.testTag("volume_normalization_bypass"))
+                    }
+                    SettingsDivider()
+                    SettingsOptionsRow("目标响度", settings.volumeNormalizationTarget.label,
+                        VolumeNormalizationTarget.entries.map { target ->
+                            SettingsOption("volume_norm_target_${target.name.lowercase()}", target.label,
+                                settings.volumeNormalizationTarget == target, summary = target.summary,
+                                onSelect = { vm.volumeNormalizationTarget(target) })
+                        }, Modifier.testTag("volume_normalization_target"))
+                    SettingsDivider()
+                    SettingsSwitch("无标签歌曲自适应均衡", settings.volumeNormalizationAdaptive,
+                        vm::volumeNormalizationAdaptive,
+                        summary = "缺少响度标签时实时测算并缓存，覆盖全部音源",
+                        modifier = Modifier.testTag("volume_normalization_adaptive"))
+                    SettingsDivider()
+                    SettingsSwitch("优先使用专辑响度", settings.volumeNormalizationAlbumGain,
+                        vm::volumeNormalizationAlbumGain,
+                        summary = "支持的内嵌标签或 Navidrome 曲库保留整张专辑的原始强弱对比",
+                        modifier = Modifier.testTag("volume_normalization_album_gain"))
+                    if (!audioOutput.mode.bypassProcessing &&
+                        (normalizationRuntime.active || normalizationRuntime.message != "未开启")) {
+                        SettingsDivider()
+                        SettingsPreference("当前状态", normalizationRuntime.message,
+                            modifier = Modifier.testTag("volume_normalization_status"))
+                    }
+                }
             }
         } }
         item("download_files") { SettingsSection("下载文件",
