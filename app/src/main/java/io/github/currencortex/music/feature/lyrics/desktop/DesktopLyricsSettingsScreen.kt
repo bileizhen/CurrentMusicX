@@ -1,6 +1,10 @@
 package io.github.currencortex.music.feature.lyrics.desktop
 
-import io.github.currencortex.music.ui.component.nativeui.*
+
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -8,19 +12,6 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-
-import io.github.suqi8.coui.kmp.basic.Slider
-
-
-import io.github.currencortex.music.ui.component.nativeui.SettingsPage
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
-
-import android.content.Intent
-import android.provider.Settings
-import androidx.core.net.toUri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,17 +23,23 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.ui.component.*
-import kotlinx.coroutines.launch
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.Slider
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable fun DesktopLyricsSettingsScreen(container: AppContainer) {
     val context = LocalContext.current
@@ -121,7 +118,7 @@ import kotlin.math.roundToInt
                 SettingsHint(message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, error = true)
             } }
             item("preview") { DesktopLyricsPreview(container, preview) }
-            item("style") { SettingsSection("显示样式", MusicIcons.Font) {
+            item("style") { SettingsSection("显示样式") {
                 SettingsOptionsRow("动画效果", options.effect.label, DesktopEffect.entries.map { mode ->
                     SettingsOption("desktop_effect_${mode.name}", mode.label, options.effect == mode,
                         summary = if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 上提归位",
@@ -144,7 +141,7 @@ import kotlin.math.roundToInt
                 if (options.enabled && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
                     SettingsHint("触摸穿透时，实际不透明度上限为 ${(status.alpha * 100).roundToInt()}%。")
             } }
-            item("glow") { SettingsSection("辉光", MusicIcons.Sun) {
+            item("glow") { SettingsSection("辉光") {
                 SettingsSwitch("歌词辉光", options.glowEnabled, { value -> edit { it.copy(glowEnabled = value) } },
                     Modifier.testTag("desktop_glow_enabled"), summary = "整句柔光，逐字延音与强调处增强")
                 AnimatedVisibility(options.glowEnabled) { Column {
@@ -166,14 +163,14 @@ import kotlin.math.roundToInt
                     } }
                 } }
             } }
-            item("window") { SettingsSection("窗口位置", MusicIcons.BottomBar) {
+            item("window") { SettingsSection("窗口位置") {
                 DesktopSlider("高度", "${(islandHeight * 100).roundToInt()}%", islandHeight, 0f..1f, "desktop_island_height",
                     { islandHeight = it }, { saveIslandHeight(islandHeight) }, { value -> islandHeight = value; saveIslandHeight(value) },
                     reset = { islandHeight = DESKTOP_ISLAND_HEIGHT; saveIslandHeight(islandHeight) },
                     resetVisible = islandHeight != DESKTOP_ISLAND_HEIGHT, resetTag = "desktop_island_height_reset")
                 SettingsHint("0% 屏幕顶部 · 100% 屏幕底部")
             } }
-            item("sync") { SettingsSection("歌词同步", MusicIcons.Update) {
+            item("sync") { SettingsSection("歌词同步") {
                 val range = maxOf(3000f, abs(offset))
                 DesktopSlider("歌词偏移", if (offset == 0f) "同步" else "${if (offset > 0) "+" else ""}${offset.toInt()} ms",
                     offset, -range..range, "desktop_offset", { offset = (it / 100).roundToInt() * 100f }, { saveOffset(offset) },

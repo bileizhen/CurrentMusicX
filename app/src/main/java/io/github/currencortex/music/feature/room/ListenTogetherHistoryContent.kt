@@ -1,34 +1,32 @@
 package io.github.currencortex.music.feature.room
 
-import io.github.currencortex.music.ui.component.nativeui.*
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.ListenTogetherPair
 import io.github.currencortex.music.data.netease.listen.*
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import io.github.suqi8.coui.kmp.basic.*
-import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Read-only archive pages. Network requests, invitations and sharing belong to their explicit callbacks. */
 @Composable internal fun ListenTogetherHistoryContent(
@@ -207,11 +205,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                                 if (listOf(report.durationMs, report.songCount, report.totalDurationMs, report.totalSongCount).any { it == null }) {
                                     ArchiveMuted("— 表示网易云未提供该项数据，部分累计数据仅会员可查看。")
                                 }
-                                if (report.showCollectButton) GlassActionButton(
+                                if (report.showCollectButton) SettingsActionButton(
                                     if (state.collecting) "正在读取歌曲…" else "收藏本次歌曲到歌单", onCollect,
                                     Modifier.fillMaxWidth().testTag("listen_archive_collect"), enabled = !state.collecting)
                                 state.collectionError?.let { Text(it, Modifier.testTag("listen_archive_collection_error"), fontSize = 12.sp, color = colors.error) }
-                                GlassActionButton(if (sharing) "正在生成报告…" else "分享一起听报告", { onShare(report) },
+                                SettingsActionButton(if (sharing) "正在生成报告…" else "分享一起听报告", { onShare(report) },
                                     Modifier.fillMaxWidth().testTag("listen_archive_share"), primary = true, enabled = !sharing && !state.loading)
                                 MusicTextAction("在网易云查看报告", { onOfficial(report) }, Modifier.testTag("listen_archive_official"))
                             }

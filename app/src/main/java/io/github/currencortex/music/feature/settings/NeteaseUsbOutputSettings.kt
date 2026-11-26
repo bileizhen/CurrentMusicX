@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -20,10 +19,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.NeteaseUsbDevices
 import io.github.currencortex.music.data.settings.AudioOutputSettings
-import io.github.currencortex.music.ui.component.MusicDestinationRow
-import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
 import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.RadioButtonPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun NeteaseUsbOutputSettings(settings: AudioOutputSettings, select: (String) -> Unit) {
@@ -45,22 +44,34 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     var message by remember { mutableStateOf<String?>(null) }
     val hint = COUITheme.colorScheme.labelSecondaryVariant
     Card { Column(Modifier.padding(vertical = 8.dp).testTag("netease_usb_settings")) {
-        Text("USB Host 独占输出", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), fontSize = 18.sp)
+        Text("USB Host 独占输出", Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            style = COUITheme.textStyles.headlineXS)
         Text("内置网易云 9.6.15 arm64 USB 驱动，直接访问授权设备。支持 8–192 kHz、单声道或立体声的 PCM 16/24/32-bit 整数；24-bit packed 扩展至 32-bit。音量跟随系统媒体音量，可用手机音量键调节；应用会对 PCM 做音量衰减，原驱动仍包含淡入处理，此模式不标为 Bit-perfect。",
-            Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp, color = hint)
-        if (devices.isEmpty()) Text("未连接 USB Audio 设备；连接后在此授权。", Modifier.padding(20.dp), fontSize = 14.sp)
+            Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = COUITheme.textStyles.bodyS, color = hint)
+        if (devices.isEmpty()) Text("未连接 USB Audio 设备；连接后在此授权。", Modifier.padding(20.dp),
+            style = COUITheme.textStyles.bodyM)
         else devices.forEach { device ->
             val selected = settings.usbDeviceKey == NeteaseUsbDevices.key(device) || (settings.usbDeviceKey.isEmpty() && devices.size == 1)
-            MusicDialogChoiceRow(NeteaseUsbDevices.label(device), selected, {
-                select(NeteaseUsbDevices.key(device))
-                if (!manager.hasPermission(device)) try { NeteaseUsbDevices.requestPermission(context, device) }
-                catch (_: Exception) { message = "USB 授权请求失败，请重新连接设备" }
-            }, summary = if (manager.hasPermission(device)) "已获得 USB 访问授权" else "点按选择并授权 USB 访问")
-            if (selected && !manager.hasPermission(device)) MusicDestinationRow("授权访问 USB DAC", {
-                try { NeteaseUsbDevices.requestPermission(context, device) }
-                catch (_: Exception) { message = "USB 授权请求失败，请重新连接设备" }
-            }, Modifier.testTag("request_usb_audio_permission"), summary = "系统授权成功后，再手动开始播放")
+            RadioButtonPreference(
+                title = NeteaseUsbDevices.label(device),
+                selected = selected,
+                onClick = {
+                    select(NeteaseUsbDevices.key(device))
+                    if (!manager.hasPermission(device)) try { NeteaseUsbDevices.requestPermission(context, device) }
+                    catch (_: Exception) { message = "USB 授权请求失败，请重新连接设备" }
+                },
+                summary = if (manager.hasPermission(device)) "已获得 USB 访问授权" else "点按选择并授权 USB 访问",
+            )
+            if (selected && !manager.hasPermission(device)) ArrowPreference(
+                title = "授权访问 USB DAC",
+                modifier = Modifier.testTag("request_usb_audio_permission"),
+                summary = "系统授权成功后，再手动开始播放",
+                onClick = {
+                    try { NeteaseUsbDevices.requestPermission(context, device) }
+                    catch (_: Exception) { message = "USB 授权请求失败，请重新连接设备" }
+                },
+            )
         }
-        message?.let { Text(it, Modifier.padding(20.dp), fontSize = 13.sp, color = hint) }
+        message?.let { Text(it, Modifier.padding(20.dp), style = COUITheme.textStyles.bodyS, color = hint) }
     } }
 }

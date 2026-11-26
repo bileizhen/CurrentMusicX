@@ -1,5 +1,6 @@
 package io.github.currencortex.music.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -7,14 +8,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.foundation.background
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.nativeui.LocalPageGlassScene
@@ -55,9 +55,9 @@ internal class PageNavigationSource(val modifier: Modifier, val open: (() -> Uni
     modifier:Modifier=Modifier,icon:ImageVector?=null,onClick:()->Unit) {
     val source=rememberPageNavigationSource(title,summary.orEmpty(),icon)
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        // SettingsPreference supplies COUI's native chevron; a manual one would double it.
         io.github.currencortex.music.ui.component.nativeui.SettingsPreference(title,summary,modifier.then(source.modifier),
-            onClick={source.open(onClick)},leading={icon?.let {io.github.suqi8.coui.kmp.basic.Icon(it,null,Modifier.size(24.dp))}},
-            trailing={io.github.suqi8.coui.kmp.basic.Icon(MusicIcons.Forward,null,Modifier.size(16.dp))})
+            onClick={source.open(onClick)},leading={icon?.let {io.github.suqi8.coui.kmp.basic.Icon(it,null,Modifier.size(24.dp))}})
         return
     }
     io.github.suqi8.coui.kmp.preference.ArrowPreference(title=title,summary=summary,

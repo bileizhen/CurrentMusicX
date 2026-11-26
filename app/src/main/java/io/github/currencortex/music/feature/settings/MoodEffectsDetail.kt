@@ -1,14 +1,10 @@
 package io.github.currencortex.music.feature.settings
 
 import androidx.activity.compose.BackHandler
-import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
@@ -27,33 +22,33 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.OriginalMoodState
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
-import kotlinx.serialization.json.*
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.serialization.json.*
 
 /** Native Mood detail, using the original vendor loops and the live model's emotion only. */
 @Composable internal fun MoodEffectsDetail(
@@ -178,7 +173,7 @@ import kotlin.math.sin
             }
         }
     }
-    if (information) MoodInformationSheet { information = false }
+    MoodInformationSheet(information) { information = false }
 }
 
 @Composable private fun MoodDetailIcon(label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
@@ -260,11 +255,14 @@ import kotlin.math.sin
     }
 }
 
-@Composable private fun MoodInformationSheet(onDismiss: () -> Unit) {
-    io.github.currencortex.music.ui.component.MusicDialog("AI情绪调音师说明", onDismiss, footer = {
-        io.github.currencortex.music.ui.component.MusicDialogButton("知道了", onDismiss,
-            Modifier.testTag("mood_info_done").semantics { contentDescription = "关闭说明" })
-    }) {
+@Composable private fun MoodInformationSheet(show: Boolean, onDismiss: () -> Unit) {
+    io.github.currencortex.music.ui.component.nativeui.SettingsDialog(
+        show = show,
+        title = "AI情绪调音师说明",
+        onDismissRequest = onDismiss,
+        positiveText = "知道了",
+        onPositive = onDismiss,
+    ) {
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag("mood_info_panel")) {
             MoodEffectsPresentation.explanation.forEach { (heading, text) ->
                 Text(heading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

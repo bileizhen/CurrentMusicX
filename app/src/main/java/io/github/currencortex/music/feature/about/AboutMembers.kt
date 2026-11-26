@@ -1,7 +1,6 @@
 // Ported from LeiFetch AboutScreen, GPL-3.0; same avatar rows, member dialogs and AnimatedList motion.
 package io.github.currencortex.music.feature.about
 
-import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
@@ -16,8 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
@@ -25,21 +22,24 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
 import io.github.currencortex.music.core.config.AboutMember
+import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
+import io.github.currencortex.music.ui.component.nativeui.SettingsActionButton
 import io.github.currencortex.music.ui.util.openExternalLink
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
-import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
 import io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal data class MemberFocus(val member: AboutMember, val group: String)
 
@@ -194,11 +194,11 @@ internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: (
                             .padding(top = 12.dp))
                 }
                 current.member.githubUrl?.let { url ->
-                    MusicDialogButton("GitHub", onClick = { openExternalLink(context, url) },
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("member_github"))
+                    SettingsActionButton("GitHub", onClick = { openExternalLink(context, url) },
+                        modifier = Modifier.padding(top = 12.dp).testTag("member_github"))
                 }
-                MusicDialogButton("关闭", onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp))
+                SettingsActionButton("关闭", onClick = onDismiss,
+                    modifier = Modifier.padding(top = 18.dp))
             }
         }
     }

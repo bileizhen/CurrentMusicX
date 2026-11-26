@@ -4,25 +4,25 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.appResult
+import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.PlaylistTrack
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
@@ -151,11 +151,11 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
         SpringLazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { SettingsHint("连接 Emby 音乐库，按需分页读取，原音质播放。登录令牌加密保存在本机，不保存密码。") }
-            if (account.configured) item { SettingsSection("当前账号", MusicIcons.Device) {
+            if (account.configured) item { SettingsSection("当前账号") {
                 SettingsPreference(account.username, account.server)
                 SettingsHint(if (account.download) "服务器允许下载原文件" else "此账号未开放下载权限，可在线播放")
             } }
-            item { SettingsSection("服务器连接", MusicIcons.Storage) {
+            item { SettingsSection("服务器连接") {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextField(server, { server = it; vm.error.value = null }, label = "服务器地址", singleLine = true, enabled = !busy,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.testTag("emby_server"))
@@ -167,7 +167,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                     error?.let { Text(it, color = COUITheme.colorScheme.error) }
                 }
             } }
-            item { GlassActionButton(if (busy) "正在连接…" else if (account.configured) "更换连接" else "连接服务器", ::connect,
+            item { SettingsActionButton(if (busy) "正在连接…" else if (account.configured) "更换连接" else "连接服务器", ::connect,
                 primary = true, enabled = canConnect, modifier = Modifier.fillMaxWidth().testTag("emby_connect")) }
             if (account.configured) item { MusicTextAction("断开连接", { password = ""; vm.disconnect() }, enabled = !busy) }
         }

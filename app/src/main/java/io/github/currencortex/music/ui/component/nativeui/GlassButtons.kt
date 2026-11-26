@@ -4,8 +4,6 @@
 package io.github.currencortex.music.ui.component.nativeui
 
 import android.os.Build
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -15,24 +13,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -104,6 +99,15 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 @Composable fun GlassIconButton(onClick: () -> Unit, description: String, modifier: Modifier = Modifier,
     backdrop: Backdrop? = LocalGlassBackdrop.current, size: Dp = 44.dp, enabled: Boolean = true, opensMenu: Boolean = false,
     onBoundsChanged: ((Rect) -> Unit)? = null, surface: Boolean = true, content: @Composable () -> Unit) {
+    // Settings pages use COUI's icon button, whose press feedback is already COUI's own.
+    if (LocalCouiSettingsPage.current && !opensMenu) {
+        io.github.suqi8.coui.kmp.basic.IconButton(
+            onClick = onClick,
+            modifier = modifier.size(size).semantics { contentDescription = description },
+            enabled = enabled,
+        ) { content() }
+        return
+    }
     val press = rememberElasticPressState()
     val trigger = if (opensMenu) LocalGlassMenuTrigger.current else null
     val sourceLayer = if (trigger != null) rememberGraphicsLayer() else null
@@ -174,6 +178,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 @Composable fun GlassActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     primary: Boolean = false, destructive: Boolean = false, enabled: Boolean = true,
     minHeight: Dp = 44.dp, backdrop: Backdrop? = LocalGlassBackdrop.current, fillWidth:Boolean=true) {
+    // Settings pages draw COUI's native capsule button instead of the app's glass one.
+    if (LocalCouiSettingsPage.current) {
+        SettingsActionButton(label, onClick, modifier, primary, destructive, enabled, fillWidth)
+        return
+    }
     val colors = COUITheme.colorScheme
     val press = rememberElasticPressState()
     val fill = if (destructive) colors.error else colors.primary

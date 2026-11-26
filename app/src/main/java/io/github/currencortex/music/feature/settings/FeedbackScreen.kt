@@ -1,15 +1,15 @@
 package io.github.currencortex.music.feature.settings
 
-import android.os.Build
 import android.content.ContentResolver
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,14 +31,12 @@ import io.github.currencortex.music.core.logging.AppLogger
 import io.github.currencortex.music.data.feedback.FEEDBACK_CONTENT_LENGTH
 import io.github.currencortex.music.data.feedback.FEEDBACK_ISSUES_URL
 import io.github.currencortex.music.data.feedback.FeedbackOwner
-import io.github.currencortex.music.data.feedback.MediaSlot
 import io.github.currencortex.music.data.feedback.FeedbackStatus
+import io.github.currencortex.music.data.feedback.MediaSlot
 import io.github.currencortex.music.data.feedback.feedbackContentLength
 import io.github.currencortex.music.feature.logs.LogExportDialog
-import io.github.currencortex.music.ui.component.MusicIcons
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.ui.component.MusicDialogActions
-import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
+import io.github.currencortex.music.ui.component.nativeui.SettingsActionButton
+import io.github.currencortex.music.ui.component.nativeui.SettingsDialog
 import io.github.currencortex.music.ui.component.nativeui.SettingsDivider
 import io.github.currencortex.music.ui.component.nativeui.SettingsGroup
 import io.github.currencortex.music.ui.component.nativeui.SettingsHint
@@ -50,15 +48,13 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsPreference
 import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl
 import io.github.currencortex.music.ui.component.nativeui.SettingsToggle
 import io.github.currencortex.music.ui.util.openExternalLink
+import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
+import io.github.suqi8.coui.kmp.basic.TextField
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.UUID
-import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
-import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.basic.TextField
 
 internal const val FEEDBACK_ROUTE = "app-feedback"
 
@@ -207,40 +203,52 @@ internal fun FeedbackScreen(vm: FeedbackViewModel, owner: FeedbackOwner?, logger
         audioDiagnostics = if (attempt?.attachAudioDiagnostics == true) vm::audioDiagnosticReport else null,
     ) { showLogs = false }
     val pending = confirmation
-    if (owner != null && pending != null && attempt == null) {
-        MusicDialog("公开发布反馈？", onDismiss = { confirmation = null }, footer = {
-            MusicDialogActions {
-                GlassActionButton("取消", { confirmation = null }, Modifier.weight(1f))
-                GlassActionButton("确认提交", {
-                    confirmation = null
-                    vm.submit(owner, pending.content, pending.attachLogs, pending.attachAudioDiagnostics, pending.requestId)
-                }, Modifier.weight(1f).testTag("feedback_confirm"), primary = true)
-            }
-        }) {
-            Text("服务端会脱敏并使用 AI 整理反馈，再发布到公开的 CurrentMusicX Issues。AI 暂不可用时，服务端可能直接发布脱敏后的原文。")
-            if (pending.attachLogs || pending.attachAudioDiagnostics) {
+    // Keep the dialog composed and let `show` drive its exit, so dismissing it animates out.
+    val showConfirmation = owner != null && pending != null && attempt == null
+    if (owner != null) {
+        SettingsDialog(
+            show = showConfirmation,
+            title = "公开发布反馈？",
+            onDismissRequest = { confirmation = null },
+            summary = pending?.let { current ->
                 val attachments = when {
-                    pending.attachLogs && pending.attachAudioDiagnostics -> "应用日志和音频诊断"
-                    pending.attachAudioDiagnostics -> "音频诊断"
+                    current.attachLogs && current.attachAudioDiagnostics -> "应用日志和音频诊断"
+                    current.attachAudioDiagnostics -> "音频诊断"
                     else -> "应用日志"
                 }
-                Text("脱敏后的${attachments}和设备信息仅供项目管理员查看，服务端保留七天。线路不支持上传时，可在回执页导出。")
-            }
-        }
+                buildString {
+                    append("服务端会脱敏并使用 AI 整理反馈，再发布到公开的 CurrentMusicX Issues。AI 暂不可用时，服务端可能直接发布脱敏后的原文。")
+                    if (current.attachLogs || current.attachAudioDiagnostics) {
+                        append("\n\n脱敏后的${attachments}和设备信息仅供项目管理员查看，服务端保留七天。线路不支持上传时，可在回执页导出。")
+                    }
+                }
+            },
+            positiveText = "确认提交",
+            onPositive = {
+                pending?.let {
+                    vm.submit(owner, it.content, it.attachLogs, it.attachAudioDiagnostics, it.requestId)
+                }
+                confirmation = null
+            },
+            negativeText = "取消",
+            onNegative = { confirmation = null },
+        )
     }
-    if (owner != null && confirmNew) {
-        MusicDialog("填写新反馈？", onDismiss = { confirmNew = false }, footer = {
-            MusicDialogActions {
-                GlassActionButton("取消", { confirmNew = false }, Modifier.weight(1f))
-                GlassActionButton("填写新反馈", {
-                    confirmNew = false
-                    vm.editForm(owner) { FeedbackFormState(drafts = it.drafts - it.template) }
-                    vm.clear(owner)
-                }, Modifier.weight(1f), primary = true)
-            }
-        }) {
-            Text("上一条反馈可能已发布。请先在 GitHub Issues 核对，避免重复提交。")
-        }
+    if (owner != null) {
+        SettingsDialog(
+            show = confirmNew,
+            title = "填写新反馈？",
+            onDismissRequest = { confirmNew = false },
+            summary = "上一条反馈可能已发布。请先在 GitHub Issues 核对，避免重复提交。",
+            positiveText = "填写新反馈",
+            onPositive = {
+                confirmNew = false
+                vm.editForm(owner) { FeedbackFormState(drafts = it.drafts - it.template) }
+                vm.clear(owner)
+            },
+            negativeText = "取消",
+            onNegative = { confirmNew = false },
+        )
     }
 }
 
@@ -281,10 +289,10 @@ private fun FeedbackReceiptSection(
         }
     }
     if (!attempt.busy && attempt.canRetry) {
-        GlassActionButton(if (attempt.queryOnly) "重试查询" else "重试提交", onRetry, primary = true)
+        SettingsActionButton(if (attempt.queryOnly) "重试查询" else "重试提交", onRetry, primary = true)
     }
     if (!attempt.busy && (attempt.canEdit || receipt?.status in setOf(FeedbackStatus.PUBLISHED, FeedbackStatus.UNCONFIRMED))) {
-        GlassActionButton(if (attempt.canEdit) "编辑反馈" else "填写新反馈", onContinue, primary = attempt.canEdit)
+        SettingsActionButton(if (attempt.canEdit) "编辑反馈" else "填写新反馈", onContinue, primary = attempt.canEdit)
     }
 }
 
@@ -295,7 +303,7 @@ private fun FeedbackProgress() {
 
 @Composable
 private fun FeedbackLink(title: String, onClick: () -> Unit, summary: String? = null, modifier: Modifier = Modifier) {
-    SettingsPreference(title, summary, modifier, onClick = onClick, trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+    SettingsPreference(title, summary, modifier, onClick = onClick)
 }
 
 private fun initialFeedbackDraft(template: FeedbackTemplate): FeedbackDraft {
@@ -385,7 +393,7 @@ private fun LazyListScope.feedbackForm(
             }
             SettingsHint("标 * 的字段必填。反馈将公开发布在 GitHub。\n正文含字段名共 $length / ${FEEDBACK_CONTENT_LENGTH.last} 字。",
                 error = length > FEEDBACK_CONTENT_LENGTH.last)
-            GlassActionButton("提交反馈", onSubmit, Modifier.testTag("feedback_submit"), primary = true,
+            SettingsActionButton("提交反馈", onSubmit, Modifier.testTag("feedback_submit"), primary = true,
                 enabled = draft.complete && (!bug || checked) && length in FEEDBACK_CONTENT_LENGTH)
         }
     }

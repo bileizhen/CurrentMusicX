@@ -12,10 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import io.github.currencortex.music.ui.component.MusicIcons
-import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,7 +37,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.OriginalAiMasterState
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
+import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 
@@ -178,9 +177,9 @@ private val masterDiyOptions = listOf(
             }
         }
     }
-    if (preferences) MasterPreferencesSheet(state.selectedDiy, state.diySaving,
+    MasterPreferencesSheet(preferences, state.selectedDiy, state.diySaving,
         onDismiss = { preferences = false }, onSave = { onSaveDiy(it); preferences = false })
-    if (information) MasterInformationSheet { information = false }
+    MasterInformationSheet(information) { information = false }
 }
 
 @Composable private fun MasterPreviewAction(label: String, active: Boolean, modifier: Modifier, tag: String, onClick: () -> Unit) {
@@ -197,18 +196,20 @@ private val masterDiyOptions = listOf(
         .semantics { contentDescription = label }.testTag(tag), contentAlignment = Alignment.Center) { content() }
 }
 
-@Composable private fun MasterPreferencesSheet(selected: Set<String>, saving: Boolean,
+@Composable private fun MasterPreferencesSheet(show: Boolean, selected: Set<String>, saving: Boolean,
     onDismiss: () -> Unit, onSave: (Set<String>) -> Unit) {
     var draft by remember { mutableStateOf(selected) }
     LaunchedEffect(selected) { draft = selected }
-    io.github.currencortex.music.ui.component.MusicDialog("DIY偏好设置", onDismiss, footer = {
-        io.github.currencortex.music.ui.component.MusicDialogActions {
-            io.github.currencortex.music.ui.component.MusicDialogButton("取消", onDismiss,
-                Modifier.weight(1f).testTag("sound_ai_master_diy_close").semantics { contentDescription = "关闭偏好设置" })
-            io.github.currencortex.music.ui.component.MusicDialogButton(if (saving) "保存中" else "保存设置", { onSave(draft) },
-                Modifier.weight(1f).testTag("sound_ai_master_diy_save"), enabled = !saving)
-        }
-    }) {
+    io.github.currencortex.music.ui.component.nativeui.SettingsDialog(
+        show = show,
+        title = "DIY偏好设置",
+        onDismissRequest = onDismiss,
+        positiveText = if (saving) "保存中" else "保存设置",
+        onPositive = { onSave(draft) },
+        positiveEnabled = !saving,
+        negativeText = "取消",
+        onNegative = onDismiss,
+    ) {
         val colors = io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
         Text("选择偏好后，AI调音大师会在保障好的听歌体验基础上结合偏好为你定制最佳调音效果哟！（PS：偏好标签会基于歌曲生效）",
@@ -242,11 +243,14 @@ private val masterDiyOptions = listOf(
     }
 }
 
-@Composable private fun MasterInformationSheet(onDismiss: () -> Unit) {
-    io.github.currencortex.music.ui.component.MusicDialog("AI调音大师说明", onDismiss, footer = {
-        io.github.currencortex.music.ui.component.MusicDialogButton("知道了", onDismiss,
-            Modifier.testTag("sound_ai_master_info_close").semantics { contentDescription = "关闭说明" })
-    }) {
+@Composable private fun MasterInformationSheet(show: Boolean, onDismiss: () -> Unit) {
+    io.github.currencortex.music.ui.component.nativeui.SettingsDialog(
+        show = show,
+        title = "AI调音大师说明",
+        onDismissRequest = onDismiss,
+        positiveText = "知道了",
+        onPositive = onDismiss,
+    ) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
         listOf(
             "1.功能说明" to "通过深度学习的 AI 引擎动态分析歌曲特征（如节奏、乐器、人声频率等），自动生成适配当前歌曲的专业级音效参数，无需手动调节即可获得歌曲的最佳听感",

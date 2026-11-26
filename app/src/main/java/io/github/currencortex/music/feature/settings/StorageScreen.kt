@@ -1,8 +1,5 @@
 package io.github.currencortex.music.feature.settings
 
-import io.github.currencortex.music.ui.component.nativeui.SettingsPage
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 
 import android.os.StatFs
 import androidx.compose.foundation.background
@@ -24,16 +21,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.storage.DataCacheCategory
 import io.github.currencortex.music.core.storage.StorageUsage
 import io.github.currencortex.music.data.settings.AudioCacheLimit
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.ui.component.MusicDialogActions
-import io.github.currencortex.music.ui.component.MusicDialogButton
-import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
+import io.github.currencortex.music.ui.component.nativeui.SettingsDialog
 import io.github.currencortex.music.ui.component.nativeui.SettingsDivider
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 import io.github.currencortex.music.ui.component.nativeui.SettingsHint
 import io.github.currencortex.music.ui.component.nativeui.SettingsOption
 import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
 import io.github.currencortex.music.ui.component.nativeui.SettingsPreference
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
@@ -84,10 +82,12 @@ internal fun formatStorageSize(bytes: Long): String = when {
                     PreferenceCategory(title = "存储明细", modifier = Modifier.weight(1f),
                         marginStartType = PreferenceCategoryMarginStartType.Small)
                     // The one-tap cleanup for both caches, on the section header line.
-                    GlassIconButton({ pending = ClearTarget.All }, "清理缓存",
-                        Modifier.testTag("clear_all_storage"), size = 44.dp,
-                        enabled = !state.busy && usage.audio + usage.data > 0) {
-                        Icon(COUIIcons.Delete, contentDescription = null, modifier = Modifier.size(20.dp))
+                    IconButton(
+                        onClick = { pending = ClearTarget.All },
+                        modifier = Modifier.testTag("clear_all_storage"),
+                        enabled = !state.busy && usage.audio + usage.data > 0,
+                    ) {
+                        Icon(COUIIcons.Delete, contentDescription = "清理缓存", modifier = Modifier.size(20.dp))
                     }
                 }
                 Card {
@@ -143,10 +143,11 @@ internal fun formatStorageSize(bytes: Long): String = when {
         leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(row.color)) },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(row.text, fontSize = 14.sp, color = COUITheme.colorScheme.labelTertiary)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(row.text, style = COUITheme.textStyles.bodyM,
+                    color = COUITheme.colorScheme.labelTertiary)
                 if (clickable) Icon(COUIIcons.Basic.ArrowRight, contentDescription = null,
-                    modifier = Modifier.size(16.dp), tint = COUITheme.colorScheme.labelTertiary)
+                    modifier = Modifier.size(12.dp), tint = COUITheme.colorScheme.labelTertiary)
             }
         },
     )
@@ -212,15 +213,18 @@ private sealed interface ClearTarget {
 @Composable
 private fun ClearCacheDialog(target: ClearTarget?, usage: StorageUsage, busy: Boolean,
     onDismiss: () -> Unit, onConfirm: (ClearTarget) -> Unit) {
-    val pending = target ?: return
-    MusicDialog(pending.title, onDismiss) {
-        Text(pending.description(usage))
-        MusicDialogActions {
-            MusicDialogButton("取消", onDismiss, Modifier.weight(1f), enabled = !busy)
-            MusicDialogButton(if (busy) "清理中…" else "清理", { onConfirm(pending) },
-                Modifier.weight(1f).testTag("confirm_clear_cache"), enabled = !busy, destructive = true)
-        }
-    }
+    SettingsDialog(
+        show = target != null,
+        title = target?.title.orEmpty(),
+        onDismissRequest = { if (!busy) onDismiss() },
+        summary = target?.description(usage),
+        positiveText = if (busy) "清理中…" else "清理",
+        onPositive = { target?.let(onConfirm) },
+        positiveEnabled = !busy,
+        negativeText = "取消",
+        onNegative = onDismiss,
+        destructive = true,
+    )
 }
 
 /** Segments in bar order; the four data-cache parts sit between audio and downloads. */

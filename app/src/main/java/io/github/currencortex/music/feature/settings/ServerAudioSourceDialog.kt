@@ -1,47 +1,45 @@
 package io.github.currencortex.music.feature.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.song.ServerAudioSource
-import io.github.currencortex.music.ui.component.MusicChoiceDialog
-import io.github.currencortex.music.ui.component.MusicDialogButton
-import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
-import io.github.currencortex.music.ui.component.nativeui.SettingsHint
+import io.github.suqi8.coui.kmp.layout.DialogButtonBarAction
+import io.github.suqi8.coui.kmp.layout.ListDialogItem
+import io.github.suqi8.coui.kmp.overlay.OverlaySingleChoiceDialog
 
 @Composable
-internal fun ServerAudioSourceDialog(state: ServerAudioCatalogState, onDismiss: () -> Unit, onRetry: () -> Unit,
-    onImport: (ServerAudioSource) -> Unit, onLogin: () -> Unit) {
-    var selection by remember(state.sources) { mutableStateOf<ServerAudioSource?>(null) }
-    MusicChoiceDialog("从服务器导入", onDismiss, footer = {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MusicDialogButton("取消", onDismiss, Modifier.weight(1f))
-            when {
-                state.needsLogin -> MusicDialogButton("登录", onLogin, Modifier.weight(1f))
-                state.sources.isNotEmpty() -> MusicDialogButton("导入并使用", { selection?.let(onImport) },
-                    Modifier.weight(1f).testTag("server_audio_confirm"), enabled = selection != null)
-                !state.busy -> MusicDialogButton("重新加载", onRetry, Modifier.weight(1f))
-            }
+internal fun ServerAudioSourceDialog(show: Boolean, state: ServerAudioCatalogState?, onDismiss: () -> Unit,
+    onRetry: () -> Unit, onImport: (ServerAudioSource) -> Unit, onLogin: () -> Unit) {
+    val sources = state?.sources.orEmpty()
+    var selection by remember(sources) { mutableStateOf<ServerAudioSource?>(null) }
+    val summary = buildList {
+        state?.let {
+            add("提供方 · ${it.server}")
+            if (it.busy) add("正在加载音源…")
+            it.message?.let(::add)
         }
-    }) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-            SettingsHint("提供方 · ${state.server}")
-            if (state.busy) SettingsHint("正在加载音源…")
-            state.message?.let { SettingsHint(it) }
-            for (source in state.sources) {
-                MusicDialogChoiceRow(source.name, selection == source, onClick = { selection = source },
-                    modifier = Modifier.testTag("server_audio_source_${source.id}"), summary = "支持网易云曲库")
-            }
-        }
-    }
+    }.joinToString("\n")
+    OverlaySingleChoiceDialog(
+        show = show,
+        items = sources.map { source ->
+            ListDialogItem(text = source.name, summary = "支持网易云曲库")
+        },
+        selectedIndex = sources.indexOf(selection),
+        onSelectedIndexChange = { index -> selection = sources.getOrNull(index) },
+        title = "从服务器导入",
+        summary = summary,
+        negative = DialogButtonBarAction("取消", onClick = onDismiss),
+        positive = when {
+            state == null -> null
+            state.needsLogin -> DialogButtonBarAction("登录", onClick = onLogin)
+            sources.isNotEmpty() -> DialogButtonBarAction(
+                "导入并使用", enabled = selection != null, onClick = { selection?.let(onImport) })
+            !state.busy -> DialogButtonBarAction("重新加载", onClick = onRetry)
+            else -> null
+        },
+        onDismissRequest = onDismiss,
+    )
 }
