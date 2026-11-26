@@ -54,6 +54,7 @@ import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
@@ -166,7 +167,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
             }
         }
         item("details") {
-            PreferenceCategory(title = "详细信息")
+            PreferenceCategory(title = "详细信息", marginStartType = PreferenceCategoryMarginStartType.Small)
             Card(Modifier.fillMaxWidth()) {
                 CardListGroup {
                     item {
@@ -224,7 +225,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
         }
         if (projectLinks.isNotEmpty()) {
             item("project") {
-                PreferenceCategory(title = "项目")
+                PreferenceCategory(title = "项目", marginStartType = PreferenceCategoryMarginStartType.Small)
                 Card(Modifier.fillMaxWidth()) {
                     CardListGroup {
                         projectLinks.distinctBy { it.url }.forEachIndexed { index, link ->
@@ -248,7 +249,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
         }
         if (legalLinks.isNotEmpty()) {
             item("legal") {
-                PreferenceCategory(title = "许可")
+                PreferenceCategory(title = "许可", marginStartType = PreferenceCategoryMarginStartType.Small)
                 Card(Modifier.fillMaxWidth()) {
                     CardListGroup {
                         legalLinks.distinctBy { it.url }.forEachIndexed { index, link ->
