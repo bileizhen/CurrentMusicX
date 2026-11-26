@@ -377,6 +377,9 @@ internal class PostsViewModel(
                     if (state.value.nextAfter == null) {
                         loadComments(state.value.lastLoadedCommentId)
                     }
+                } else if (state.value.detailId == id) {
+                    // The composer is still open while a refresh replaces the post data.
+                    state.update { it.copy(postedCommentId = commentId) }
                 }
             }
         }
