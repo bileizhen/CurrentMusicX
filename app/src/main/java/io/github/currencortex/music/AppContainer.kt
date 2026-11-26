@@ -273,6 +273,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val serverAudioSources = ServerAudioSources(apiClient)
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
         lx = lxSources, emby = emby, qqMusic = qqMusic, serverAudioSources = serverAudioSources)
+    val dynamicCovers = io.github.currencortex.music.data.song.DynamicCoverRepository(
+        api = apiClient,
+        qqMusic = qqMusic,
+        httpClient = apiHttpClient ?: ApiClient.defaultHttpClient(),
+        allowExternalLookup = storageNamespace.isEmpty(),
+    )
     internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
         qqAudioIdentity(qqMusic.audioIdentity, access)
 

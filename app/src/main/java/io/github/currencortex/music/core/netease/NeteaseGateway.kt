@@ -233,6 +233,22 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 require(id.toLongOrNull()?.let { it > 0 } == true)
                 return official("/api/song/chorus", data("ids" to "[$id]"), expected = expected)
             }
+            "song/dynamic/cover" -> {
+                require(id.toLongOrNull()?.let { it > 0 } == true)
+                if (expected.credential.cookies["MUSIC_U"].isNullOrBlank() || expected.credential.stale)
+                    throw ApiException(ErrorKind.NeteaseBindingRequired)
+                // Keep authenticated = false so a rejected optional cover endpoint never marks MUSIC_U stale.
+                val raw = official("/api/songplay/dynamic-cover", data("songId" to id),
+                    expected = expected, authenticated = false,
+                    clientProfile = NeteaseClientProfile.ANDROID, saveCookies = false)
+                val url = raw.obj("data").text("videoPlayUrl").replace("http:", "https:")
+                    .takeIf { it.toHttpUrlOrNull()?.scheme in setOf("http", "https") }
+                    .orEmpty()
+                return buildJsonObject {
+                    put("code", 200)
+                    put("videoUrl", url)
+                }
+            }
             "song/url", "song/url/v1" -> {
                 suspend fun trackAt(level: String): JsonObject? {
                     val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {

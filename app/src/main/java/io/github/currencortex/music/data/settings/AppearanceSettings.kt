@@ -59,6 +59,9 @@ data class AppearanceSettings(
     val customTextScale: Boolean = false,
     val textScale: Float = 1f,
     val playerCoverStyle: PlayerCoverStyle = PlayerCoverStyle.CIRCLE,
+    val playerDynamicCover: Boolean = true,
+    val playerHideStatusBar: Boolean = false,
+    val playerCoverHideControls: Boolean = false,
     /** Developer mode is unlocked by tapping the version row five times on the About page. */
     val developerMode: Boolean = false,
     val scrollEdgeHaptic: Boolean = true,

@@ -251,6 +251,7 @@ class QqDirectMusicClient(
                 route == "search/suggest" -> suggestions(query)
                 route == "search/hot" -> hotSearch()
                 route == "song/detail" -> songDetail(query)
+                route == "song/dynamic/cover" -> songDynamicCover(query)
                 route == "song/qualities" -> songQualities(query)
                 route == "song/favorite-count" -> songFavoriteCount(query)
                 route == "song/url" -> songUrl(query, credential)
@@ -821,6 +822,63 @@ class QqDirectMusicClient(
         }, null)
         val tracks = data.array("tracks", "track_info", "songs", "songlist", "list")
         return wrapped(buildJsonObject { put("songs", JsonArray(tracks)) })
+    }
+
+    private fun songDynamicCover(query: Map<String, String>): JsonObject {
+        val songMid = query["songMid"].orEmpty().trim()
+        val rawAlbumMid = query["albumMid"].orEmpty().trim()
+        val albumMid = rawAlbumMid.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) } ?: run {
+            if (!songMid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
+            val detail = cgi("music.trackInfo.UniformRuleCtrl", "CgiGetTrackInfo", buildJsonObject {
+                put("ctx", 0)
+                put("client", 1)
+                put("mids", buildJsonArray { add(JsonPrimitive(songMid)) })
+                put("types", buildJsonArray { add(JsonPrimitive(0)) })
+                put("modify_stamp", buildJsonArray { add(JsonPrimitive(0)) })
+            }, null)
+            val track = detail.array("tracks", "track_info", "songs", "songlist", "list")
+                .firstOrNull() as? JsonObject
+            (track?.get("album") as? JsonObject)?.firstText("mid", "albumMid", "albumMID")
+                ?: track?.firstText("albumMid", "albummid", "albumMID")
+                ?: ""
+        }.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val albumData = cgi("music.musichallAlbum.AlbumInfoServer", "GetAlbumDetail",
+            buildJsonObject { put("albumMid", albumMid) }, null)
+        val basic = (albumData["basicInfo"] as? JsonObject) ?: (albumData["album"] as? JsonObject) ?: albumData
+        val vid = basic.firstText("dynamicCoverVid", "dynamic_cover_vid")
+            .takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val streamData = cgi("music.stream.MvUrlProxy", "GetMvUrls", buildJsonObject {
+            put("vids", buildJsonArray { add(JsonPrimitive(vid)) })
+            put("request_type", 10003)
+            put("guid", playbackGuid)
+            put("videoformat", 1)
+            put("format", 264)
+            put("dolby", 0)
+            put("use_new_domain", 1)
+            put("use_ipv6", 1)
+        }, null)
+        val vidObj = (streamData[vid] as? JsonObject)
+            ?: (streamData.values.firstOrNull { it is JsonObject } as? JsonObject)
+        val mp4Entries = vidObj?.array("mp4").orEmpty().mapNotNull { it as? JsonObject }
+        val bestEntry = mp4Entries
+            .filter { entry ->
+                entry.firstLong("code") == 0L &&
+                    entry.array("freeflow_url").any { (it as? JsonPrimitive)?.contentOrNull?.startsWith("http") == true }
+            }
+            .maxByOrNull { entry -> entry.firstLong("filetype") }
+        val urls = bestEntry?.array("freeflow_url")
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+            .orEmpty()
+        val videoUrl = (urls.firstOrNull { it.startsWith("https://") }
+            ?: urls.firstOrNull { it.startsWith("http://") }).orEmpty()
+        return wrapped(buildJsonObject {
+            put("vid", vid)
+            put("videoUrl", videoUrl)
+        })
     }
 
     private fun songQualities(query: Map<String, String>): JsonObject {

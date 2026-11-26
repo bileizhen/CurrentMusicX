@@ -168,6 +168,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
         val q = if (queueReady) queueProgress().coerceIn(0f, 1f) else 0f
         return bounds.size.minDimension * (if (square) .05f else .5f) * (1 - immersion()) * (1 - q) + queueRadius * q
     }
+    fun settledCoverBounds(): Rect? = if (ready && !immersive) endpoints?.first?.translate(paneOffset) else null
 }
 internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtworkTransition?> { null }
 

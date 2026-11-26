@@ -922,6 +922,17 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
             .firstOrNull { it.startsWith("https://") || it.startsWith("http://") }
             ?: throw ApiException(ErrorKind.NotFound, userMessage = "QQ 音乐未提供 MV 播放地址")
     }
+    /** Resolve a track's animated album cover video URL when available, or null when absent. */
+    suspend fun dynamicCover(song: Song): String? {
+        val songMid = song.qqMusic?.mid?.takeIf(String::isNotBlank) ?: runCatching { mid(song) }.getOrNull().orEmpty()
+        val albumMid = song.qqMusic?.albumMid.orEmpty()
+        if (songMid.isBlank() && albumMid.isBlank()) return null
+        val raw = payload(call("song/dynamic/cover", buildMap {
+            if (songMid.isNotBlank()) put("songMid", songMid)
+            if (albumMid.isNotBlank()) put("albumMid", albumMid)
+        }))
+        return raw.text("videoUrl").takeIf { it.startsWith("https://") || it.startsWith("http://") }
+    }
     suspend fun favoriteAlbums(offset: Int = 0): QqCatalogPage {
         require(offset in 0..10_000) { "QQ 音乐收藏专辑偏移量无效" }
         val raw = native("user/albums", mapOf("offset" to "$offset", "limit" to "30"), requiresSession = true)
