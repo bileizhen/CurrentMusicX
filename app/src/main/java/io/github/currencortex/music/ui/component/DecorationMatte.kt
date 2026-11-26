@@ -50,13 +50,16 @@ import coil3.request.ImageRequest
             else -> Unit
         }
     }
-    Image(painter, contentDescription, modifier = modifier.then(if (blackBacked) Modifier.decorationMatteLayer() else Modifier),
+    Image(painter, contentDescription, modifier = modifier.then(if (blackBacked) Modifier.decorationMatte() else Modifier),
         contentScale = contentScale)
 }
 
 /** Runtime shaders need Android 13; older releases draw the source image unchanged. */
+@Composable private fun Modifier.decorationMatte(): Modifier =
+    if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) matteLayer() else this
+
 @RequiresApi(33)
-@Composable private fun Modifier.decorationMatteLayer(): Modifier {
+@Composable private fun Modifier.matteLayer(): Modifier {
     // A bad shader must never take the screen down with it; fall back to the raw image.
     val effect = remember {
         runCatching { RenderEffect.createRuntimeShaderEffect(RuntimeShader(DECORATION_MATTE_SHADER), "content") }.getOrNull()
