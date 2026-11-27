@@ -41,6 +41,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import io.github.currencortex.music.core.media.BannerVideoCache
 import io.github.currencortex.music.data.profile.BannerCrop
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicDialogActions
@@ -115,9 +119,11 @@ internal fun ProfileBannerHero(
     modifier: Modifier = Modifier,
     isVideo: Boolean = false,
     httpClient: okhttp3.OkHttpClient? = null,
+    videoCache: BannerVideoCache? = null,
     videoActive: Boolean = true,
     seamColor: Color = COUITheme.colorScheme.cardBackground,
 ) {
+    val context = LocalContext.current
     val canBlur = Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated
     Box(
         modifier = modifier
@@ -146,12 +152,21 @@ internal fun ProfileBannerHero(
                     BannerVideoSurface(
                         source = model,
                         httpClient = httpClient,
+                        videoCache = videoCache,
                         active = videoActive,
                         modifier = Modifier.matchParentSize(),
                     )
                 } else {
+                    val imageRequest = remember(context, model) {
+                        ImageRequest.Builder(context)
+                            .data(model)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .crossfade(true)
+                            .build()
+                    }
                     AsyncImage(
-                        model = model,
+                        model = imageRequest,
                         contentDescription = null,
                         modifier = Modifier.matchParentSize(),
                         contentScale = ContentScale.Crop,

@@ -49,6 +49,8 @@ data class AppearanceSettings(
     val refreshRate: RefreshRatePreference = RefreshRatePreference.SYSTEM,
     val playerBackground: String = "",
     val playerBackgroundBlur: Float = 35f,
+    val rootBackground: String = "",
+    val rootBackgroundBlur: Float = 35f,
     val launchStyle: LaunchStyle = LaunchStyle.CLASSIC,
     val customFont: String = "",
     val playerDynamicBackground: Boolean = true,
@@ -70,6 +72,7 @@ data class AppearanceSettings(
     fun normalized() = copy(floatingBar = true,
         uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
         playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f,
+        rootBackgroundBlur = if (rootBackgroundBlur.isFinite()) rootBackgroundBlur.coerceIn(0f, 100f) else 35f,
         textScale = if (textScale.isFinite()) textScale.coerceIn(.8f, 1.4f) else 1f,
         primaryColor = (primaryColor and 0xFFFFFF) or 0xFF000000,
         primaryColors = primaryColors.map { (it and 0xFFFFFF) or 0xFF000000 }.distinct().take(32).ifEmpty { DefaultThemeColors })

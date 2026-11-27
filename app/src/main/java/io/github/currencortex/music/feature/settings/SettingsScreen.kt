@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -129,8 +130,9 @@ fun SettingsScreen(
     }
     val colors = COUITheme.colorScheme
     val backgroundColor = colors.background
+    val rootBackgroundActive = onBack == null && io.github.currencortex.music.ui.component.LocalRootBackgroundActive.current
     val isDark = COUITheme.isDark
-    val backdrop = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
+    val backdrop = if (!rootBackgroundActive && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
         rememberLayerBackdrop {
             drawRect(backgroundColor)
             drawContent()
@@ -152,7 +154,7 @@ fun SettingsScreen(
             colors.blue, onAccount),
         SettingsDestination("updates", updateTitle, updateSummary, COUIIcons.Update,
             colors.blue) { onUpdates(null) },
-        SettingsDestination("appearance", "外观", "主题、颜色与界面效果", COUIIcons.Theme,
+        SettingsDestination("appearance", "外观", "主题、颜色、背景与界面效果", COUIIcons.Theme,
             colors.orange, onAppearance),
         SettingsDestination("desktop_lyrics", "桌面悬浮歌词", "实时预览、字幕样式与窗口控制",
             COUIIcons.ScreenMirroring, colors.azure, onDesktopLyrics),
@@ -180,7 +182,7 @@ fun SettingsScreen(
         SettingsUiScope {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                containerColor = backgroundColor,
+                containerColor = if (rootBackgroundActive) Color.Transparent else backgroundColor,
                 topBar = {
                     SettingsHomeHeader(
                         title = "设置",
@@ -190,6 +192,7 @@ fun SettingsScreen(
                         backdrop = backdrop,
                         isDark = isDark,
                         baseColor = backgroundColor,
+                        rootBackgroundActive = rootBackgroundActive,
                         query = query,
                         onQueryChange = { query = it },
                         searching = searching,
@@ -378,6 +381,7 @@ private fun SettingsHomeHeader(
     backdrop: Backdrop?,
     isDark: Boolean,
     baseColor: Color,
+    rootBackgroundActive: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
     searching: Boolean,
@@ -387,7 +391,21 @@ private fun SettingsHomeHeader(
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val titleAreaHeight = (titleHeight * (1f - collapseFraction)).coerceAtLeast(0.dp)
     Box(Modifier.fillMaxWidth().testTag("settings_root_toolbar")) {
-        if (backdrop != null) {
+        if (rootBackgroundActive) {
+            Box(
+                Modifier.matchParentSize()
+                    .padding(bottom = TopAppBarGlowDefaults.ExtraHeight)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                baseColor.copy(alpha = 0.22f + 0.56f * collapseFraction),
+                                baseColor.copy(alpha = 0.08f + 0.36f * collapseFraction),
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+        } else if (backdrop != null) {
             TopAppBarGlow(
                 backdrop = backdrop,
                 scrollOffsetPx = scrollOffsetPx,

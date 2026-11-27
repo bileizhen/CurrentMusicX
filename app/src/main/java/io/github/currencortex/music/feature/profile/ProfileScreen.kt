@@ -259,6 +259,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                             },
                             isVideo = user.isVideoBanner,
                             httpClient = vm.container.mediaHttpClient,
+                            videoCache = vm.container.bannerVideoCache,
                             videoActive = videoActive,
                             modifier = Modifier.testTag("profile_banner"),
                         )
@@ -415,6 +416,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         is ProfileViewModel.BannerDraft.Video -> ProfileBannerVideoDialog(
             uri = draft.uri,
             info = draft.info,
+            maxDurationMs = draft.maxDurationMs,
             busy = busy,
             statusText = bannerStatus,
             onCancel = vm::dismissBanner,

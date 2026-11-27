@@ -4,12 +4,16 @@
 package io.github.currencortex.music.feature.settings
 
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +68,7 @@ import kotlinx.coroutines.*
                 }
             }
             item("primary_color") { AppearancePalette(config, viewModel) }
+            item("root_background") { AppearanceRootBackground(config, viewModel) }
             item("liquid_glass") {
                 SettingsPreviewChoiceGroup("液态玻璃", MusicIcons.Drop, listOf("标准", "液态"),
                     if (config.liquidGlass) 1 else 0, { index -> viewModel.edit { it.copy(liquidGlass = index == 1) } },
@@ -260,6 +265,201 @@ import kotlinx.coroutines.*
                             } })
                         Text("A", fontSize = 22.sp, color = colors.labelSecondaryVariant)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun AppearanceRootBackground(config: AppearanceSettings, vm: SettingsViewModel) {
+    val colors = COUITheme.colorScheme
+    val dark = io.github.currencortex.music.ui.theme.isInDarkTheme()
+    val scope = rememberCoroutineScope()
+    var blur by remember { mutableFloatStateOf(config.rootBackgroundBlur) }
+    LaunchedEffect(config.rootBackgroundBlur) { blur = config.rootBackgroundBlur }
+    val file = remember(config.rootBackground) { vm.rootBackgroundFile(config.rootBackground) }
+    var busy by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun runAction(action: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        errorMessage = null
+        scope.launch {
+            try {
+                action()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                errorMessage = if (failure is IllegalArgumentException || failure is IllegalStateException) {
+                    failure.message ?: "背景图片保存失败，请重试"
+                } else {
+                    "无法读取背景图片，请重新选择"
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) runAction { vm.importRootBackground(uri) }
+    }
+
+    fun persistBlur(value: Float) {
+        val clamped = if (value.isFinite()) value.coerceIn(0f, 100f) else 35f
+        scope.launch { vm.edit { it.copy(rootBackgroundBlur = clamped) } }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsListHeader("一级页面背景", actions = {
+            SettingsFadingReset(
+                visible = config.rootBackground.isNotBlank() && !busy,
+                onClick = { runAction { vm.clearRootBackground() } },
+                description = "恢复默认背景",
+                modifier = Modifier.testTag("appearance_root_background_reset"),
+            )
+        })
+        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsGroup {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(148.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(colors.background)
+                            .testTag("root_background_preview"),
+                    ) {
+                        if (file != null) {
+                            RootPageBackground(
+                                file = file,
+                                blurPercent = blur,
+                                dark = dark,
+                                surfaceColor = colors.background,
+                                modifier = Modifier.matchParentSize(),
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.matchParentSize().padding(14.dp),
+                            verticalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "首页 · 发现 · 我的 · 设置",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.labelPrimary,
+                                )
+                                Text(
+                                    text = if (file != null) "模糊 ${blur.roundToInt()}%" else "默认背景",
+                                    fontSize = 12.sp,
+                                    color = colors.labelSecondaryVariant,
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.cardBackground)
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    Text("页面卡片效果预览", fontSize = 12.sp, color = colors.labelPrimary)
+                                }
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth(.65f)
+                                        .height(22.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(colors.cardBackground),
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = when {
+                            busy -> "正在保存背景图片…"
+                            errorMessage != null -> errorMessage.orEmpty()
+                            file != null -> "已应用于首页、发现、我的、设置（图片仅保存在本机）"
+                            config.rootBackground.isNotBlank() -> "背景图片不可用，请重新选择"
+                            else -> "为首页、发现、我的、设置统一设置背景图，并自由调节模糊度"
+                        },
+                        fontSize = 13.sp,
+                        color = if (errorMessage != null) colors.error else colors.labelSecondaryVariant,
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            enabled = !busy,
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier.weight(1f).testTag("root_background_choose"),
+                        ) {
+                            Text(if (file == null) "选择背景图" else "更换背景图", style = COUITheme.textStyles.buttonM)
+                        }
+                        Button(
+                            onClick = { runAction { vm.clearRootBackground() } },
+                            enabled = config.rootBackground.isNotBlank() && !busy,
+                            colors = ButtonDefaults.buttonColors(),
+                            modifier = Modifier.weight(1f).testTag("root_background_clear"),
+                        ) {
+                            Text("恢复默认", style = COUITheme.textStyles.buttonM)
+                        }
+                    }
+
+                    val canAdjustBlur = !busy && file != null
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("背景模糊度", fontSize = 15.sp, color = colors.labelPrimary)
+                        Text(
+                            text = "${blur.roundToInt()}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.labelSecondaryVariant,
+                        )
+                    }
+                    Slider(
+                        value = blur,
+                        onValueChange = { blur = it },
+                        onValueChangeFinished = { persistBlur(blur) },
+                        valueRange = 0f..100f,
+                        enabled = canAdjustBlur,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("root_background_blur")
+                            .semantics {
+                                if (!canAdjustBlur) disabled()
+                                setProgress { target ->
+                                    if (!canAdjustBlur || !target.isFinite()) {
+                                        false
+                                    } else {
+                                        val clamped = target.coerceIn(0f, 100f)
+                                        blur = clamped
+                                        persistBlur(clamped)
+                                        true
+                                    }
+                                }
+                            },
+                    )
                 }
             }
         }

@@ -65,8 +65,9 @@ data class PreparedBannerVideo(
 
 object BannerVideoRules {
     const val MIN_TRIM_DURATION_MS = 1_000L
-    const val MAX_TRIM_DURATION_MS = PROFILE_BANNER_VIDEO_MAX_MS
-    private const val EXPORT_SAFE_MAX_MS = 4_900L
+    private const val STANDARD_MAX_DURATION_MS = 5_000L
+    private const val ADMIN_MAX_DURATION_MS = 10_000L
+    private const val EXPORT_MARGIN_MS = 100L
     private const val FULL_CLIP_TOLERANCE_MS = 120L
 
     private val MP4_BRANDS = setOf(
@@ -81,65 +82,65 @@ object BannerVideoRules {
     fun minSelectableDurationMs(totalDurationMs: Long): Long =
         if (totalDurationMs <= 0L) 0L else min(MIN_TRIM_DURATION_MS, totalDurationMs)
 
-    fun maxSelectableDurationMs(totalDurationMs: Long): Long =
-        if (totalDurationMs <= 0L) 0L else min(MAX_TRIM_DURATION_MS, totalDurationMs)
+    fun maxDurationMs(role: UserRole?): Long =
+        if (role == null) STANDARD_MAX_DURATION_MS else ADMIN_MAX_DURATION_MS
 
-    fun defaultRange(totalDurationMs: Long): BannerTrimSelection {
+    fun defaultRange(totalDurationMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
-        return BannerTrimSelection(0L, maxSelectableDurationMs(totalDurationMs))
+        return BannerTrimSelection(0L, min(maxDurationMs, totalDurationMs))
     }
 
-    fun normalizeRange(totalDurationMs: Long, startMs: Long, endMs: Long): BannerTrimSelection {
+    fun normalizeRange(totalDurationMs: Long, startMs: Long, endMs: Long, maxDurationMs: Long): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
         val minLen = minSelectableDurationMs(totalDurationMs)
-        val maxLen = maxSelectableDurationMs(totalDurationMs)
+        val maxLen = min(maxDurationMs, totalDurationMs)
         val s = startMs.coerceIn(0L, (totalDurationMs - minLen).coerceAtLeast(0L))
         val e = endMs.coerceIn(s + minLen, min(totalDurationMs, s + maxLen))
         return BannerTrimSelection(s, e)
     }
 
-    fun shiftWindow(totalDurationMs: Long, startMs: Long, endMs: Long, newStartMs: Long): BannerTrimSelection {
+    fun shiftWindow(totalDurationMs: Long, startMs: Long, endMs: Long, newStartMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
-        val current = normalizeRange(totalDurationMs, startMs, endMs)
+        val current = normalizeRange(totalDurationMs, startMs, endMs, maxDurationMs)
         val len = current.durationMs
         val clampedStart = newStartMs.coerceIn(0L, (totalDurationMs - len).coerceAtLeast(0L))
         return BannerTrimSelection(clampedStart, (clampedStart + len).coerceAtMost(totalDurationMs))
     }
 
-    fun moveStart(totalDurationMs: Long, currentEndMs: Long, newStartMs: Long): BannerTrimSelection {
+    fun moveStart(totalDurationMs: Long, currentEndMs: Long, newStartMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
         val minLen = minSelectableDurationMs(totalDurationMs)
-        val maxLen = maxSelectableDurationMs(totalDurationMs)
+        val maxLen = min(maxDurationMs, totalDurationMs)
         val end = currentEndMs.coerceIn(minLen, totalDurationMs)
         val start = newStartMs.coerceIn((end - maxLen).coerceAtLeast(0L), end - minLen)
         return BannerTrimSelection(start, end)
     }
 
-    fun moveEnd(totalDurationMs: Long, currentStartMs: Long, newEndMs: Long): BannerTrimSelection {
+    fun moveEnd(totalDurationMs: Long, currentStartMs: Long, newEndMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
         val minLen = minSelectableDurationMs(totalDurationMs)
-        val maxLen = maxSelectableDurationMs(totalDurationMs)
+        val maxLen = min(maxDurationMs, totalDurationMs)
         val start = currentStartMs.coerceIn(0L, (totalDurationMs - minLen).coerceAtLeast(0L))
         val end = newEndMs.coerceIn(start + minLen, min(totalDurationMs, start + maxLen))
         return BannerTrimSelection(start, end)
     }
 
     /**
-     * Trims slightly under 5000 ms when re-encoding a full 5s span so frame-rate rounding
-     * does not push the muxed MP4 past the server's strict 5.0 s limit.
+     * Leaves room for frame-rate rounding when re-encoding near the server's duration limit.
      */
-    fun exportClipEndMs(totalDurationMs: Long, startMs: Long, endMs: Long): Long {
-        val range = normalizeRange(totalDurationMs, startMs, endMs)
-        val fullTail = totalDurationMs <= MAX_TRIM_DURATION_MS &&
+    fun exportClipEndMs(totalDurationMs: Long, startMs: Long, endMs: Long, maxDurationMs: Long): Long {
+        val range = normalizeRange(totalDurationMs, startMs, endMs, maxDurationMs)
+        val safeDurationMs = maxDurationMs - EXPORT_MARGIN_MS
+        val fullTail = totalDurationMs <= maxDurationMs &&
             range.startMs == 0L &&
             range.endMs >= totalDurationMs - FULL_CLIP_TOLERANCE_MS
-        if (fullTail && totalDurationMs <= EXPORT_SAFE_MAX_MS) return totalDurationMs
-        return min(range.endMs, range.startMs + EXPORT_SAFE_MAX_MS)
+        if (fullTail && totalDurationMs <= safeDurationMs) return totalDurationMs
+        return min(range.endMs, range.startMs + safeDurationMs)
     }
 
-    fun canUploadDirectly(info: BannerVideoInfo, startMs: Long, endMs: Long): Boolean {
+    fun canUploadDirectly(info: BannerVideoInfo, startMs: Long, endMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): Boolean {
         if (info.uploadMimeType != "video/mp4" && info.uploadMimeType != "video/quicktime") return false
-        if (info.durationMs !in 1L..MAX_TRIM_DURATION_MS) return false
+        if (info.durationMs !in 1L..maxDurationMs) return false
         if (info.sizeBytes !in 1L..PROFILE_BANNER_VIDEO_LIMIT) return false
         if (info.displayWidth <= 0 || info.displayHeight <= 0) return false
         if (max(info.displayWidth, info.displayHeight) > PROFILE_BANNER_VIDEO_MAX_DIMENSION) return false
@@ -284,12 +285,13 @@ internal suspend fun prepareBannerVideoForUpload(
     info: BannerVideoInfo,
     startMs: Long,
     endMs: Long,
+    maxDurationMs: Long,
     onStage: (String) -> Unit,
 ): PreparedBannerVideo {
-    val range = BannerVideoRules.normalizeRange(info.durationMs, startMs, endMs)
+    val range = BannerVideoRules.normalizeRange(info.durationMs, startMs, endMs, maxDurationMs)
     val cacheDir = File(context.cacheDir, "banner_upload").apply { mkdirs() }
 
-    if (BannerVideoRules.canUploadDirectly(info, range.startMs, range.endMs)) {
+    if (BannerVideoRules.canUploadDirectly(info, range.startMs, range.endMs, maxDurationMs)) {
         onStage("正在准备视频…")
         val ext = if (info.uploadMimeType == "video/quicktime") ".mov" else ".mp4"
         val outFile = File(cacheDir, "banner-direct-${System.currentTimeMillis()}$ext")
@@ -309,7 +311,7 @@ internal suspend fun prepareBannerVideoForUpload(
     }
 
     onStage("正在裁剪并转码为 3:2 MP4…")
-    val clipEndMs = BannerVideoRules.exportClipEndMs(info.durationMs, range.startMs, range.endMs)
+    val clipEndMs = BannerVideoRules.exportClipEndMs(info.durationMs, range.startMs, range.endMs, maxDurationMs)
     val highRes = max(info.displayWidth, info.displayHeight) >= 900
     val primaryWidth = if (highRes) 960 else 720
     val primaryHeight = if (highRes) 640 else 480
@@ -321,7 +323,7 @@ internal suspend fun prepareBannerVideoForUpload(
             context = context,
             uri = uri,
             startMs = range.startMs,
-            endMs = clipEndMs,
+            endMs = range.endMs,
             targetWidth = primaryWidth,
             targetHeight = primaryHeight,
             bitrate = primaryBitrate,
@@ -329,7 +331,7 @@ internal suspend fun prepareBannerVideoForUpload(
         )
         val verified = inspectLocalVideoFile(primaryFile)
         if (primaryFile.length() in 1L..PROFILE_BANNER_VIDEO_LIMIT &&
-            verified != null && verified.first <= PROFILE_BANNER_VIDEO_MAX_MS
+            verified != null && verified.first <= maxDurationMs
         ) {
             return PreparedBannerVideo(
                 file = primaryFile,
@@ -367,8 +369,8 @@ internal suspend fun prepareBannerVideoForUpload(
         }
         val verified = inspectLocalVideoFile(fallbackFile)
         val outDuration = verified?.first ?: (clipEndMs - range.startMs)
-        if (outDuration > PROFILE_BANNER_VIDEO_MAX_MS) {
-            throw IOException("裁切后的视频超过 5 秒，请缩短选取片段")
+        if (outDuration > maxDurationMs) {
+            throw IOException("裁切后的视频超过 ${maxDurationMs / 1_000} 秒，请缩短选取片段")
         }
         return PreparedBannerVideo(
             file = fallbackFile,
