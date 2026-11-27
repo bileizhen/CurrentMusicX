@@ -229,6 +229,98 @@ internal object QqMusicParsing {
                 (total > 0 && songs.size < total))
     }
 
+    /**
+     * Rank-hall sections from `music.musicToplist.Toplist/GetAll`. The mobile hall draws
+     * 巅峰榜 (group 0) as full-width cards and every other group as a cover grid, and uses
+     * `updateTips` ("17首歌新上榜") as each card's subtitle instead of the long `intro`.
+     */
+    fun chartGroups(value: JsonObject): List<QqChartGroup> = value.array("groups", "group").mapNotNull { item ->
+        val group = item as? JsonObject ?: return@mapNotNull null
+        val type = group.number("type", "groupType").toInt()
+        val charts = group.array("toplists", "toplist", "list")
+            .mapNotNull { chart(it, type) }.distinctBy { it.id }
+        if (charts.isEmpty()) null else QqChartGroup(
+            group.number("id", "groupId").toInt(),
+            group.text("name", "groupName").decodeHtmlEntities().ifBlank { "榜单" },
+            type,
+            charts,
+        )
+    }.distinctBy { it.id }
+
+    fun chartDetail(value: JsonObject): QqChartDetail {
+        val envelope = value["data"] as? JsonObject
+        val info = (envelope?.get("data") as? JsonObject)
+            ?: (value["toplist"] as? JsonObject)
+            ?: envelope
+            ?: value
+        val songValues = value.array("songs", "songlist", "songList", "songInfoList")
+            .ifEmpty { (envelope ?: value).array("songInfoList", "songs", "songlist", "songList") }
+        // Rank rows and full song rows arrive apart in the mobile response; the hall merges
+        // them by songId (songInfoList has no rank of its own).
+        val rankById = info.array("song", "songs", "songlist").mapNotNull { row ->
+            val o = row as? JsonObject ?: return@mapNotNull null
+            o.identifier("songId", "id").takeIf(String::isNotBlank)?.let { it to o }
+        }.toMap()
+        val entries = songValues.mapIndexedNotNull { index, row ->
+            val o = row as? JsonObject ?: return@mapIndexedNotNull null
+            val ranked = if (o["rank"] != null) o else
+                rankById[o.identifier("id", "songId")] ?: o
+            val track = song(o) ?: return@mapIndexedNotNull null
+            val rank = ranked.number("rank", "rankNo").toInt().takeIf { it > 0 } ?: (index + 1)
+            QqChartEntry(track, rank, ranked.number("rankType", "rankTypeId").toInt(),
+                ranked.text("rankValue", "rankRate"))
+        }.distinctBy { it.song.id }.sortedBy { it.rank }
+        val fallbackChart = chart(info)
+        val chart = fallbackChart ?: QqChart(
+            id = info.identifier("topId", "id"),
+            name = info.text("title", "name", "topName").decodeHtmlEntities().ifBlank { "排行榜" },
+            updateTips = info.text("updateTips").decodeHtmlEntities(),
+            updateTime = info.text("updateTime"),
+        )
+        val total = value.number("total", "totalNum")
+            .takeIf { it > 0 } ?: info.number("totalNum", "songnum", "total").toInt().toLong()
+        return QqChartDetail(chart.copy(total = maxOf(chart.total, total.toInt())), entries, total.toInt())
+    }
+
+    fun chart(value: JsonElement, groupType: Int = -1): QqChart? {
+        val o = value as? JsonObject ?: return null
+        val id = o.identifier("id", "topId", "tid", "topID")
+        if (id.isBlank()) return null
+        fun url(vararg keys: String) = o.text(*keys).https()
+        // The official hall shows the current No.1 album art for 巅峰榜 (group 0) cards and
+        // the chart's branded square logo for the remaining groups.
+        val hallCover = if (groupType == 0) o.text("mbFrontPicUrl", "itemPicUrl")
+        else o.text("mbFrontLogoUrl", "frontLogoUrl")
+        val cover = o.text("pic", "cover").ifBlank { hallCover }
+            .ifBlank { o.text("mbFrontLogoUrl", "mbFrontPicUrl", "frontPicUrl", "frontLogoUrl") }.https()
+        val headerCover = o.text("headerPic", "mbHeadPicUrl", "headPicUrl", "frontPicUrl", "cover", "pic")
+            .ifBlank { cover }.https()
+        val previews = o.array("song", "songs", "songlist").mapNotNull { row ->
+            val item = row as? JsonObject ?: return@mapNotNull null
+            val title = item.text("title", "name", "songName").decodeHtmlEntities()
+            if (title.isBlank()) return@mapNotNull null
+            QqChartSong(item.number("rank", "rankNo").toInt().takeIf { it > 0 } ?: 0, title,
+                item.text("singerName", "singer", "artist").decodeHtmlEntities(),
+                item.text("cover", "pic").https())
+        }.take(3)
+        return QqChart(
+            id = id,
+            name = o.text("name", "title", "topName").decodeHtmlEntities().ifBlank { "排行榜" },
+            cover = cover,
+            logo = o.text("logo", "logoImgURL").https(),
+            headerCover = headerCover,
+            intro = o.text("intro", "description").decodeHtmlEntities(),
+            updateTips = o.text("updateTips").decodeHtmlEntities(),
+            updateTime = o.text("updateTime"),
+            period = o.text("period"),
+            listenNum = o.number("listenNum"),
+            total = o.number("totalNum", "songnum", "songNum", "total").toInt(),
+            cornerMark = o.number("cornerMark").toInt(),
+            cardStyle = o.number("toplistCardStyle", "cardStyle").toInt(),
+            previews = previews,
+        )
+    }
+
     private fun albumObject(value: JsonObject): JsonObject =
         (value["album"] as? JsonObject)
             ?: (value["basicInfo"] as? JsonObject)

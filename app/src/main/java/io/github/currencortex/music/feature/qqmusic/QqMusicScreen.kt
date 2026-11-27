@@ -2,7 +2,10 @@ package io.github.currencortex.music.feature.qqmusic
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -60,6 +63,7 @@ private data class QqPage(
     val entries: List<QqCatalogEntry> = emptyList(),
     val more: Boolean = false, val playlist: Playlist? = null, val nextRadioPage: Int? = null,
     val rankCounts: Map<Long, Long> = emptyMap(),
+    val chartGroups: List<QqChartGroup> = emptyList(), val chart: QqChartDetail? = null,
 )
 private fun qqSongSubtitle(song: Song, listenCount: Long?): String =
     listOfNotNull(
@@ -132,6 +136,7 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
     var editName by remember(route, sessionRevision, account.revision) { mutableStateOf<String?>(null) }
     var confirmDelete by remember(route, sessionRevision, account.revision) { mutableStateOf(false) }
     var managePlaylistSubscription by remember(route, sessionRevision, account.revision) { mutableStateOf(false) }
+    var showChartRules by remember(route) { mutableStateOf(false) }
     val isSearch = route == "qq/search" || route.startsWith("qq/search/")
     val root = route in setOf("home", "discover", "me")
     val bottom = LocalMusicBottomInset.current
@@ -183,7 +188,8 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                         songs = it.entries.map(QqListeningRankEntry::song),
                         rankCounts = it.entries.associate { entry -> entry.song.id to entry.listenCount })
                 } else QqPage("本周常听", "登录后查看本周常听")
-                route in setOf("discover", "qq/charts") -> QqPage("QQ 音乐排行榜", entries = repository.charts())
+                route in setOf("discover", "qq/charts") -> QqPage("QQ 音乐排行榜",
+                    chartGroups = repository.chartGroups())
                 route == "me" || route == "qq/playlists" -> QqPage("我的 QQ 音乐歌单",
                     playlists = if (account.loggedIn) repository.playlists() else emptyList())
                 route == "qq/likes" -> QqPage("我喜欢",
@@ -203,8 +209,10 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                 route.startsWith("qq/playlist/") -> repository.playlist(routeId(route)).let {
                     QqPage(it.name, it.description, it.cover, it.songs, playlist = it)
                 }
-                route.startsWith("qq/chart/") -> repository.chart(routeId(route)).let {
-                    QqPage(it.name, it.description, it.cover, it.songs)
+                route.startsWith("qq/chart/") -> repository.chartDetail(routeId(route)).let { detail ->
+                    QqPage(detail.chart.name, detail.chart.updateTips,
+                        detail.chart.headerCover.ifBlank { detail.chart.cover },
+                        songs = detail.entries.map(QqChartEntry::song), chart = detail)
                 }
                 route.startsWith("qq/genre/") -> {
                     val categoryId = routeId(route)
@@ -358,13 +366,31 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                 MusicTextAction("重新加载", { offset = 0; radioPage = 1; refresh++ }, enabled = !loading)
             } }
             notice?.let { item { SettingsHint(it) } }
-            if (page.cover.isNotBlank()) item {
+            page.chart?.let { detail -> item(key = "chart_header") {
+                QqChartHeader(detail.chart, onRules = { showChartRules = true })
+            } }
+            if (page.chart == null && page.cover.isNotBlank()) item {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     MusicCover(page.cover, Modifier.size(112.dp), pixels = 320)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(pageTitle, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         if (page.description.isNotBlank()) Text(readableText(page.description), fontSize = 13.sp, maxLines = 5,
                             overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
+                    }
+                }
+            }
+            page.chartGroups.forEach { group ->
+                item(key = "chart_group_${group.id}") { SettingsListHeader(group.name) }
+                item(key = "chart_group_body_${group.id}") {
+                    when (group.type) {
+                        0 -> SettingsGroup {
+                            group.charts.forEachIndexed { index, chart ->
+                                QqPeakChartRow(chart) { navigate(qqRoute("chart", chart.id)) }
+                                if (index != group.charts.lastIndex) SettingsDivider(92.dp)
+                            }
+                        }
+                        2 -> QqChartRow(group.charts) { chart -> navigate(qqRoute("chart", chart.id)) }
+                        else -> QqChartGrid(group.charts) { chart -> navigate(qqRoute("chart", chart.id)) }
                     }
                 }
             }
@@ -394,11 +420,13 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
             }
             items(page.songs, key = { "song:${it.id}" }) { song ->
                 val index = page.songs.indexOf(song)
+                val ranked = page.chart?.entries?.getOrNull(index)
                 SongRow(
                     row = SongRowUi(song, subtitle = qqSongSubtitle(song, page.rankCounts[song.id])),
                     onPlay = { play(page.songs, index) },
                     onNext = { container.playerController.add(song, true) },
                     onQueue = { container.playerController.add(song) },
+                    leading = ranked?.let { entry -> { QqRankBadge(entry) } },
                     extraActions = { qqSongActions(song) },
                 )
             }
@@ -424,7 +452,7 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                 }
             }
             if (loading && page.songs.isEmpty() && page.entries.isEmpty() &&
-                page.playlists.isEmpty()) item { LoadingSongList(5) }
+                page.playlists.isEmpty() && page.chartGroups.isEmpty()) item { LoadingSongList(5) }
             if (page.more) item { MusicTextAction(if (loading) "加载中…" else if (route == "qq/radio") "下一批" else "加载更多", {
                 if (route == "qq/radio") page.nextRadioPage?.let { radioPage = it }
                 else offset += when {
@@ -433,10 +461,20 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                     else -> 30
                 }
             }, enabled = !loading) }
+            if (!loading && error == null && page.chart != null && page.songs.isEmpty()) item {
+                SettingsHint("该榜单暂时没有歌曲")
+            }
             if (!loading && error == null && page.songs.isEmpty() && page.entries.isEmpty() &&
-                page.playlists.isEmpty()) item {
+                page.playlists.isEmpty() && page.chartGroups.isEmpty() && page.chart == null) item {
                 SettingsHint(if (isSearch && submitted.isBlank()) "输入关键词，搜索 QQ 音乐曲库" else "暂时没有内容")
             }
+        }
+    }
+    if (showChartRules) page.chart?.chart?.let { chart ->
+        MusicDialog("榜单规则 · ${chart.name}", { showChartRules = false }) {
+            Text(readableText(chart.intro).ifBlank { "该榜单暂无规则说明" },
+                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                fontSize = 14.sp, lineHeight = 21.sp)
         }
     }
     destinations?.let { (song, lists) -> MusicDialog("加入 QQ 音乐歌单", { destinations = null }) {
@@ -487,4 +525,111 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
     SettingsPreference(title, detail.ifBlank { null }, onClick = onClick,
         leading = { MusicCover(cover, Modifier.size(52.dp), pixels = 220) },
         trailing = { Text("›", fontSize = 24.sp, color = COUITheme.colorScheme.labelSecondaryVariant) })
+}
+
+/** Chart brief from the official hall: branded cover, update summary and the top-3 preview. */
+@Composable private fun QqChartHeader(chart: QqChart, onRules: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        MusicCover(chart.headerCover.ifBlank { chart.cover }, Modifier.size(112.dp), pixels = 400)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(readableText(chart.name), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            val updated = chart.updateTime.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+            val meta = listOf(
+                readableText(chart.updateTips),
+                updated.takeIf(String::isNotBlank)?.let { "更新于 $it" }.orEmpty(),
+            ).filter(String::isNotBlank).joinToString(" · ")
+            if (meta.isNotBlank()) Text(meta, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+            if (chart.intro.isNotBlank()) MusicTextAction("榜单规则", onRules)
+        }
+    }
+}
+
+/** 巅峰榜 cards mirror QQ's peak list: the No.1 album art plus the current top-3 songs. */
+@Composable private fun QqPeakChartRow(chart: QqChart, onClick: () -> Unit) {
+    val previews = chart.previews.take(3)
+    val footer: (@Composable () -> Unit)? = if (previews.isEmpty()) null else {
+        {
+            Column(Modifier.padding(start = 76.dp, bottom = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                previews.forEachIndexed { index, song ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${index + 1}", Modifier.width(18.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                            color = if (index < 3) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant)
+                        Text(readableText(song.title), Modifier.weight(1f), fontSize = 13.sp, lineHeight = 17.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (song.singer.isNotBlank()) Text(readableText(song.singer),
+                            Modifier.padding(start = 8.dp).widthIn(max = 120.dp), fontSize = 12.sp,
+                            color = COUITheme.colorScheme.labelSecondaryVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+    SettingsPreference(
+        title = readableText(chart.name),
+        summary = readableText(chart.updateTips).ifBlank { chart.updateTime }.takeIf(String::isNotBlank),
+        modifier = Modifier.testTag("qq_chart_${chart.id}"),
+        onClick = onClick,
+        leading = { MusicCover(chart.cover, Modifier.size(64.dp), pixels = 240) },
+        footer = footer,
+    )
+}
+
+/** Type-2 groups scroll sideways in the official hall. */
+@Composable private fun QqChartRow(charts: List<QqChart>, onOpen: (QqChart) -> Unit) {
+    LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(charts, key = { it.id }) { chart ->
+            MusicArtworkCard(
+                cover = chart.cover,
+                title = readableText(chart.name),
+                subtitle = readableText(chart.updateTips).ifBlank { chart.updateTime },
+                onClick = { onOpen(chart) },
+                modifier = Modifier.width(132.dp).testTag("qq_chart_${chart.id}"),
+                pixels = 240,
+            )
+        }
+    }
+}
+
+/** 特色/地区/全球/网络 charts use QQ's three-column cover grid. */
+@Composable private fun QqChartGrid(charts: List<QqChart>, onOpen: (QqChart) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        charts.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { chart ->
+                    MusicArtworkCard(
+                        cover = chart.cover,
+                        title = readableText(chart.name),
+                        subtitle = readableText(chart.updateTips).ifBlank { chart.updateTime },
+                        onClick = { onOpen(chart) },
+                        modifier = Modifier.weight(1f).testTag("qq_chart_${chart.id}"),
+                        pixels = 240,
+                    )
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Rank number plus QQ's trend marker (up/down/re-entry/new/percentage). */
+@Composable private fun QqRankBadge(entry: QqChartEntry) {
+    val colors = COUITheme.colorScheme
+    val trend = entry.rankValue.trim().removePrefix("-")
+    val marker = when (entry.rankType) {
+        1 -> trend.takeIf { it.isNotBlank() && it != "0" }?.let { "↑$it" }
+        2 -> trend.takeIf { it.isNotBlank() && it != "0" }?.let { "↓$it" }
+        3 -> "重"
+        4 -> "NEW"
+        6 -> trend.takeIf(String::isNotBlank)
+        else -> null
+    }
+    Column(Modifier.width(40.dp).padding(end = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(if (entry.rank > 0) "${entry.rank}" else "–", fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+            color = if (entry.rank in 1..3) colors.primary else colors.labelSecondaryVariant)
+        marker?.let {
+            Text(it, fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1,
+                color = if (entry.rankType == 2) colors.labelTertiary else colors.primary)
+        }
+    }
 }

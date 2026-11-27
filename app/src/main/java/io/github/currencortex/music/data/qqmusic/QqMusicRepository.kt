@@ -477,27 +477,28 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
             hasMore = raw.flag("more", "hasMore"),
         )
     }
-    suspend fun charts(): List<QqCatalogEntry> = native("recommend/toplists").array("groups").flatMap {
-        (it as? JsonObject)?.array("toplists").orEmpty().mapNotNull { value -> QqMusicParsing.entry(value, "chart") }
-    }
-    suspend fun chart(id: String): Playlist {
-        val songs = mutableListOf<Song>()
-        var base: Playlist? = null
+    suspend fun chartGroups(): List<QqChartGroup> =
+        QqMusicParsing.chartGroups(native("recommend/toplists"))
+    suspend fun chartDetail(id: String): QqChartDetail {
+        val rid = remoteId(id)
+        val collected = LinkedHashMap<Long, QqChartEntry>()
+        var base: QqChart? = null
         var total = 0
         var offset = 0
         var pages = 0
-        while (pages++ < 100) {
-            val raw = native("recommend/toplist", mapOf("id" to remoteId(id), "offset" to "$offset", "limit" to "100"))
-            val info = raw["toplist"] as? JsonObject ?: buildJsonObject { put("id", id); put("title", "排行榜") }
-            if (base == null) base = QqMusicParsing.playlist(info)
-            val batch = QqMusicParsing.songs(raw)
-            total = raw.number("total").toInt().takeIf { it > 0 } ?: total
-            songs += batch
-            val pageSize = raw.array("songs", "songlist", "songList", "tracks", "list").size
-            if (!raw.flag("more") || batch.isEmpty() || pageSize <= 0) break
-            offset += pageSize
+        while (pages++ < 20) {
+            val raw = native("recommend/toplist", mapOf("id" to rid, "offset" to "$offset", "limit" to "100"))
+            val page = QqMusicParsing.chartDetail(raw)
+            if (base == null) base = page.chart
+            if (page.total > total) total = page.total
+            page.entries.forEach { collected.putIfAbsent(it.song.id, it) }
+            val batch = raw.array("songs", "songlist", "songList", "list").size
+            if (!raw.flag("more") || batch <= 0) break
+            offset += batch
         }
-        return requireNotNull(base).copy(songs = songs.distinctBy { it.id }, count = total.takeIf { it > 0 } ?: songs.size)
+        val chart = base ?: throw ApiException(ErrorKind.Parse, userMessage = "QQ 音乐榜单数据无效")
+        return QqChartDetail(chart.copy(total = maxOf(chart.total, total)),
+            collected.values.sortedBy { it.rank }, maxOf(total, collected.size))
     }
     suspend fun radioScenes(): List<QqRadioScene> {
         val raw = native("user/radio-scenes", requiresSession = true)
