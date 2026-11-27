@@ -33,10 +33,14 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun UserIdentityDetails(title: String, ipRegion: String) {
+@Composable internal fun UserIdentityDetails(title: String, ipRegion: String, centered: Boolean = false) {
     val region = ipRegion.trim()
     if (title.isBlank() && region.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(
+        modifier = if (centered) Modifier.fillMaxWidth() else Modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, if (centered) Alignment.CenterHorizontally else Alignment.Start),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         UserTitleBadge(title)
         if (region.isNotEmpty()) Row(Modifier.testTag("user_ip_region").padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {

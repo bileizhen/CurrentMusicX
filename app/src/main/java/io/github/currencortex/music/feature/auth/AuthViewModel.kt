@@ -55,6 +55,7 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
                         is LoginOutcome.SignedIn -> {
                             loginChallenge.value = null
                             container.playerController.pause()
+                            container.importNeteaseProfileAfterLogin(container.projectSession())
                             state.value = AuthUiState(message = "登录成功")
                         }
                     }
@@ -118,7 +119,14 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
         loginChallenge.value?.let(container.authRepository::discardLoginChallenge)
         super.onCleared()
     }
-    fun register(input: RegistrationInput) = action("注册成功") { container.authRepository.register(input).also { if (it is AppResult.Success) container.playerController.pause() } }
+    fun register(input: RegistrationInput) = action("注册成功") {
+        container.authRepository.register(input).also {
+            if (it is AppResult.Success) {
+                container.playerController.pause()
+                container.importNeteaseProfileAfterLogin(container.projectSession())
+            }
+        }
+    }
     fun code(contact: String, phone: Boolean) {
         if (SystemClock.elapsedRealtime() < codeUntil.value) return
         action("验证码已发送") { container.authRepository.sendRegistrationCode(contact.trim(), phone).also {
@@ -128,7 +136,9 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     fun switch(key: String) = action("账号已切换") {
         if (container.roomSession.active) container.roomSession.leave()
         if (container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL) container.playerController.pause()
-        container.authRepository.switchAccount(key)
+        container.authRepository.switchAccount(key).also {
+            if (it is AppResult.Success) container.importNeteaseProfileAfterLogin(container.projectSession())
+        }
     }
     fun passwordCode(email: String) {
         if (SystemClock.elapsedRealtime() < resetCodeUntil.value) return

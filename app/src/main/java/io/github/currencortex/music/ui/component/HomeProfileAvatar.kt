@@ -82,11 +82,13 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         Box(Modifier.size(48.dp).testTag("home_profile_avatar")
             .onGloballyPositioned {
                 // Measure outside the reveal layer, whose initial scale is .84. Landing at
-                // that transformed size would make the photo jump at the end of launch.
+                // that transformed size would make the photo jump at the end of launch or tab return.
                 val slot = placement?.landingBounds(it) ?: it.boundsInRoot()
                 val inset = slot.width * (3f / 48f)
-                launchBounds = Rect(slot.left + inset, slot.top + inset, slot.right - inset, slot.bottom - inset)
+                val resting = Rect(slot.left + inset, slot.top + inset, slot.right - inset, slot.bottom - inset)
                     .takeIf { rect -> rect.width > 0f && rect.height > 0f && rect.top >= 0f && placement?.visible(rect) != false }
+                launchBounds = resting
+                flight?.homeLanding = resting
             }
             .semantics { contentDescription = "账号头像，打开我的" }
             .clickable(role = Role.Button, onClickLabel = "打开我的") {
@@ -102,9 +104,6 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     translationY = (1f - amount) * 3.dp.toPx()
                 }.onGloballyPositioned {
                     imageCoordinates = it
-                    val landing = placement?.landingBounds(it) ?: it.boundsInRoot()
-                    flight?.homeLanding = landing.takeIf { rect -> rect.width > 0f && rect.height > 0f &&
-                        rect.top >= 0f && placement?.visible(rect) != false }
                 }) {
                 Box(Modifier.fillMaxSize().clip(CircleShape).background(COUITheme.colorScheme.primary.copy(alpha = .08f)),
                     contentAlignment = Alignment.Center) {

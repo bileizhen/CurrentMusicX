@@ -8,12 +8,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
+import java.io.File
 import java.util.Base64
 
 internal const val PROFILE_BANNER_LIMIT = 1024 * 1024
+internal const val PROFILE_BANNER_VIDEO_LIMIT = 16L * 1024 * 1024
+internal const val PROFILE_BANNER_VIDEO_MAX_MS = 5_000L
+internal const val PROFILE_BANNER_VIDEO_MAX_DIMENSION = 3840
+internal const val PROFILE_BANNER_VIDEO_MAX_PIXELS = 8_294_400L
 private val profileBannerPath = Regex("/users/([0-9]+)/banner\\?v=([0-9a-f]{24})")
 
-@Serializable private data class ProfileBanner(val bannerUrl: String)
+@Serializable data class ProfileBannerUpload(val bannerUrl: String, val bannerType: String = "")
 
 class ProfileRepository(private val api: ApiClient, private val avatarCache: AvatarCache? = null,
     private val session: () -> RequestSession) {
@@ -21,6 +26,7 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     val scales = MutableStateFlow<Map<String, Double>>(emptyMap())
     val avatarVersions = MutableStateFlow(avatarCache?.versions.orEmpty())
     private val avatarMutex = Mutex()
+    private val bannerMutex = Mutex()
     private suspend fun own(expected: RequestSession) = api.decode<ProfileUser>(
         api.request("GET", "auth/me", authenticated = true, expectedSession = expected))
     suspend fun me() = own(session())
@@ -46,13 +52,38 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     suspend fun avatar(bytes: ByteArray, expected: RequestSession = session(), previousAvatar: String = ""): ProfileUser =
         avatarMutex.withLock { uploadAvatar(bytes, expected, previousAvatar) }
 
-    suspend fun banner(bytes: ByteArray?, expected: RequestSession): String {
+    suspend fun banner(bytes: ByteArray?, expected: RequestSession): String =
+        bannerMutex.withLock { uploadBanner(bytes, expected).bannerUrl }
+
+    suspend fun bannerUpload(bytes: ByteArray?, expected: RequestSession): ProfileBannerUpload =
+        bannerMutex.withLock { uploadBanner(bytes, expected) }
+
+    suspend fun bannerVideo(file: File, contentType: String, expected: RequestSession): ProfileBannerUpload =
+        bannerMutex.withLock {
+            require(file.isFile && file.length() in 1L..PROFILE_BANNER_VIDEO_LIMIT)
+            require(contentType in setOf("video/mp4", "video/quicktime"))
+            val result = api.decode<ProfileBannerUpload>(api.uploadProfileBannerVideo(expected, file, contentType))
+            revision.update { it + 1 }
+            result
+        }
+
+    suspend fun bannerIfDefault(bytes: ByteArray, expected: RequestSession, accountId: Long,
+        stillAllowed: () -> Boolean): String? = bannerMutex.withLock {
+        if (!stillAllowed()) return@withLock null
+        val current = own(expected)
+        if (current.id != accountId || current.bannerUrl.isNotBlank() || !stillAllowed()) return@withLock null
+        uploadBanner(bytes, expected).bannerUrl
+    }
+
+    private suspend fun uploadBanner(bytes: ByteArray?, expected: RequestSession): ProfileBannerUpload {
         val body = bytes?.let {
             require(it.isNotEmpty() && it.size <= PROFILE_BANNER_LIMIT)
             buildJsonObject { put("data", Base64.getEncoder().encodeToString(it)) }
         }
-        return api.decode<ProfileBanner>(api.request(if (body == null) "DELETE" else "PUT", "profile/banner",
-            body = body, authenticated = true, expectedSession = expected, retryConnection = false)).bannerUrl
+        val result = api.decode<ProfileBannerUpload>(api.request(if (body == null) "DELETE" else "PUT", "profile/banner",
+            body = body, authenticated = true, expectedSession = expected, retryConnection = false))
+        revision.update { it + 1 }
+        return result
     }
 
     fun bannerImageUrl(server: String, user: ProfileUser): String? {

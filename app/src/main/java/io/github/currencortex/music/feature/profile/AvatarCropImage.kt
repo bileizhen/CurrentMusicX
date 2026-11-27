@@ -5,6 +5,8 @@ import android.graphics.*
 import android.media.ExifInterface
 import android.net.Uri
 import io.github.currencortex.music.data.profile.AvatarCrop
+import io.github.currencortex.music.data.profile.BannerCrop
+import io.github.currencortex.music.data.profile.RemoteAvatarImage
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
@@ -54,4 +56,32 @@ internal fun avatarCropBytes(resolver: ContentResolver, uri: Uri, crop: AvatarCr
             }
         } finally { output.recycle() }
     } finally { source.recycle() }
+}
+
+internal fun bannerCropBytes(resolver: ContentResolver, uri: Uri, crop: BannerCrop, aspectRatio: Float): ByteArray {
+    val source = loadAvatarCropImage(resolver, uri)
+    try {
+        val bounds = crop.bounds(source.width, source.height, aspectRatio)
+        val outWidth = bounds.width.roundToInt().coerceIn(1, 1600)
+        val outHeight = (outWidth / aspectRatio).roundToInt().coerceAtLeast(1)
+        val output = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        try {
+            Canvas(output).apply {
+                drawColor(Color.WHITE)
+                val matrix = Matrix().apply {
+                    setRectToRect(
+                        RectF(bounds.left, bounds.top, bounds.left + bounds.width, bounds.top + bounds.height),
+                        RectF(0f, 0f, outWidth.toFloat(), outHeight.toFloat()),
+                        Matrix.ScaleToFit.FILL,
+                    )
+                }
+                drawBitmap(source, matrix, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            }
+            return RemoteAvatarImage.encodeBannerBitmap(output)
+        } finally {
+            output.recycle()
+        }
+    } finally {
+        source.recycle()
+    }
 }

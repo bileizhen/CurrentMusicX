@@ -181,30 +181,42 @@ internal class CurrentMusicPreviewRenderer(font: Typeface?, private val fontScal
             icon("file", 264f, 24f, 24f, ink)
             icon("settings", 310f, 24f, 24f, ink)
             withTransform({ translate(0f, 8f) }) {
-            panel(16f, 88f, 328f, 240f, radius = 20f)
-            avatar(64f, 136f, 32f)
-            text("CurrentMusic", 112f, 128f, 21f, strong = true, maxWidth = 212f)
-            text("让喜欢的音乐一直陪伴", 112f, 153f, 13f, muted, maxWidth = 212f)
-            drawLine(ink.copy(alpha = .08f), Offset(32f, 184f), Offset(328f, 184f))
-            listOf("点赞", "收藏", "歌单").forEachIndexed { i, title ->
-                text(listOf("24", "18", "8")[i], 32f + i * 104, 217f, 21f, strong = true)
-                text(title, 32f + i * 104, 241f, 12f, muted, maxWidth = 92f)
+            val cardClip = Path().apply { addRoundRect(RoundRect(Rect(16f, 76f, 344f, 480f), CornerRadius(24f))) }
+            panel(16f, 76f, 328f, 404f, radius = 24f)
+            clipPath(cardClip) {
+                drawRect(Brush.linearGradient(listOf(accent.copy(alpha = .28f), accent.copy(alpha = .12f)),
+                    Offset(16f, 76f), Offset(344f, 294f)), Offset(16f, 76f), Size(328f, 218f))
+                drawCircle(accent.copy(alpha = .10f), 62f, Offset(300f, 172f), style = Stroke(1.5f))
+                drawRect(Brush.verticalGradient(listOf(Color.Transparent, card), startY = 214f, endY = 294f),
+                    Offset(16f, 214f), Size(328f, 80f))
             }
-            drawLine(ink.copy(alpha = .08f), Offset(32f, 260f), Offset(328f, 260f))
-            text("听歌天数", 32f, 282f, 12f, muted)
-            text("12 天", 32f, 308f, 15f)
-            text("听歌时长", 188f, 282f, 12f, muted)
-            text("3 小时 30 分", 188f, 308f, 15f, maxWidth = 140f)
-            text("我的音乐", 32f, 368f, 17f, muted, true)
-            panel(16f, 388f, 328f, 248f, radius = 20f)
+            drawCircle(card, 38f, Offset(180f, 268f))
+            avatar(180f, 268f, 34f)
+            text("CurrentMusic", 180f, 330f, 20f, strong = true, align = AndroidPaint.Align.CENTER, maxWidth = 290f)
+            text("让喜欢的音乐一直陪伴", 180f, 350f, 13f, muted, align = AndroidPaint.Align.CENTER, maxWidth = 290f)
+            drawLine(ink.copy(alpha = .08f), Offset(34f, 370f), Offset(326f, 370f))
+            listOf("点赞", "收藏", "歌单").forEachIndexed { i, title ->
+                text(listOf("24", "18", "8")[i], 70f + i * 110, 398f, 20f, strong = true, align = AndroidPaint.Align.CENTER)
+                text(title, 70f + i * 110, 416f, 11f, muted, align = AndroidPaint.Align.CENTER, maxWidth = 86f)
+            }
+            panel(34f, 428f, 141f, 38f, ink.copy(alpha = .04f), 12f)
+            panel(185f, 428f, 141f, 38f, ink.copy(alpha = .04f), 12f)
+            text("听歌天数 · 12 天", 44f, 451f, 11f, muted, maxWidth = 122f)
+            text("听歌时长 · 3h", 195f, 451f, 11f, muted, maxWidth = 122f)
+            text("社区", 32f, 512f, 15f, muted, true)
+            panel(16f, 526f, 328f, 62f, radius = 24f)
+            row("我的帖子", "查看与管理已发布的动态", 526f, "file")
+            text("我的音乐", 32f, 620f, 15f, muted, true)
+            panel(16f, 634f, 328f, 248f, radius = 24f)
             listOf(Triple("我喜欢", "收藏的歌曲", "heart"), Triple("歌单", "创建与收藏的歌单", "list"),
                 Triple("最近播放", "回顾听过的歌曲", "recent"), Triple("本地音乐", "手机上的歌曲", "device")).forEachIndexed { i, item ->
-                row(item.first, item.second, 388f + i * 62, item.third)
+                row(item.first, item.second, 634f + i * 62, item.third)
             }
-            text("音乐服务", 32f, 676f, 17f, muted, true)
-            panel(16f, 696f, 328f, 186f, radius = 20f)
-            listOf("网易云账号" to "绑定账号、同步歌单", "导入歌单" to "链接、文字、图片与本地歌曲",
-                "Navidrome 曲库" to "自己的音乐服务器").forEachIndexed { i, item -> row(item.first, item.second, 696f + i * 62) }
+            text("音乐服务", 32f, 914f, 15f, muted, true)
+            panel(16f, 928f, 328f, 124f, radius = 24f)
+            listOf("网易云账号" to "绑定账号、同步歌单", "导入歌单" to "链接、文字、图片与本地歌曲").forEachIndexed { i, item ->
+                row(item.first, item.second, 928f + i * 62)
+            }
             }
         }
         fun settings() {
