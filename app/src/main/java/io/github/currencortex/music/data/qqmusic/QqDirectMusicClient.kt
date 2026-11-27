@@ -1989,14 +1989,16 @@ class QqDirectMusicClient(
 
     private fun topLists(): JsonObject {
         val data = cgi("music.musicToplist.Toplist", "GetAll", buildJsonObject {}, null)
-        val groups = data.array("groups", "v_group", "group").mapNotNull { value ->
+        val groups = data.array("group", "groups", "v_group").mapNotNull { value ->
             val group = value as? JsonObject ?: return@mapNotNull null
+            val groupId = group.firstLong("groupId", "id").toInt()
             buildJsonObject {
-                put("name", group.firstText("name", "title"))
+                put("id", groupId)
+                put("name", group.firstText("groupName", "name", "title"))
+                put("type", group.firstLong("type", "groupType").toInt())
                 put("toplists", JsonArray(
-                    group.array("toplists", "toplist", "list").mapNotNull { item ->
-                        val row = item as? JsonObject ?: return@mapNotNull null
-                        normalizeToplist(row)
+                    group.array("toplist", "toplists", "list").mapNotNull { item ->
+                        (item as? JsonObject)?.let { normalizeToplist(it, groupId) }
                     }
                 ))
             }
@@ -2013,30 +2015,68 @@ class QqDirectMusicClient(
             if (numericId != null) put("topId", numericId) else put("topId", id)
             put("offset", offset)
             put("num", limit)
+            put("withTags", true)
         }, null)
-        val info = (data["toplist"] as? JsonObject) ?: normalizeToplist(data)
-        val songs = data.array("songlist", "songs", "list")
-        val total = data.firstLong("total", "total_num").takeIf { it > 0 }
-            ?: info.firstLong("total", "song_num").takeIf { it > 0 }
+        // GetDetail nests the chart metadata under data.data and returns playable tracks in
+        // songInfoList; the rank rows (with rankType/rankValue) live in data.data.song.
+        val detail = (data["data"] as? JsonObject) ?: data
+        val info = (data["toplist"] as? JsonObject) ?: normalizeToplist(detail, -1)
+        val rankById = detail.array("song", "songs", "songlist").mapNotNull { value ->
+            val row = value as? JsonObject ?: return@mapNotNull null
+            row.identifier("songId", "id").takeIf(String::isNotBlank)?.let { it to row }
+        }.toMap()
+        val songs = data.array("songInfoList", "songlist", "songs", "list")
+            .ifEmpty { detail.array("songInfoList", "songlist", "songs", "list") }
+            .mapNotNull { value ->
+                val row = value as? JsonObject ?: return@mapNotNull null
+                val rank = rankById[row.identifier("id", "songId")] ?: return@mapNotNull row
+                buildJsonObject {
+                    row.forEach { (key, child) -> put(key, child) }
+                    put("rank", rank.firstLong("rank"))
+                    put("rankType", rank.firstLong("rankType"))
+                    put("rankValue", rank.firstText("rankValue"))
+                }
+            }
+        val total = info.firstLong("totalNum", "songnum", "song_num", "total").takeIf { it > 0 }
+            ?: data.firstLong("total", "totalNum").takeIf { it > 0 }
             ?: (offset + songs.size).toLong()
         return wrapped(buildJsonObject {
             put("toplist", info)
             put("songs", JsonArray(songs))
             put("total", total)
-            put("more", data.flag("hasmore") || (offset + songs.size).toLong() < total)
+            put("more", data.flag("hasmore", "more") || (offset + songs.size).toLong() < total)
         })
     }
 
-    private fun normalizeToplist(value: JsonObject): JsonObject {
+    private fun normalizeToplist(value: JsonObject, groupId: Int): JsonObject {
         val nested = (value["Toplist"] as? JsonObject)
             ?: (value["basic"] as? JsonObject)
+            ?: (value["data"] as? JsonObject)?.let { it["data"] as? JsonObject ?: it }
             ?: value
+        // 巅峰榜 (group 0) cards preview the current No.1 album art; the other groups show
+        // the chart's branded square logo, matching RankHallDataSource in the official app.
+        val hallCover = if (groupId == 0) nested.firstText("mbFrontPicUrl", "itemPicUrl")
+        else nested.firstText("mbFrontLogoUrl", "frontLogoUrl")
+        val cover = hallCover.ifBlank {
+            nested.firstText("mbFrontLogoUrl", "mbFrontPicUrl", "frontPicUrl", "headPicUrl", "pic", "cover")
+        }
+        val headerPic = nested.firstText("mbHeadPicUrl", "headPicUrl", "frontPicUrl", "mbFrontPicUrl", "cover", "pic")
         return buildJsonObject {
             nested.forEach { (key, child) -> put(key, child) }
             put("id", nested.identifier("topId", "id", "tid", "topID"))
             put("title", nested.firstText("title", "name", "topName"))
-            put("pic", nested.firstText("pic", "cover", "headPic"))
-            put("songnum", nested.firstLong("song_num", "songNum", "total"))
+            put("pic", cover)
+            put("cover", cover)
+            put("logo", nested.firstText("logoImgURL", "logo"))
+            put("headerPic", headerPic.ifBlank { cover })
+            put("intro", nested.firstText("intro", "description"))
+            put("updateTips", nested.firstText("updateTips"))
+            put("updateTime", nested.firstText("updateTime", "period"))
+            put("period", nested.firstText("period", "updateTime"))
+            put("listenNum", nested.firstLong("listenNum"))
+            put("songnum", nested.firstLong("song_num", "songNum", "totalNum", "total"))
+            put("cornerMark", nested.firstLong("cornerMark"))
+            put("toplistCardStyle", nested.firstLong("toplistCardStyle"))
         }
     }
 
