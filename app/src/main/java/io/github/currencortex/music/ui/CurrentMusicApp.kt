@@ -68,6 +68,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.toMutableStateList
 import io.github.suqi8.coui.kmp.nav.core.NavDisplay
 import io.github.suqi8.coui.kmp.nav.core.NavDisplayEffects
+import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.nav.core.NavKey
 import io.github.suqi8.coui.kmp.nav.core.rememberNavSystemCornerRadius
 import io.github.suqi8.coui.kmp.nav.transition.NavSwipeDirection
@@ -200,7 +203,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val qqSelected = lyricsFontSettings.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC
     val lyricsFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricsFontSettings)
     AppRefreshRateRequest(settings.refreshRate)
-    val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
+    val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings, container.rootBackgrounds) })
     val musicSnackbar = io.github.currencortex.music.ui.component.rememberMusicSnackbar()
     val feedbackVm: FeedbackViewModel = viewModel(factory = viewModelFactory { FeedbackViewModel(container) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
@@ -647,7 +650,28 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     put(route, content)
                 }
                 entry(ROOT.toString()) {
+                    val rootBackgroundFile = remember(settings.rootBackground) { container.rootBackgrounds.file(settings.rootBackground) }
+                    val rootBackdrop = if (rootBackgroundFile != null && Build.VERSION.SDK_INT >= 33 &&
+                        LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()
+                    ) {
+                        rememberLayerBackdrop()
+                    } else null
                     Box(Modifier.fillMaxSize()) {
+                    if (rootBackgroundFile != null) {
+                        RootPageBackground(
+                            file = rootBackgroundFile,
+                            blurPercent = settings.rootBackgroundBlur,
+                            dark = io.github.currencortex.music.ui.theme.isInDarkTheme(),
+                            surfaceColor = COUITheme.colorScheme.background,
+                            modifier = Modifier.fillMaxSize().then(
+                                if (rootBackdrop != null) Modifier.layerBackdrop(rootBackdrop) else Modifier,
+                            ),
+                        )
+                    }
+                    CompositionLocalProvider(
+                        LocalRootBackgroundActive provides (rootBackgroundFile != null),
+                        LocalRootBackgroundBackdrop provides rootBackdrop,
+                    ) {
                     Box(Modifier.fillMaxSize()
                         .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
                         .padding(end = if (wideLayout) SideNavigationSpace else 0.dp,
@@ -723,6 +747,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             }
                         }
                         }
+                    }
                     }
                     }
                     CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides overlayBackOwner) {

@@ -25,7 +25,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     val passwordCodeUntil = MutableStateFlow(0L)
     sealed interface BannerDraft {
         data class Image(val uri: Uri) : BannerDraft
-        data class Video(val uri: Uri, val info: BannerVideoInfo) : BannerDraft
+        data class Video(val uri: Uri, val info: BannerVideoInfo, val maxDurationMs: Long) : BannerDraft
     }
 
     val message = MutableStateFlow<String?>(null)
@@ -194,6 +194,12 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
             return
         }
         val appContext = context.applicationContext
+        val profileUser = state.value.profile?.user
+        val account = container.accountRepository.state.value.account
+        val role = if (profileUser != null) profileUser.role else account?.let {
+            userRole(it.isAdmin, it.isSuper, it.isOwner)
+        }
+        val maxDurationMs = BannerVideoRules.maxDurationMs(role)
         bannerInspectJob?.cancel()
         bannerDraft.value = null
         bannerStatus.value = "正在读取媒体信息…"
@@ -206,7 +212,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                         BannerMediaKind.VIDEO -> {
                             val info = inspectBannerVideo(appContext, uri)
                                 ?: throw ApiException(ErrorKind.Unknown, userMessage = "无法读取该视频，请换一个 MP4 或 MOV 文件")
-                            BannerDraft.Video(uri, info)
+                            BannerDraft.Video(uri, info, maxDurationMs)
                         }
                         BannerMediaKind.UNSUPPORTED ->
                             throw ApiException(ErrorKind.Unknown, userMessage = "仅支持图片、MP4 或 MOV 格式的主页横幅")
@@ -252,7 +258,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
             if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
             val uploaded = container.profileRepository.bannerUpload(bytes, expected)
             if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-            applyBannerUpdate(uploaded)
+            applyBannerUpdate(expected.server, uploaded)
             dismissBanner()
         }
     }
@@ -270,6 +276,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     info = draft.info,
                     startMs = startMs,
                     endMs = endMs,
+                    maxDurationMs = draft.maxDurationMs,
                     onStage = { stage -> bannerStatus.value = stage },
                 )
                 if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
@@ -280,7 +287,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     expected = expected,
                 )
                 if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-                applyBannerUpdate(uploaded)
+                applyBannerUpdate(expected.server, uploaded)
                 dismissBanner()
             } catch (e: kotlin.coroutines.cancellation.CancellationException) {
                 throw e
@@ -298,7 +305,11 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         }
     }
 
-    private fun applyBannerUpdate(uploaded: ProfileBannerUpload) {
+    private fun applyBannerUpdate(server: String, uploaded: ProfileBannerUpload) {
+        val previousUser = state.value.profile?.user
+        val previousUrl = previousUser?.let { container.profileRepository.bannerImageUrl(server, it) }
+        val updatedUser = previousUser?.copy(bannerUrl = uploaded.bannerUrl, bannerType = uploaded.bannerType)
+        val updatedUrl = updatedUser?.let { container.profileRepository.bannerImageUrl(server, it) }
         state.update { current ->
             current.copy(
                 profile = current.profile?.let {
@@ -310,6 +321,9 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     )
                 },
             )
+        }
+        if (previousUrl != null && previousUrl != updatedUrl) {
+            viewModelScope.launch { container.evictBannerCache(previousUrl) }
         }
     }
     fun password(old: String, new: String) = action("密码已更新，请确认当前会话") {

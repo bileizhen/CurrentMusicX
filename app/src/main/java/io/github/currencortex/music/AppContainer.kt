@@ -347,13 +347,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 neteaseSongActions.setLiked(id, true, expected, song, expectedUid = uid)
             })
     }
+    private val appContext = context.applicationContext
+    val bannerVideoCache = BannerVideoCache(appContext, java.io.File(appContext.cacheDir, "banner_video$storageSuffix"))
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia,
         initialMaxBytes = AudioCache.UNLIMITED_BYTES, initialCapacityReady = false)
     // The lyrics cache is mostly rows in the music database, so the storage page measures and
     // clears them through it rather than only counting cache/lyrics files.
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache,
         databaseLyricsBytes = { database.music().lyricsBytes() },
-        clearDatabaseLyrics = { database.music().clearLyrics() })
+        clearDatabaseLyrics = { database.music().clearLyrics() },
+        isManagedOtherCache = { name -> name == "banner_video$storageSuffix" },
+        clearManagedOtherCaches = { bannerVideoCache.clear() })
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
         currentProvider = { audioSettings.access().identity },
@@ -808,6 +812,26 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val settings = SettingsRepository(settingsStore, appScope)
     val playerBackgrounds = io.github.currencortex.music.data.settings.PlayerBackgroundStore(context, settings, storageSuffix)
+    val rootBackgrounds = io.github.currencortex.music.data.settings.CustomBackgroundStore(
+        context = context,
+        settings = settings,
+        directoryName = "root-background",
+        readName = io.github.currencortex.music.data.settings.AppearanceSettings::rootBackground,
+        writeName = { s, name -> s.copy(rootBackground = name) },
+        suffix = storageSuffix,
+    )
+
+    suspend fun evictBannerCache(url: String?) {
+        val target = url?.takeIf { it.isNotBlank() } ?: return
+        bannerVideoCache.evict(target)
+        runCatching {
+            val loader = coil3.SingletonImageLoader.get(appContext)
+            loader.memoryCache?.let { memory ->
+                memory.keys.filter { it.key == target }.forEach(memory::remove)
+            }
+            loader.diskCache?.remove(target)
+        }
+    }
     val updateSettings = UpdateSettingsRepository(settingsStore, appScope)
     val updates = UpdateService(
         checker = releaseChecker ?: GitHubUpdateChecker(
@@ -843,6 +867,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()
         audioCache.close()
+        bannerVideoCache.close()
         trackLoudnessStore.close()
     }
 }

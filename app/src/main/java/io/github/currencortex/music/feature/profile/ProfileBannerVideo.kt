@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +52,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import io.github.currencortex.music.R
+import io.github.currencortex.music.core.media.BannerVideoCache
 import io.github.currencortex.music.data.profile.BannerTrimSelection
 import io.github.currencortex.music.data.profile.BannerVideoInfo
 import io.github.currencortex.music.data.profile.BannerVideoRules
@@ -83,6 +85,7 @@ internal fun BannerVideoSurface(
     httpClient: OkHttpClient?,
     active: Boolean,
     modifier: Modifier = Modifier,
+    videoCache: BannerVideoCache? = null,
     trimRange: BannerTrimSelection? = null,
     scrubPositionMs: Long? = null,
     onPositionUpdate: ((Long) -> Unit)? = null,
@@ -104,11 +107,12 @@ internal fun BannerVideoSurface(
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     val shouldPlay = active && lifecycleStarted && scrubPositionMs == null
 
-    DisposableEffect(context, source) {
+    DisposableEffect(context, source, videoCache) {
         val builder = ExoPlayer.Builder(context)
         if (source is String && httpClient != null) {
-            val factory = OkHttpDataSource.Factory(httpClient)
-            builder.setMediaSourceFactory(DefaultMediaSourceFactory(factory))
+            val mediaSourceFactory = videoCache?.mediaSourceFactory(httpClient)
+                ?: DefaultMediaSourceFactory(OkHttpDataSource.Factory(httpClient))
+            builder.setMediaSourceFactory(mediaSourceFactory)
         }
         val exo = builder.build().apply {
             volume = 0f
@@ -203,6 +207,7 @@ internal fun BannerVideoSurface(
 internal fun ProfileBannerVideoDialog(
     uri: Uri,
     info: BannerVideoInfo,
+    maxDurationMs: Long,
     busy: Boolean,
     statusText: String?,
     onCancel: () -> Unit,
@@ -210,7 +215,8 @@ internal fun ProfileBannerVideoDialog(
 ) {
     val context = LocalContext.current
     val durationMs = info.durationMs
-    var selection by remember(uri, durationMs) { mutableStateOf(BannerVideoRules.defaultRange(durationMs)) }
+    val defaultRange = BannerVideoRules.defaultRange(durationMs, maxDurationMs)
+    var selection by remember(uri, durationMs, maxDurationMs) { mutableStateOf(defaultRange) }
     var scrubMs by remember(uri) { mutableStateOf<Long?>(null) }
     var playheadMs by remember(uri) { mutableStateOf(selection.startMs) }
 
@@ -273,8 +279,8 @@ internal fun ProfileBannerVideoDialog(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = if (durationMs > BannerVideoRules.MAX_TRIM_DURATION_MS) {
-                    "拖动框选最多 5 秒，按 3:2 居中裁剪静音循环"
+                text = if (durationMs > maxDurationMs) {
+                    stringResource(R.string.profile_banner_video_trim_limit, maxDurationMs / 1_000)
                 } else {
                     "保存前可预览或裁切片段，按 3:2 静音循环"
                 },
@@ -293,6 +299,7 @@ internal fun ProfileBannerVideoDialog(
 
         BannerVideoTrimBar(
             durationMs = durationMs,
+            maxDurationMs = maxDurationMs,
             selection = selection,
             playheadMs = scrubMs ?: playheadMs,
             thumbnails = thumbnails,
@@ -304,15 +311,14 @@ internal fun ProfileBannerVideoDialog(
                 .testTag("banner_video_trim_bar"),
         )
 
-        val isDefault = selection == BannerVideoRules.defaultRange(durationMs)
+        val isDefault = selection == defaultRange
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MusicDialogButton(
                 text = "重置",
                 onClick = {
-                    val reset = BannerVideoRules.defaultRange(durationMs)
-                    selection = reset
+                    selection = defaultRange
                     scrubMs = null
-                    playheadMs = reset.startMs
+                    playheadMs = defaultRange.startMs
                 },
                 enabled = !busy && !isDefault,
                 modifier = Modifier
@@ -347,6 +353,7 @@ private enum class TrimDragTarget { START, END, WINDOW }
 @Composable
 private fun BannerVideoTrimBar(
     durationMs: Long,
+    maxDurationMs: Long,
     selection: BannerTrimSelection,
     playheadMs: Long,
     thumbnails: List<Bitmap>,
@@ -371,7 +378,7 @@ private fun BannerVideoTrimBar(
             .clip(RoundedCornerShape(12.dp))
             .onSizeChanged { barWidthPx = it.width.toFloat().coerceAtLeast(1f) }
             .semantics { contentDescription = "视频横幅时间轴裁切条" }
-            .pointerInput(durationMs, enabled) {
+            .pointerInput(durationMs, maxDurationMs, enabled) {
                 if (!enabled || durationMs <= 0L) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
@@ -396,6 +403,7 @@ private fun BannerVideoTrimBar(
                                     currentSelection.startMs,
                                     currentSelection.endMs,
                                     clickMs - halfLen,
+                                    maxDurationMs,
                                 )
                                 selectionChanged(jumped)
                                 scrubCallback(jumped.startMs)
@@ -417,9 +425,15 @@ private fun BannerVideoTrimBar(
                         val deltaMs = (dragAmount / usable * durationMs).roundToLong()
                         val active = currentSelection
                         val updated = when (dragTarget) {
-                            TrimDragTarget.START -> BannerVideoRules.moveStart(durationMs, active.endMs, active.startMs + deltaMs)
-                            TrimDragTarget.END -> BannerVideoRules.moveEnd(durationMs, active.startMs, active.endMs + deltaMs)
-                            TrimDragTarget.WINDOW -> BannerVideoRules.shiftWindow(durationMs, active.startMs, active.endMs, active.startMs + deltaMs)
+                            TrimDragTarget.START -> BannerVideoRules.moveStart(
+                                durationMs, active.endMs, active.startMs + deltaMs, maxDurationMs,
+                            )
+                            TrimDragTarget.END -> BannerVideoRules.moveEnd(
+                                durationMs, active.startMs, active.endMs + deltaMs, maxDurationMs,
+                            )
+                            TrimDragTarget.WINDOW -> BannerVideoRules.shiftWindow(
+                                durationMs, active.startMs, active.endMs, active.startMs + deltaMs, maxDurationMs,
+                            )
                             null -> active
                         }
                         selectionChanged(updated)

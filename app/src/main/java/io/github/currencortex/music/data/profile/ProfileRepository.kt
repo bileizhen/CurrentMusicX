@@ -13,7 +13,6 @@ import java.util.Base64
 
 internal const val PROFILE_BANNER_LIMIT = 1024 * 1024
 internal const val PROFILE_BANNER_VIDEO_LIMIT = 16L * 1024 * 1024
-internal const val PROFILE_BANNER_VIDEO_MAX_MS = 5_000L
 internal const val PROFILE_BANNER_VIDEO_MAX_DIMENSION = 3840
 internal const val PROFILE_BANNER_VIDEO_MAX_PIXELS = 8_294_400L
 private val profileBannerPath = Regex("/users/([0-9]+)/banner\\?v=([0-9a-f]{24})")

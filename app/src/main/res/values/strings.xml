@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">流声音乐</string>
+    <string name="profile_banner_video_trim_limit">拖动框选最多 %1$d 秒，按 3:2 居中裁剪静音循环</string>
 </resources>
