@@ -63,9 +63,19 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
     suspend fun status() = statusMutex.withLock { readStatus() }
     suspend fun userBackgroundUrl(uid: Long): String {
         if (uid <= 0) return ""
+        val owner = session()
+        val authenticated = !owner.token.isNullOrBlank()
+        val requestSession = if (authenticated) owner else RequestSession(owner.server, null, owner.neteaseRevision)
         val detail = api.decode<JsonObject>(
-            api.request("GET", "ncm/user/detail", mapOf("uid" to "$uid"), expectedSession = session()),
+            api.request(
+                "GET",
+                "ncm/user/detail",
+                mapOf("uid" to "$uid"),
+                authenticated = authenticated,
+                expectedSession = requestSession,
+            ),
         )
+        if (!sameOwner(owner)) throw ApiException(ErrorKind.Unauthorized)
         val profile = detail["profile"] as? JsonObject ?: return ""
         return (profile["backgroundUrl"] as? JsonPrimitive)?.contentOrNull.orEmpty()
     }

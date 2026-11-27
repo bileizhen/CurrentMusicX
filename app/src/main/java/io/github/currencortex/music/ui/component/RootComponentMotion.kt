@@ -100,7 +100,7 @@ internal fun RootMotionItem(order: Int = 0, content: @Composable () -> Unit) {
     val placement = remember(parent) { parent?.forAnchoredMotion({ outer }, { inner }) }
     Box(Modifier.onGloballyPositioned { outer = it }) {
         Column(Modifier.componentLayer(offset)) {
-            Box(Modifier.onGloballyPositioned { inner = it }) {
+            Column(Modifier.onGloballyPositioned { inner = it }) {
                 // A group moves once. Nested cards only opt in when the outer row is explicitly skipped.
                 CompositionLocalProvider(LocalRootComponentMotion provides null,
                     LocalRootTabPlacement provides placement, content = content)
