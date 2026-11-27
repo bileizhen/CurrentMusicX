@@ -39,11 +39,23 @@ import kotlin.math.ceil
 
 /** Project a hero destination onto the stationary viewport while its page is still sliding in. */
 class RootTabPlacement(private val viewport: () -> LayoutCoordinates?, private val page: () -> LayoutCoordinates?,
-    private val componentOffset: () -> Float = { 0f }) {
-    internal fun forComponent(offset: () -> Float) = RootTabPlacement(viewport, page) { componentOffset() + offset() }
+    private val componentOffset: () -> Float = { 0f },
+    private val anchorOuter: (() -> LayoutCoordinates?)? = null,
+    private val anchorInner: (() -> LayoutCoordinates?)? = null) {
+    internal fun forComponent(offset: () -> Float) =
+        RootTabPlacement(viewport, page, componentOffset = { componentOffset() + offset() })
+    internal fun forAnchoredMotion(outer: () -> LayoutCoordinates?, inner: () -> LayoutCoordinates?) =
+        RootTabPlacement(viewport, page, componentOffset, outer, inner)
     fun landingBounds(child: LayoutCoordinates): Rect? {
         val root = viewport()?.takeIf { it.isAttached } ?: return null
         val page = page()?.takeIf { it.isAttached } ?: return null
+        val outer = anchorOuter?.invoke()?.takeIf { it.isAttached }
+        val inner = anchorInner?.invoke()?.takeIf { it.isAttached }
+        if (outer != null && inner != null) {
+            val itemOrigin = page.localPositionOf(outer, Offset.Zero)
+            return inner.localBoundingBoxOf(child, clipBounds = false)
+                .translate(root.boundsInRoot().topLeft + itemOrigin)
+        }
         return page.localBoundingBoxOf(child, clipBounds = false)
             .translate(root.boundsInRoot().topLeft - Offset(componentOffset(), 0f))
     }

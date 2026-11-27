@@ -3,6 +3,7 @@ package io.github.currencortex.music.ui.component
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
@@ -94,11 +95,17 @@ internal fun RootMotionItem(order: Int = 0, content: @Composable () -> Unit) {
     if (motion == null) { content(); return }
     val offset = remember(motion, order) { ComponentOffset(motion, order) }
     val parent = LocalRootTabPlacement.current
-    val placement = remember(parent, offset) { parent?.forComponent { offset.x } }
-    Column(Modifier.componentLayer(offset)) {
-        // A group moves once. Nested cards only opt in when the outer row is explicitly skipped.
-        CompositionLocalProvider(LocalRootComponentMotion provides null,
-            LocalRootTabPlacement provides placement, content = content)
+    var outer by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var inner by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val placement = remember(parent) { parent?.forAnchoredMotion({ outer }, { inner }) }
+    Box(Modifier.onGloballyPositioned { outer = it }) {
+        Column(Modifier.componentLayer(offset)) {
+            Column(Modifier.onGloballyPositioned { inner = it }) {
+                // A group moves once. Nested cards only opt in when the outer row is explicitly skipped.
+                CompositionLocalProvider(LocalRootComponentMotion provides null,
+                    LocalRootTabPlacement provides placement, content = content)
+            }
+        }
     }
 }
 

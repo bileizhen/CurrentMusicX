@@ -414,19 +414,33 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
+    internal val mediaHttpClient: okhttp3.OkHttpClient by lazy { apiHttpClient ?: ApiClient.defaultHttpClient() }
     internal val postsRepository = io.github.currencortex.music.data.profile.PostsRepository(apiClient, ::projectSession)
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
+    private val remoteProfileImage by lazy { io.github.currencortex.music.data.profile.RemoteAvatarImage() }
     private val neteaseAvatarImporter by lazy {
-        val image = io.github.currencortex.music.data.profile.RemoteAvatarImage()
         io.github.currencortex.music.data.profile.NeteaseAvatarImporter(accountRepository, authRepository,
-            profileRepository, bindingRepository, { musicSession() }, image::download)
+            profileRepository, bindingRepository, { musicSession() }, remoteProfileImage::download)
+    }
+    private val neteaseBannerImporter by lazy {
+        io.github.currencortex.music.data.profile.NeteaseBannerImporter(accountRepository,
+            profileRepository, bindingRepository, { musicSession() }, remoteProfileImage::downloadBanner)
     }
     fun importNeteaseAvatarAfterLogin(expected: RequestSession) {
+        importNeteaseProfileAfterLogin(expected)
+    }
+    fun importNeteaseProfileAfterLogin(expected: RequestSession) {
         appScope.launch {
             when (val result = appResult { neteaseAvatarImporter.importAfterLogin(expected) }) {
                 is AppResult.Success -> Unit
                 is AppResult.Failure -> logger.warn("Profile", "NetEase avatar import failed: ${result.kind}")
+            }
+        }
+        appScope.launch {
+            when (val result = appResult { neteaseBannerImporter.importAfterLogin(expected) }) {
+                is AppResult.Success -> Unit
+                is AppResult.Failure -> logger.warn("Profile", "NetEase banner import failed: ${result.kind}")
             }
         }
     }

@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-@Serializable data class BoundProfile(val uid: Long = 0, val nickname: String = "", val avatar: String = "")
+@Serializable data class BoundProfile(val uid: Long = 0, val nickname: String = "", val avatar: String = "",
+    val backgroundUrl: String = "")
 @Serializable data class BindingState(val bound: Boolean = false, val stale: Boolean = false,
     val profile: BoundProfile? = null, val lastSync: Long = 0, val lastSyncCount: Int = 0,
     // This is the imported CurrentMusic playlist ID, not an upstream NetEase playlist ID.
@@ -60,6 +61,24 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
         return value
     }
     suspend fun status() = statusMutex.withLock { readStatus() }
+    suspend fun userBackgroundUrl(uid: Long): String {
+        if (uid <= 0) return ""
+        val owner = session()
+        val authenticated = !owner.token.isNullOrBlank()
+        val requestSession = if (authenticated) owner else RequestSession(owner.server, null, owner.neteaseRevision)
+        val detail = api.decode<JsonObject>(
+            api.request(
+                "GET",
+                "ncm/user/detail",
+                mapOf("uid" to "$uid"),
+                authenticated = authenticated,
+                expectedSession = requestSession,
+            ),
+        )
+        if (!sameOwner(owner)) throw ApiException(ErrorKind.Unauthorized)
+        val profile = detail["profile"] as? JsonObject ?: return ""
+        return (profile["backgroundUrl"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+    }
     suspend fun medals(): NeteaseMedals {
         val expected = session()
         val value = api.decode<NeteaseMedals>(api.request("GET", "ncmbind/medals", authenticated = true, expectedSession = expected))
