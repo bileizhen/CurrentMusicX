@@ -9,20 +9,25 @@ import java.security.MessageDigest
 
 internal const val LX_MAX_SCRIPT_BYTES = 1024 * 1024
 internal const val LX_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
-internal const val LX_CAPABILITY_VERSION = 2
+internal const val LX_CAPABILITY_VERSION = 3
 internal val lxQualities = listOf(
     "128k", "320k", "flac", "flac24bit", "hires",
     "atmos", "atmos_plus", "master", "nac", "dtsx", "dolby",
 )
 internal enum class LxPlatform(val key: String, val label: String) {
     NETEASE("wy", "网易云"),
-    QQ_MUSIC("tx", "QQ 音乐");
+    QQ_MUSIC("tx", "QQ 音乐"),
+    KUGOU("kg", "酷狗");
 
     companion object {
-        fun from(song: Song) = if (song.musicSource == MusicSource.QQ_MUSIC) QQ_MUSIC else NETEASE
+        fun from(song: Song) = when (song.musicSource) {
+            MusicSource.QQ_MUSIC -> QQ_MUSIC
+            MusicSource.KUGOU -> KUGOU
+            else -> NETEASE
+        }
     }
 }
-internal val lxPlatforms = linkedMapOf("wy" to "网易云", "tx" to "QQ 音乐")
+internal val lxPlatforms = linkedMapOf("wy" to "网易云", "tx" to "QQ 音乐", "kg" to "酷狗")
 
 private fun lxCanonicalQuality(quality: String) = when (quality) {
     "dts", "qq_dts_x" -> "dtsx"
@@ -62,10 +67,22 @@ internal fun lxQualityLabel(platform: LxPlatform, quality: String) = when (platf
         "dolby" -> "杜比全景声"
         else -> quality
     }
+    LxPlatform.KUGOU -> when (quality) {
+        "128k" -> "标准"
+        "320k" -> "高品"
+        "flac" -> "无损"
+        "flac24bit" -> "24bit 无损"
+        "hires" -> "Hi-Res"
+        "atmos" -> "蝰蛇全景声"
+        "atmos_plus" -> "全景声"
+        "master" -> "母带"
+        "dolby" -> "杜比全景声"
+        else -> quality
+    }
 }
 
 internal fun lxQualityLevel(platform: LxPlatform, quality: String) = when (platform) {
-    LxPlatform.NETEASE -> when (quality) {
+    LxPlatform.NETEASE, LxPlatform.KUGOU -> when (quality) {
         "master" -> AudioQuality.JYMASTER.value
         "atmos" -> AudioQuality.JYEFFECT.value
         "atmos_plus" -> AudioQuality.VIVID.value
@@ -140,6 +157,7 @@ internal fun lxNormalizeCapabilities(sources: List<LxCapability>): List<LxCapabi
 @Serializable internal data class LxStoredSource(val info: LxSourceInfo, val script: String,
     val performance: LxSourcePerformance = LxSourcePerformance(),
     val qqPerformance: LxSourcePerformance = LxSourcePerformance(),
+    val kugouPerformance: LxSourcePerformance = LxSourcePerformance(),
     val capabilitiesChecked: Boolean = false) {
     override fun toString() = "LxStoredSource(${info.id}, script=[private])"
 }
@@ -169,12 +187,13 @@ internal fun lxCapabilities(value: JsonObject): List<LxCapability> {
         LxCapability(platform.key, qualities)
     }
     return lxNormalizeCapabilities(declared).also {
-        if (it.isEmpty()) throw LxSourceException("此音源没有声明网易云或 QQ 音乐播放接口")
+        if (it.isEmpty()) throw LxSourceException("此音源没有声明网易云、QQ 音乐或酷狗播放接口")
     }
 }
 
 internal data class LxTrackRequest(val platform: String, val quality: String, val data: JsonObject)
 private val lxQqMid = Regex("[a-zA-Z0-9]{1,64}")
+private val lxKugouHash = Regex("[a-fA-F0-9]{32}")
 
 private data class LxSongTarget(val id: String, val platform: LxPlatform,
     val supported: List<String>, val declared: List<String>)
@@ -189,6 +208,8 @@ private fun lxSongTarget(song: Song, sources: List<LxCapability>): LxSongTarget 
             ?: song.id.takeIf { song.musicSource == MusicSource.NETEASE && it > 0 }?.toString()
         LxPlatform.QQ_MUSIC -> song.qqMusic?.mid?.takeIf(lxQqMid::matches)
             ?: song.externalIds.qqMusicId?.takeIf(lxQqMid::matches)
+        LxPlatform.KUGOU -> song.kugou?.hash?.takeIf(lxKugouHash::matches)?.uppercase()
+            ?: song.externalIds.kugouId?.takeIf(lxKugouHash::matches)?.uppercase()
     } ?: throw LxSourceException("歌曲缺少有效${platform.label} ID")
     return LxSongTarget(id, platform, supported, declared)
 }
@@ -209,6 +230,9 @@ private val lxQualityPreferences: Map<AudioQuality, List<String>> = mapOf(
     AudioQuality.QQ_SURROUND to listOf("atmos_plus", "atmos", "hires", "flac24bit", "flac"),
     AudioQuality.QQ_DTS_X to listOf("dtsx", "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac"),
     AudioQuality.QQ_NAC to listOf("nac", "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac"),
+    AudioQuality.KUGOU_VIPER_MASTER to listOf("master", "hires", "flac24bit", "flac"),
+    AudioQuality.KUGOU_VIPER_CLEAR to listOf("hires", "flac24bit", "master", "flac"),
+    AudioQuality.KUGOU_VIPER_ATMOS to listOf("atmos_plus", "atmos", "dolby", "hires", "flac24bit", "flac"),
     AudioQuality.AUTO to listOf("master", "atmos", "hires", "flac24bit", "flac", "atmos_plus", "dolby", "dtsx", "nac", "320k", "128k"),
 )
 
@@ -226,9 +250,11 @@ private fun lxTrackRequest(song: Song, target: LxSongTarget, selected: String): 
     val types = JsonArray(pluginQualities.map { buildJsonObject { put("type", it) } })
     val typeMap = buildJsonObject { pluginQualities.forEach { put(it, buildJsonObject { put("type", it) }) } }
     val isQq = target.platform == LxPlatform.QQ_MUSIC
+    val isKugou = target.platform == LxPlatform.KUGOU
     val mediaMid = song.qqMusic?.mediaMid?.takeIf(lxQqMid::matches) ?: target.id
     val albumMid = song.qqMusic?.albumMid?.takeIf(lxQqMid::matches)
     val songId = song.qqMusic?.songId?.takeIf { it > 0 }
+    val kugouAlbumId = song.kugou?.albumId?.takeIf(String::isNotBlank)
     return LxTrackRequest(target.platform.key, selected, buildJsonObject {
         put("source", target.platform.key); put("action", "musicUrl")
         put("info", buildJsonObject {
@@ -247,6 +273,10 @@ private fun lxTrackRequest(song: Song, target: LxSongTarget, selected: String): 
                         put("albumMid", it)
                     }
                 }
+                if (isKugou) {
+                    put("hash", target.id)
+                    kugouAlbumId?.let { put("albumId", it) }
+                }
                 put("meta", buildJsonObject {
                     put("songId", target.id)
                     put("albumName", song.album)
@@ -260,6 +290,13 @@ private fun lxTrackRequest(song: Song, target: LxSongTarget, selected: String): 
                             put("albumId", it)
                             put("albumMid", it)
                         }
+                    }
+                    if (isKugou) {
+                        put("hash", target.id)
+                        put("qualitys", types)
+                        put("_qualitys", typeMap)
+                        put("picUrl", song.cover)
+                        kugouAlbumId?.let { put("albumId", it) }
                     }
                 })
             })

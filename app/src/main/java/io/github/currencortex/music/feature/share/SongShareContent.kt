@@ -17,10 +17,16 @@ internal data class SongShareContent(val title: String, val artists: String, val
                 (song.externalIds.neteaseId?.toLongOrNull() ?: song.id).takeIf { it > 0 } else null
             return SongShareContent(clean(song.name).ifBlank { "未命名歌曲" },
                 clean(song.artists).ifBlank { "未知歌手" },
-                if (!song.video && song.musicSource == MusicSource.QQ_MUSIC)
-                    song.externalIds.qqMusicId?.takeIf { it.matches(Regex("[A-Za-z0-9]+")) }
-                        ?.let { "https://y.qq.com/n/ryqq/songDetail/$it" }
-                else id?.let { "https://music.20110208.xyz/app/#/song/$it" })
+                when {
+                    !song.video && song.musicSource == MusicSource.QQ_MUSIC ->
+                        song.externalIds.qqMusicId?.takeIf { it.matches(Regex("[A-Za-z0-9]+")) }
+                            ?.let { "https://y.qq.com/n/ryqq/songDetail/$it" }
+                    !song.video && song.musicSource == MusicSource.KUGOU ->
+                        song.kugou?.albumAudioId?.takeIf { it > 0 }?.let { "https://www.kugou.com/mixsong/$it.html" }
+                            ?: song.kugou?.hash?.takeIf { it.matches(Regex("[A-Fa-f0-9]{32}")) }
+                                ?.let { "https://www.kugou.com/song/#hash=$it" }
+                    else -> id?.let { "https://music.20110208.xyz/app/#/song/$it" }
+                })
         }
     }
 }

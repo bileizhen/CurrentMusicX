@@ -45,11 +45,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.BannerVideoCache
@@ -59,6 +62,7 @@ import io.github.currencortex.music.data.profile.BannerVideoRules
 import io.github.currencortex.music.data.profile.loadBannerVideoThumbnails
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicDialogButton
+import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -77,7 +81,9 @@ class BannerVideoPlayerView @JvmOverloads constructor(
     override fun dispatchTouchEvent(ev: MotionEvent?): Boolean = false
 }
 
-/** Muted, non-audio-focus, center-cropped looping video player used by banner hero & preview. */
+internal enum class BannerVideoAudio { Disabled, Muted, Audible }
+
+/** Loops banner clips without taking audio focus from the music player. */
 @OptIn(UnstableApi::class)
 @Composable
 internal fun BannerVideoSurface(
@@ -89,6 +95,12 @@ internal fun BannerVideoSurface(
     trimRange: BannerTrimSelection? = null,
     scrubPositionMs: Long? = null,
     onPositionUpdate: ((Long) -> Unit)? = null,
+    fit: Boolean = false,
+    audio: BannerVideoAudio = BannerVideoAudio.Disabled,
+    onFirstFrame: (() -> Unit)? = null,
+    onAudioAvailable: ((Boolean) -> Unit)? = null,
+    onAudioInterrupted: (() -> Unit)? = null,
+    onError: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -103,11 +115,16 @@ internal fun BannerVideoSurface(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    var renderedFirstFrame by remember(source) { mutableStateOf(false) }
+    val audioTracksEnabled = audio != BannerVideoAudio.Disabled
+    var renderedFirstFrame by remember(source, audioTracksEnabled, fit) { mutableStateOf(false) }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     val shouldPlay = active && lifecycleStarted && scrubPositionMs == null
+    val firstFrameCallback by rememberUpdatedState(onFirstFrame)
+    val audioAvailableCallback by rememberUpdatedState(onAudioAvailable)
+    val audioInterruptedCallback by rememberUpdatedState(onAudioInterrupted)
+    val errorCallback by rememberUpdatedState(onError)
 
-    DisposableEffect(context, source, videoCache) {
+    DisposableEffect(context, source, httpClient, videoCache, audioTracksEnabled, fit) {
         val builder = ExoPlayer.Builder(context)
         if (source is String && httpClient != null) {
             val mediaSourceFactory = videoCache?.mediaSourceFactory(httpClient)
@@ -117,26 +134,44 @@ internal fun BannerVideoSurface(
         val exo = builder.build().apply {
             volume = 0f
             setAudioAttributes(AudioAttributes.DEFAULT, false)
-            trackSelectionParameters = trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                .build()
+            if (!audioTracksEnabled) {
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                    .build()
+            }
             repeatMode = Player.REPEAT_MODE_ONE
-            videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            videoScalingMode = if (fit) C.VIDEO_SCALING_MODE_SCALE_TO_FIT else C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             setMediaItem(
                 when (source) {
                     is Uri -> MediaItem.fromUri(source)
                     else -> MediaItem.fromUri(source.toString())
                 },
             )
-            prepare()
-            playWhenReady = shouldPlay
         }
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 renderedFirstFrame = true
+                firstFrameCallback?.invoke()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                audioAvailableCallback?.invoke(tracks.isTypeSupported(C.TRACK_TYPE_AUDIO))
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
+                    exo.volume = 0f
+                    audioInterruptedCallback?.invoke()
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                errorCallback?.invoke()
             }
         }
         exo.addListener(listener)
+        exo.prepare()
+        exo.playWhenReady = shouldPlay
         player = exo
         onDispose {
             exo.removeListener(listener)
@@ -145,10 +180,12 @@ internal fun BannerVideoSurface(
         }
     }
 
-    LaunchedEffect(player, shouldPlay) {
+    LaunchedEffect(player, audio, shouldPlay) {
         val exo = player ?: return@LaunchedEffect
+        val audible = audio == BannerVideoAudio.Audible
+        exo.setHandleAudioBecomingNoisy(audible)
+        exo.volume = if (audible) 1f else 0f
         exo.playWhenReady = shouldPlay
-        if (shouldPlay) exo.play() else exo.pause()
     }
 
     LaunchedEffect(player, scrubPositionMs) {
@@ -194,6 +231,7 @@ internal fun BannerVideoSurface(
             }
         },
         update = { view ->
+            view.resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             if (view.player !== player) view.player = player
         },
         onRelease = { view ->
@@ -211,22 +249,23 @@ internal fun ProfileBannerVideoDialog(
     busy: Boolean,
     statusText: String?,
     onCancel: () -> Unit,
-    onSave: (startMs: Long, endMs: Long) -> Unit,
+    allowsOriginalAudio: Boolean,
+    onSave: (startMs: Long, endMs: Long, keepAudio: Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val canKeepAudio = info.hasAudio && allowsOriginalAudio
     val durationMs = info.durationMs
     val defaultRange = BannerVideoRules.defaultRange(durationMs, maxDurationMs)
     var selection by remember(uri, durationMs, maxDurationMs) { mutableStateOf(defaultRange) }
     var scrubMs by remember(uri) { mutableStateOf<Long?>(null) }
     var playheadMs by remember(uri) { mutableStateOf(selection.startMs) }
+    var keepAudio by remember(uri) { mutableStateOf(false) }
+    var auditionAudio by remember(uri) { mutableStateOf(false) }
 
+    // The overlay can still draw these small bitmaps during its exit animation.
+    // Let the backing bitmaps live as long as the renderer holds a reference.
     val thumbnails by produceState<List<Bitmap>>(emptyList(), uri, durationMs) {
         value = loadBannerVideoThumbnails(context, uri, durationMs)
-    }
-
-    DisposableEffect(thumbnails) {
-        val bitmaps = thumbnails
-        onDispose { bitmaps.forEach { if (!it.isRecycled) it.recycle() } }
     }
 
     MusicDialog("编辑视频横幅", onDismiss = { if (!busy) onCancel() }) {
@@ -246,6 +285,12 @@ internal fun ProfileBannerVideoDialog(
                 trimRange = selection,
                 scrubPositionMs = scrubMs,
                 onPositionUpdate = { playheadMs = it },
+                audio = when {
+                    !canKeepAudio -> BannerVideoAudio.Disabled
+                    auditionAudio -> BannerVideoAudio.Audible
+                    else -> BannerVideoAudio.Muted
+                },
+                onAudioInterrupted = { auditionAudio = false },
                 modifier = Modifier
                     .matchParentSize()
                     .testTag("banner_video_preview"),
@@ -282,7 +327,7 @@ internal fun ProfileBannerVideoDialog(
                 text = if (durationMs > maxDurationMs) {
                     stringResource(R.string.profile_banner_video_trim_limit, maxDurationMs / 1_000)
                 } else {
-                    "保存前可预览或裁切片段，按 3:2 静音循环"
+                    stringResource(R.string.profile_banner_video_trim_hint)
                 },
                 fontSize = 12.sp,
                 color = colors.labelSecondaryVariant,
@@ -311,6 +356,23 @@ internal fun ProfileBannerVideoDialog(
                 .testTag("banner_video_trim_bar"),
         )
 
+        if (canKeepAudio) {
+            SettingsSwitch(
+                title = stringResource(R.string.profile_banner_video_keep_audio),
+                summary = stringResource(R.string.profile_banner_video_keep_audio_summary),
+                checked = keepAudio,
+                onCheckedChange = { keepAudio = it; auditionAudio = it },
+                enabled = !busy,
+                modifier = Modifier.testTag("profile_banner_keep_audio"),
+            )
+        } else if (info.hasAudio) {
+            Text(
+                text = stringResource(R.string.profile_banner_video_remove_audio),
+                fontSize = 12.sp,
+                color = colors.labelSecondaryVariant,
+            )
+        }
+
         val isDefault = selection == defaultRange
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MusicDialogButton(
@@ -329,7 +391,7 @@ internal fun ProfileBannerVideoDialog(
                 text = if (busy) "处理中…" else "保存横幅",
                 onClick = {
                     scrubMs = null
-                    onSave(selection.startMs, selection.endMs)
+                    onSave(selection.startMs, selection.endMs, canKeepAudio && keepAudio)
                 },
                 enabled = !busy && selection.durationMs > 0L,
                 modifier = Modifier

@@ -35,6 +35,9 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val qqMobileQuality: AudioQuality = AudioQuality.AUTO,
                          val qqWirelessQuality: AudioQuality = AudioQuality.AUTO,
                          val qqDownloadQuality: AudioQuality = AudioQuality.AUTO,
+                         val kugouMobileQuality: AudioQuality = AudioQuality.AUTO,
+                         val kugouWirelessQuality: AudioQuality = AudioQuality.AUTO,
+                         val kugouDownloadQuality: AudioQuality = AudioQuality.AUTO,
                          /** Mirror the current lyric line into the system media card, lockscreen and Bluetooth AVRCP title. */
                          val bluetoothLyrics: Boolean = false,
                          /** Publish timed lyrics to Lyricon (词幕) for its status-bar display. */
@@ -47,17 +50,21 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val volumeNormalizationTarget: VolumeNormalizationTarget = VolumeNormalizationTarget.STANDARD,
                          val volumeNormalizationAdaptive: Boolean = true,
                          val volumeNormalizationAlbumGain: Boolean = false) {
-    fun qualityFor(source: MusicSource?, network: PlaybackNetworkKind = PlaybackNetworkKind.MOBILE): AudioQuality =
-        if (source == MusicSource.QQ_MUSIC) {
-            if (network == PlaybackNetworkKind.WIRELESS) qqWirelessQuality else qqMobileQuality
-        } else if (network == PlaybackNetworkKind.WIRELESS) wirelessQuality else mobileQuality
+    fun qualityFor(source: MusicSource?, network: PlaybackNetworkKind = PlaybackNetworkKind.MOBILE): AudioQuality = when (source) {
+        MusicSource.QQ_MUSIC -> if (network == PlaybackNetworkKind.WIRELESS) qqWirelessQuality else qqMobileQuality
+        MusicSource.KUGOU -> if (network == PlaybackNetworkKind.WIRELESS) kugouWirelessQuality else kugouMobileQuality
+        else -> if (network == PlaybackNetworkKind.WIRELESS) wirelessQuality else mobileQuality
+    }
 
-    fun downloadQualityFor(source: MusicSource?): AudioQuality =
-        if (source == MusicSource.QQ_MUSIC) qqDownloadQuality else downloadQuality
+    fun downloadQualityFor(source: MusicSource?): AudioQuality = when (source) {
+        MusicSource.QQ_MUSIC -> qqDownloadQuality
+        MusicSource.KUGOU -> kugouDownloadQuality
+        else -> downloadQuality
+    }
 }
 
 enum class MusicPlatform(val label: String) {
-    NETEASE("网易云音乐"), QQ_MUSIC("QQ 音乐");
+    NETEASE("网易云音乐"), QQ_MUSIC("QQ 音乐"), KUGOU("酷狗音乐");
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: NETEASE }
 }
 
@@ -149,6 +156,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val qqMobileQuality = stringPreferencesKey("music.qqQuality.mobile")
     private val qqWirelessQuality = stringPreferencesKey("music.qqQuality.wireless")
     private val qqDownloadQuality = stringPreferencesKey("music.qqQuality.download")
+    private val kugouMobileQuality = stringPreferencesKey("music.kugouQuality.mobile")
+    private val kugouWirelessQuality = stringPreferencesKey("music.kugouQuality.wireless")
+    private val kugouDownloadQuality = stringPreferencesKey("music.kugouQuality.download")
     private val restore = booleanPreferencesKey("music.restore")
     private val nickname = stringPreferencesKey("account.nickname")
     private val account = longPreferencesKey("account.id")
@@ -249,6 +259,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[qqMobileQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
             p[qqWirelessQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
             p[qqDownloadQuality]?.let(AudioQuality::from) ?: legacyQuality,
+            p[kugouMobileQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
+            p[kugouWirelessQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
+            p[kugouDownloadQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
             p[bluetoothLyrics] ?: false,
             p[lyriconStatusBar] ?: true,
             p[downloadLyricsFile] ?: true,
@@ -287,14 +300,32 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             if (mode == CurrentMusicServer.CUSTOM) it[customServer] = normalized
         }
     }
-    suspend fun setMobileQuality(value: AudioQuality, qq: Boolean = false) {
-        store.edit { if (qq) it[qqMobileQuality] = value.value else it[mobileQuality] = value.value }
+    suspend fun setMobileQuality(value: AudioQuality, qq: Boolean = false, kugou: Boolean = false) {
+        store.edit {
+            when {
+                kugou -> it[kugouMobileQuality] = value.value
+                qq -> it[qqMobileQuality] = value.value
+                else -> it[mobileQuality] = value.value
+            }
+        }
     }
-    suspend fun setWirelessQuality(value: AudioQuality, qq: Boolean = false) {
-        store.edit { if (qq) it[qqWirelessQuality] = value.value else it[wirelessQuality] = value.value }
+    suspend fun setWirelessQuality(value: AudioQuality, qq: Boolean = false, kugou: Boolean = false) {
+        store.edit {
+            when {
+                kugou -> it[kugouWirelessQuality] = value.value
+                qq -> it[qqWirelessQuality] = value.value
+                else -> it[wirelessQuality] = value.value
+            }
+        }
     }
-    suspend fun setDownloadQuality(value: AudioQuality, qq: Boolean = false) {
-        store.edit { if (qq) it[qqDownloadQuality] = value.value else it[downloadQuality] = value.value }
+    suspend fun setDownloadQuality(value: AudioQuality, qq: Boolean = false, kugou: Boolean = false) {
+        store.edit {
+            when {
+                kugou -> it[kugouDownloadQuality] = value.value
+                qq -> it[qqDownloadQuality] = value.value
+                else -> it[downloadQuality] = value.value
+            }
+        }
     }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }

@@ -32,19 +32,38 @@ import io.github.suqi8.coui.kmp.basic.Text
 ) {
     val binding by vm.container.bindingRepository.state.collectAsStateWithLifecycle()
     val session by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugouAccount by vm.container.kugou.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    var info by remember(playlist.id, playlist.source, session.revision) { mutableStateOf<Playlist?>(null) }
+    var info by remember(playlist.id, playlist.source, session.revision, kugouAccount.revision) { mutableStateOf<Playlist?>(null) }
+    var kugouSubscribed by remember(playlist.id, playlist.source, kugouAccount.revision) {
+        mutableStateOf(playlist.nativeSubscribed)
+    }
     val native = playlist.source == "netease"
-    LaunchedEffect(playlist.id, playlist.source, session.revision) {
+    val kugou = playlist.source == "kugou"
+    val qq = playlist.source == "qqmusic"
+    LaunchedEffect(playlist.id, playlist.source, session.revision, kugouAccount.revision) {
         if (native) when (val result = appResult { vm.container.neteaseLibrary.playlistInfo(playlist.id) }) {
             is AppResult.Success -> info = result.value
             is AppResult.Failure -> vm.container.errorNotices.show(result.message)
+        } else if (kugou && kugouAccount.loggedIn && !playlist.nativeOwned && !playlist.nativeLiked) {
+            kugouSubscribed = vm.container.kugou.isPlaylistSubscribed(playlist)
         }
     }
     val target = info
-    val canSubscribe = native && !playlist.nativeOwned && !playlist.nativeLiked &&
+    val canSubscribe = (native || kugou || qq) && !playlist.nativeOwned && !playlist.nativeLiked &&
         target?.nativeOwned != true && target?.nativeLiked != true
-    val subscribed = target?.nativeSubscribed ?: playlist.nativeSubscribed
+    val subscribed = when {
+        native -> target?.nativeSubscribed ?: playlist.nativeSubscribed
+        kugou -> kugouSubscribed
+        else -> playlist.nativeSubscribed
+    }
+    val subscribeEnabled = when {
+        native -> target != null && !busy && binding?.bound == true && binding?.stale == false
+        kugou -> !busy && kugouAccount.loggedIn
+        qq -> !busy && qqAccount.loggedIn
+        else -> false
+    }
     val display = target ?: playlist
     val context = LocalContext.current
     var infoOpen by remember(playlist.id, playlist.source) { mutableStateOf(false) }
@@ -63,7 +82,7 @@ import io.github.suqi8.coui.kmp.basic.Text
     if (infoOpen) SettingsUiScope {
         MusicDialog("歌单信息", onDismiss = onDismiss) {
             Text(display.name, Modifier.testTag("playlist_preview_info_name"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text(when (display.source) { "netease", "ncm" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }, fontSize = 13.sp)
+            Text(when (display.source) { "netease", "ncm" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; "kugou" -> "酷狗音乐"; else -> "CurrentMusic" }, fontSize = 13.sp)
             Text("${display.count} 首歌曲", fontSize = 13.sp)
             Text(display.description.ifBlank { "暂无歌单介绍" },
                 Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()), fontSize = 14.sp)
@@ -76,12 +95,24 @@ import io.github.suqi8.coui.kmp.basic.Text
             add(GlassMenuItem("play", "播放全部", MusicIcons.Play, enabled = canPlay, onClick = { onPlay(false) }))
             if (canSubscribe) add(GlassMenuItem("subscribe", if (subscribed) "已收藏" else "收藏",
                 if (subscribed) Icons.Default.Star else MusicIcons.Star,
-                enabled = target != null && !busy && binding?.bound == true && binding?.stale == false,
+                enabled = subscribeEnabled,
                 keepOpen = true, onClick = {
                     vm.action(if (subscribed) "已取消收藏歌单" else "已收藏歌单") {
-                        if (subscribed) vm.container.neteaseLibrary.unsubscribe(playlist.id)
-                        else vm.container.neteaseLibrary.subscribe(playlist.id)
-                        info = target?.copy(nativeSubscribed = !subscribed)
+                        when {
+                            native -> {
+                                if (subscribed) vm.container.neteaseLibrary.unsubscribe(playlist.id)
+                                else vm.container.neteaseLibrary.subscribe(playlist.id)
+                                info = target?.copy(nativeSubscribed = !subscribed)
+                            }
+                            kugou -> {
+                                if (subscribed) vm.container.kugou.unsubscribePlaylist(playlist)
+                                else vm.container.kugou.subscribePlaylist(playlist)
+                                kugouSubscribed = !subscribed
+                            }
+                            qq -> {
+                                vm.container.qqMusic.subscribePlaylist(playlist.remoteId, !subscribed)
+                            }
+                        }
                     }
                 }))
             add(GlassMenuItem("shuffle", "随机播放", MusicIcons.Shuffle, enabled = canPlay, onClick = { onPlay(true) }))

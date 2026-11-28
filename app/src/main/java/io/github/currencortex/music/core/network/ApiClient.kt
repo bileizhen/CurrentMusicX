@@ -168,10 +168,11 @@ class ApiClient(
         expectedSession, "PUT", "feedback/$requestId/media/$slot", payload, mediaUpload = true,
     )
 
-    internal suspend fun uploadProfileBannerVideo(
+    internal suspend fun uploadProfileBannerMedia(
         expectedSession: RequestSession,
         file: File,
         contentType: String,
+        crop: String? = null,
     ): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), token())
         val revision = currentMusicSessionRevision()
@@ -185,7 +186,8 @@ class ApiClient(
         if (session.token.isNullOrBlank()) {
             throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录 CurrentMusic 账号")
         }
-        val url = ServerUrl.endpoint(routeServer(session.server), "profile/banner", emptyMap())
+        val params = if (crop == null) emptyMap() else mapOf("crop" to crop)
+        val url = ServerUrl.endpoint(routeServer(session.server), "profile/banner", params)
         val request = Request.Builder()
             .url(url)
             .tag(RequestSession::class.java, session)
@@ -267,9 +269,9 @@ class ApiClient(
             val parsedErrorMessage = ((errorPayload?.get("error") ?: errorPayload?.get("message")) as? JsonPrimitive)
                 ?.takeIf(JsonPrimitive::isString)?.content?.trim()?.takeIf(String::isNotEmpty)?.take(240)
             val errorMessage = parsedErrorMessage ?: if (bannerError) when (code) {
-                413 -> "横幅视频文件不能超过 16 MiB"
-                415 -> "仅支持 MP4 或 MOV 格式的视频"
-                503 -> "服务器视频处理组件暂不可用，请稍后再试"
+                413 -> "横幅文件过大，请缩小后重试"
+                415 -> "服务器不支持所选横幅格式"
+                503 -> "服务器横幅处理暂不可用，请稍后重试"
                 else -> null
             } else null
             // Legacy dispatchers and reverse proxies often return a generic 404 for an unknown route.

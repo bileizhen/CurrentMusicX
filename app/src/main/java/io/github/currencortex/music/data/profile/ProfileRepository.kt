@@ -12,6 +12,8 @@ import java.io.File
 import java.util.Base64
 
 internal const val PROFILE_BANNER_LIMIT = 1024 * 1024
+internal const val PROFILE_BANNER_ORIGINAL_IMAGE_LIMIT = 32L * 1024 * 1024
+internal val losslessBannerImageTypes = setOf("image/jpeg", "image/png", "image/webp")
 internal const val PROFILE_BANNER_VIDEO_LIMIT = 16L * 1024 * 1024
 internal const val PROFILE_BANNER_VIDEO_MAX_DIMENSION = 3840
 internal const val PROFILE_BANNER_VIDEO_MAX_PIXELS = 8_294_400L
@@ -61,10 +63,30 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         bannerMutex.withLock {
             require(file.isFile && file.length() in 1L..PROFILE_BANNER_VIDEO_LIMIT)
             require(contentType in setOf("video/mp4", "video/quicktime"))
-            val result = api.decode<ProfileBannerUpload>(api.uploadProfileBannerVideo(expected, file, contentType))
-            revision.update { it + 1 }
-            result
+            uploadBannerMedia(file, contentType, expected)
         }
+
+    internal suspend fun bannerLosslessImage(
+        file: File,
+        contentType: String,
+        crop: BannerPixelCrop,
+        expected: RequestSession,
+    ): ProfileBannerUpload = bannerMutex.withLock {
+        require(file.isFile && file.length() in 1L..PROFILE_BANNER_ORIGINAL_IMAGE_LIMIT)
+        require(contentType in losslessBannerImageTypes)
+        uploadBannerMedia(file, contentType, expected, "${crop.left},${crop.top},${crop.width},${crop.height}")
+    }
+
+    private suspend fun uploadBannerMedia(
+        file: File,
+        contentType: String,
+        expected: RequestSession,
+        crop: String? = null,
+    ): ProfileBannerUpload {
+        val result = api.decode<ProfileBannerUpload>(api.uploadProfileBannerMedia(expected, file, contentType, crop))
+        revision.update { it + 1 }
+        return result
+    }
 
     suspend fun bannerIfDefault(bytes: ByteArray, expected: RequestSession, accountId: Long,
         stillAllowed: () -> Boolean): String? = bannerMutex.withLock {

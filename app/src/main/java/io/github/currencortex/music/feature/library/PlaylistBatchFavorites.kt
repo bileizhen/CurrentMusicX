@@ -7,7 +7,7 @@ import io.github.currencortex.music.data.song.Song
 internal fun favoriteSelectionKey(song: Song) = "${song.musicSource}:${song.id}:${song.video}"
 
 internal fun supportsBatchFavorite(song: Song) = !song.video && !song.privateLibrary &&
-    song.musicSource !in setOf(MusicSource.LOCAL, MusicSource.QQ_MUSIC)
+    song.musicSource !in setOf(MusicSource.LOCAL, MusicSource.QQ_MUSIC, MusicSource.KUGOU)
 
 internal fun playlistSupportsMultiSelect(route: String) = route.startsWith("lib/playlist/") ||
     route.startsWith("lib/ncmplaylist/") || route == "lib/likes"

@@ -52,6 +52,7 @@ internal fun listeningHistorySong(song: Song): ListeningHistorySong {
         MusicSource.QQ_MUSIC -> listOf(song.externalIds.qqMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.APPLE_MUSIC -> listOf(song.externalIds.appleMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.SPOTIFY -> listOf(song.externalIds.spotifyId?.takeIf { it.isNotBlank() } ?: song.id.toString())
+        MusicSource.KUGOU -> listOf(song.kugou?.hash?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.SERVICE -> emptyList()
     }
     // Length-prefix fields so different provider/account/track combinations cannot alias.

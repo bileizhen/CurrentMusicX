@@ -123,7 +123,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                     onConnect = { navigate("user/binding") }, dateLabel = "${today.monthValue}月${today.dayOfMonth}日", room = request)
             }
             item(key = "personal-roaming") {
-                HomePersonalRoamingEntry({ navigate(if (qqPlatform) "qq/roaming" else "lib/roaming") }, qqMusic = qqPlatform)
+                HomePersonalRoamingEntry({ navigate(if (qqPlatform) "qq/roaming" else "lib/roaming") }, guessYouLike = qqPlatform)
             }
             item(key = "shortcuts") { HomeLibraryShortcuts(navigate, request != null) }
             if (!direct && !account.loading && account.account == null) item(key = "login") {
@@ -229,12 +229,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     }
 }
 
-@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit, qqMusic: Boolean = false) {
+@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit, guessYouLike: Boolean = false) {
     SettingsGroup {
-        SettingsPreference(if (qqMusic) "猜你喜欢" else "私人漫游",
-            if (qqMusic) "推荐歌曲" else "按你的喜好，连续听点好音乐",
+        SettingsPreference(if (guessYouLike) "猜你喜欢" else "私人漫游",
+            if (guessYouLike) "推荐歌曲" else "按你的喜好，连续听点好音乐",
             Modifier.testTag("open_personal_roaming"), onClick = onOpen,
             leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = COUITheme.colorScheme.primary) },
-            trailing = { MusicTransportButton(if (qqMusic) "播放推荐歌曲" else "打开私人漫游", onOpen) })
+            trailing = { MusicTransportButton(if (guessYouLike) "播放推荐歌曲" else "打开私人漫游", onOpen) })
     }
 }

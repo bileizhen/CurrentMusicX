@@ -1,5 +1,7 @@
 package io.github.currencortex.music.data.profile
 
+import kotlin.math.roundToInt
+
 /** Image-relative coordinates keep the preview and uploaded square identical at any screen size. */
 data class AvatarCrop(val zoom: Float = 1f, val centerX: Float = .5f, val centerY: Float = .5f) {
     fun constrained(width: Int, height: Int): AvatarCrop =
@@ -38,6 +40,18 @@ data class BannerCrop(val zoom: Float = 1f, val centerX: Float = .5f, val center
 }
 
 data class BannerCropBounds(val left: Float, val top: Float, val width: Float, val height: Float)
+
+internal data class BannerPixelCrop(val left: Int, val top: Int, val width: Int, val height: Int)
+
+internal fun BannerCrop.pixelCrop(imageWidth: Int, imageHeight: Int): BannerPixelCrop {
+    val bounds = bounds(imageWidth, imageHeight, 3f / 2f)
+    val units = (bounds.width / 3f).roundToInt().coerceIn(1, minOf(imageWidth / 3, imageHeight / 2))
+    val width = units * 3
+    val height = units * 2
+    val left = (bounds.left + (bounds.width - width) / 2).roundToInt().coerceIn(0, imageWidth - width)
+    val top = (bounds.top + (bounds.height - height) / 2).roundToInt().coerceIn(0, imageHeight - height)
+    return BannerPixelCrop(left, top, width, height)
+}
 
 private fun baseCropDimensions(width: Int, height: Int, aspectRatio: Float): Pair<Float, Float> {
     require(width > 0 && height > 0 && aspectRatio > 0f)
