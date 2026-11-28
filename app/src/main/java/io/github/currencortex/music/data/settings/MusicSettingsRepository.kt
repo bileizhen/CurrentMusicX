@@ -105,6 +105,13 @@ enum class LyricsStyle(val label: String) {
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: CLASSIC }
 }
 
+
+/** How much of the lyric stage is drawn; AUTO resolves against the device before the first frame. */
+enum class LyricsRenderQuality(val label: String) {
+    AUTO("自动"), FULL("高清"), BALANCED("均衡"), POWER_SAVER("省电");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
+}
+
 data class LyricsDisplayOptions(
     val centered: Boolean = false, val fontWeight: Int = 500,
     val blur: Boolean = true, val stagger: Boolean = true,
@@ -116,6 +123,7 @@ data class LyricsDisplayOptions(
     val particles: Boolean = false,
     val style: LyricsStyle = LyricsStyle.CLASSIC,
     val appleMusic: AppleMusicLyricsOptions = AppleMusicLyricsOptions(),
+    val renderQuality: LyricsRenderQuality = LyricsRenderQuality.AUTO,
 ) {
     /** Classic stages own their layout; their saved options must not constrain Apple Music. */
     fun normalized(): LyricsDisplayOptions {
@@ -170,6 +178,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val lyricsWeight = stringPreferencesKey("lyrics.weight")
     private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
     private val lyricsSource = stringPreferencesKey("lyrics.source")
+    private val lyricsRenderQuality = stringPreferencesKey("lyrics.renderQuality")
     private val lyricsSourceMigration = intPreferencesKey("lyrics.source.automaticMigrationVersion")
     private val bluetoothLyrics = booleanPreferencesKey("lyrics.bluetooth")
     private val lyriconStatusBar = booleanPreferencesKey("lyrics.lyricon")
@@ -249,7 +258,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: false, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false,
-            LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p)).normalized(), p[neteaseMain] ?: true,
+            LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p),
+            p[lyricsRenderQuality]?.let(LyricsRenderQuality::from) ?: LyricsRenderQuality.AUTO).normalized(), p[neteaseMain] ?: true,
         p[concurrentPlayback] ?: true, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
@@ -362,6 +372,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[romanization] = value.romanization; p[wordAnimation] = value.wordAnimation
             p[perspective] = value.perspective
             p[glow] = value.glow; p[wordLift] = value.wordLift
+            p[lyricsRenderQuality] = value.renderQuality.name
             p[smoke] = value.smoke
             p[particles] = value.particles
             p[lyricsStyle] = value.style.name
