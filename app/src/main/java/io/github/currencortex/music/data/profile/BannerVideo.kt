@@ -283,6 +283,7 @@ internal suspend fun loadBannerVideoThumbnails(
     }
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
 internal suspend fun prepareBannerVideoForUpload(
     context: Context,
     uri: Uri,
@@ -391,12 +392,19 @@ internal suspend fun prepareBannerVideoForUpload(
         throw e
     } catch (e: Exception) {
         fallbackFile.delete()
-        if (keepAudio && e is ExportException) {
+        if (keepAudio && e.causedBy<ExportException>()) {
             throw IOException(context.getString(R.string.profile_banner_video_export_with_audio_error), e)
         }
         throw e
     }
 }
+
+/**
+ * The Transformer listener reports failures as `IOException(message, exportException)`, so the
+ * export error itself only shows up somewhere down the cause chain.
+ */
+internal inline fun <reified T : Throwable> Throwable.causedBy(): Boolean =
+    generateSequence(this, Throwable::cause).any { it is T }
 
 @androidx.annotation.OptIn(UnstableApi::class)
 private suspend fun exportTrimmedBannerMp4(
