@@ -239,6 +239,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
     val kugouLikes by vm.container.kugou.likedState.collectAsStateWithLifecycle()
+    val kugouAccount by vm.container.kugou.state.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
@@ -558,7 +559,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                     if (vm.route in setOf("lib/cloud", "lib/likes") &&
                         error == io.github.currencortex.music.core.network.ErrorKind.NeteaseBindingRequired.message)
                         TextButton("登录网易云", onClick = { navigate("user/binding") })
-                    else if (vm.route.startsWith("kugou/") && !vm.container.kugou.state.value.loggedIn &&
+                    else if (vm.route.startsWith("kugou/") && !kugouAccount.loggedIn &&
                         (vm.route == "kugou/likes" || vm.route.startsWith("kugou/user-playlist/")))
                         TextButton("登录酷狗音乐", onClick = { navigate("kugou/account") })
                     else TextButton("重试", onClick = ::refresh)

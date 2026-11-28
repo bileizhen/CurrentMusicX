@@ -66,8 +66,8 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged as distinctFlowUntilChanged
+import kotlinx.coroutines.flow.map as flowMap
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -118,10 +118,10 @@ fun KugouHomeScreen(
     }
     val bottom = LocalMusicBottomInset.current
     val playbackSummary = remember(container.playerController) {
-        container.playerController.state.map {
+        container.playerController.state.flowMap {
             PlayerState(song = it.song, playing = it.playing, loading = it.loading, playRequested = it.playRequested,
                 mode = it.mode, canControlPlayback = it.canControlPlayback, error = it.error)
-        }.distinctUntilChanged()
+        }.distinctFlowUntilChanged()
     }
     val playback by playbackSummary.collectAsStateWithLifecycle(initialValue = PlayerState())
     var refresh by remember { mutableIntStateOf(0) }
