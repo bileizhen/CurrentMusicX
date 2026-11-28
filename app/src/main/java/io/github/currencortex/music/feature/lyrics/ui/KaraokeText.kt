@@ -48,7 +48,8 @@ import androidx.compose.ui.text.style.TextAlign
     prewarmGlow: Boolean = false, monet: Boolean = false,
     smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null,
     particleColors: LyricsSmokeColors? = null, particleExitAt: Long? = null,
-    wordLiftReturns: Boolean = false, alignFirstBaseline: Boolean = false) {
+    wordLiftReturns: Boolean = false, alignFirstBaseline: Boolean = false,
+    rhythmGlow: State<Float>? = null) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -118,6 +119,12 @@ import androidx.compose.ui.text.style.TextAlign
             WordGeometry(segments, total, Path().apply { segments.forEach { addRect(it.box) } }, glyphs)
         } } }
         val geometry = geometries[layoutIndex]
+        val displayGroups = remember(line.text, words) { lyricDisplayGroups(line.text, words) }
+        val wordGroup = remember(words, displayGroups) { IntArray(words.size).also { mapping ->
+            displayGroups.forEachIndexed { groupIndex, range ->
+                range.forEach { wordIndex -> if (wordIndex in mapping.indices) mapping[wordIndex] = groupIndex }
+            }
+        } }
         val timed = animateWords && words.isNotEmpty()
         // Retain the lift when Current-line karaoke stops animating a completed row.
         val safeRaster = layout.size.width.toLong() * layout.size.height <= 4_000_000 && layout.size.height < 8192 && layout.size.width < 8192
@@ -125,8 +132,12 @@ import androidx.compose.ui.text.style.TextAlign
         val glyphs = remember(geometry) { geometry.flatMap { it.glyphs } }
         val liftedInk = remember(glyphs) { Path().apply { glyphs.forEach { addRect(it.box) } } }
         val lifts = remember(glyphs) { FloatArray(glyphs.size) }
-        val glowWeights = remember(words, line.roles, monet) { words.map {
-            if (monet) { if (it.endTimeMs > it.startTimeMs) 1f else 0f } else lyricGlowWeight(it, line.roles)
+        val glowWeights = remember(words, line.roles, monet, displayGroups) { displayGroups.map { range ->
+            range.maxOf { index ->
+                val word = words[index]
+                if (monet) { if (word.endTimeMs > word.startTimeMs) 1f else 0f }
+                else lyricGlowWeight(word, line.roles)
+            }
         } }
         val wordGlows = remember(words) { FloatArray(words.size) }
         val glowTimed = glow && safeRaster && line.words.isNotEmpty() && glowWeights.any { it > 0f }
@@ -177,7 +188,7 @@ import androidx.compose.ui.text.style.TextAlign
                 // Warm the next paragraph over separate display frames, before its entrance.
                 // Both cached weights are needed when Current-line bold changes at that cue.
                 geometries.forEachIndexed { index, shapes ->
-                    shapes.filterIndexed { wordIndex, _ -> glowWeights[wordIndex] > 0f }.forEach { shape ->
+                    shapes.filterIndexed { wordIndex, _ -> glowWeights[wordGroup[wordIndex]] > 0f }.forEach { shape ->
                         shape.glyphs.forEach { glyph ->
                             withFrameNanos { }
                             val halo = rasters[index].glyphHalo(glyph.box).first
@@ -192,14 +203,14 @@ import androidx.compose.ui.text.style.TextAlign
             }
         }
         if (glowLine) raster.lineHalo.first.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
-        if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach {
+        if (glowTimed) glyphs.filter { glowWeights[wordGroup[it.wordIndex]] > 0f }.forEach {
             val halo = raster.glyphHalo(it.box).first
             if (prepareDrawResources) raster.prepareForDrawing(halo)
             if (monet) raster.wideGlyphHalo(it.box).first.let { wide -> if (prepareDrawResources) raster.prepareForDrawing(wide) }
         }
         val monetSweeps = if (monet && safeRaster) remember(rasters, color) { rasters.map { MonetSweepInk(it.ink, color) } } else emptyList()
         val monetHalo = if (monet && glowTimed) remember(raster, glyphs, glowColor) {
-            MonetHaloInk(glyphs.filter { glowWeights[it.wordIndex] > 0f }.flatMap { glyph -> listOf(
+            MonetHaloInk(glyphs.filter { glowWeights[wordGroup[it.wordIndex]] > 0f }.flatMap { glyph -> listOf(
                 glyph.wordIndex to raster.glyphHalo(glyph.box),
                 glyph.wordIndex to raster.wideGlyphHalo(glyph.box)) }, glowColor)
         } else null
@@ -251,6 +262,9 @@ import androidx.compose.ui.text.style.TextAlign
                     val softness = monetSweepSoftness(size * density.fontScale) * density.density
                     val base = baseOpacity?.value ?: .34f
                     if (monetHalo != null) {
+                        // Read the envelope only while this row is the sung one; future and
+                        // finished rows stay static, so they must not observe the state.
+                        val rhythmScale = if (phase == 1) rhythmGlow?.value?.let { .86f + .14f * it } ?: 1f else 1f
                         words.forEachIndexed { index, word ->
                             wordGlows[index] = if (glowWeights[index] > 0f)
                                 monetGlow(now, word.startTimeMs, word.endTimeMs, line.endTimeMs) else 0f
@@ -308,10 +322,11 @@ import androidx.compose.ui.text.style.TextAlign
                 // words, future words and untimed ordinary lines never receive a halo.
                 if (phase == 1 && glowTimed) {
                     words.forEachIndexed { index, word ->
-                        wordGlows[index] = glowWeights[index] * lyricGlowStrength(now, word.startTimeMs, word.endTimeMs)
+                        wordGlows[index] = glowWeights[wordGroup[index]] * lyricGlowStrength(now, word.startTimeMs, word.endTimeMs)
                     }
                     glyphs.forEachIndexed { index, glyph ->
-                        val intensity = wordGlows[glyph.wordIndex] * glowAlpha
+                        val intensity = wordGlows[glyph.wordIndex] * glowAlpha *
+                            (1f + .16f * (rhythmGlow?.value ?: 0f))
                         if (intensity <= .001f) return@forEachIndexed
                         val shape = geometry[glyph.wordIndex]
                         val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)

@@ -23,7 +23,8 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
 @Composable internal fun LyricsLineView(line: LyricLine, index: Int, position: State<Long>, focused: Boolean,
     resting: Boolean, distance: Int, canSeek: Boolean, onSeek: (Long) -> Unit, translation: Boolean,
     romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float, weightMode: LyricsWeight,
-    display: LyricsDisplayOptions, monetTone: MonetTone, browsing: Boolean = false) {
+    display: LyricsDisplayOptions, monetTone: MonetTone, browsing: Boolean = false,
+    rhythmGlow: State<Float>? = null) {
     val mainFocused by remember(line, position) {
         derivedStateOf { position.value >= line.startTimeMs && position.value < line.endTimeMs }
     }
@@ -45,6 +46,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
             LyricsVocalView(line, position, mainFocused, resting, translation, romanization, wordAnimation,
                 if (line.isBackground) fontSize * .75f else fontSize, weightMode, display, effects, distance,
                 vocalModifier = Modifier.testTag("lyric_vocal_$index"), monetTone = monetTone,
+                rhythmGlow = rhythmGlow.takeIf { line.roles.any { role -> role.equals("chorus", true) } },
                 reserveAuxiliarySpace = line.backgroundVocals.isNotEmpty())
             line.backgroundVocals.forEachIndexed { bgIndex, bg ->
                 val bgFocused by remember(bg, position) { derivedStateOf { position.value >= bg.startTimeMs && position.value < bg.endTimeMs } }
@@ -69,7 +71,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
 @Composable private fun LyricsVocalView(line: LyricLine, position: State<Long>, focused: Boolean,
     resting: Boolean, translation: Boolean, romanization: Boolean, wordAnimation: Boolean, size: Float, weightMode: LyricsWeight,
     display: LyricsDisplayOptions, effects: Boolean, distance: Int, vocalModifier: Modifier = Modifier,
-    monetTone: MonetTone, reserveAuxiliarySpace: Boolean = false) {
+    monetTone: MonetTone, reserveAuxiliarySpace: Boolean = false, rhythmGlow: State<Float>? = null) {
     val weight = lyricsFontWeight(weightMode, focused || resting, display.fontWeight)
     val reservedWeight = lyricsFontWeight(LyricsWeight.ALL, true, display.fontWeight)
     val auxiliaryWeight = lyricsFontWeight(weightMode, true, display.fontWeight)
@@ -101,7 +103,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
                 (focused || glowing || (!beforeStart && distance <= 4)),
             wordLift = false, monet = wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
             prepareDrawResources = true, prewarmGlow = display.glow && (!aligned || sourceWordTiming) && beforeStart && distance == 1,
-            alignFirstBaseline = aligned)
+            alignFirstBaseline = aligned, rhythmGlow = rhythmGlow)
     }
     Column(Modifier.fillMaxWidth().then(blur)) {
     if (line.text.isNotBlank()) {
