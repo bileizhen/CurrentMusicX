@@ -101,7 +101,10 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
             lyricsOffsetMs, renderDisplay, mediaDurationMs, playbackRunning)
         return
     }
-    val smokeColors = if (renderDisplay.smoke || renderDisplay.particles) rememberLyricsSmokeColors(cover) else null
+    // The saved mode picks the stage: flipping it to power saver must not move the lyrics layout.
+    val smokeStage = display.smoke || display.particles
+    val smokeEffects = renderDisplay.smoke || renderDisplay.particles
+    val smokeColors = if (smokeStage) rememberLyricsSmokeColors(cover).takeIf { smokeEffects } else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.lyricPosition(position.value, lyricsOffsetMs) } }
@@ -116,7 +119,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     val target by remember(timeline, visualPosition) { derivedStateOf { timeline.scrollTarget(visualPosition.value) } }
     val playbackTarget by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
-    if (renderDisplay.smoke || renderDisplay.particles) {
+    if (smokeStage) {
         SmokeLyricsStage(document, target, effectivePosition, onSeek = {
             LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let(onSeek)
         },
