@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
-import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,10 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
@@ -35,11 +33,14 @@ import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.theme.rememberAppearanceColors
 import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
 import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Confirmation is delivered after the exit animation, so retheming cannot stall it. */
@@ -72,13 +73,14 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         backgroundColor = colors.cardBackground, cornerRadius = 32.dp,
         insideMargin = DpSize(16.dp, 0.dp), outsideMargin = DpSize(0.dp, 0.dp),
         startAction = {
-            GlassIconButton(::dismiss, "取消", Modifier.testTag("appearance_color_cancel"), backdrop = backdrop) {
-                Icon(MusicIcons.Close, null, Modifier.size(24.dp), tint = colors.labelPrimary)
+            IconButton(onClick = ::dismiss, modifier = Modifier.testTag("appearance_color_cancel")) {
+                Icon(MusicIcons.Close, contentDescription = "取消", modifier = Modifier.size(24.dp), tint = colors.labelPrimary)
             }
         }, endAction = {
-            GlassIconButton({ confirmed = draft.toArgb().toLong() and 0xFFFFFFFF; dismiss() }, "确认颜色",
-                Modifier.testTag("appearance_color_save"), enabled = hex.length == 6, backdrop = backdrop) {
-                Icon(MusicIcons.Check, null, Modifier.size(24.dp), tint = colors.labelPrimary.copy(alpha = if (hex.length == 6) 1f else .35f))
+            IconButton(onClick = { confirmed = draft.toArgb().toLong() and 0xFFFFFFFF; dismiss() },
+                modifier = Modifier.testTag("appearance_color_save"), enabled = hex.length == 6) {
+                Icon(MusicIcons.Check, contentDescription = "确认颜色", modifier = Modifier.size(24.dp),
+                    tint = colors.labelPrimary.copy(alpha = if (hex.length == 6) 1f else .35f))
             }
         }, onDismissRequest = ::dismiss, onDismissFinished = {
             currentClosed()
@@ -129,8 +131,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             COUITheme(colors = colors.copy(surfaceContainerHighest = colors.cardPressed)) {
                 ColorPalette(draft, ::pick)
             }
-            if (onDeleted != null) GlassActionButton("删除颜色", { deleted = true; dismiss() },
-                Modifier.testTag("appearance_color_delete"), destructive = true, backdrop = null)
+            if (onDeleted != null) SettingsActionButton("删除颜色", { deleted = true; dismiss() },
+                Modifier.testTag("appearance_color_delete"), destructive = true)
         }
     }
 }

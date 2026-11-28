@@ -9,11 +9,12 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,10 +81,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 }
 
 /** Category title plus one COUI card group; the group draws the rows' corners and dividers. */
-@Composable private fun ProfileCardGroup(title: String, content: @Composable () -> Unit) {
+@Composable internal fun ProfileCardGroup(title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         PreferenceCategory(title = title, marginStartType = PreferenceCategoryMarginStartType.Small)
-        Card(Modifier.fillMaxWidth()) { content() }
+        Card(Modifier.fillMaxWidth().padding(bottom = 16.dp)) { content() }
     }
 }
 
@@ -207,41 +208,87 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ProfileStatsBlock(stats: ProfileStats, likesLabel: String = "点赞",
     likesValue: String = "${stats.likes}", onLikes: (() -> Unit)? = null, onListening: (() -> Unit)? = null) {
-    val muted = COUITheme.colorScheme.labelSecondaryVariant
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).testTag("profile_stats"),
+    val colors = COUITheme.colorScheme
+    val muted = colors.labelSecondaryVariant
+    Column(Modifier.fillMaxWidth().padding(start = 18.dp, top = 14.dp, end = 18.dp, bottom = 18.dp).testTag("profile_stats"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf(Triple(likesLabel, likesValue, onLikes), Triple("收藏", "${stats.favs}", null),
-                Triple("歌单", "${stats.playlists}", null)).forEach { (label, value, action) ->
-                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}
+        val entries = listOf(Triple(likesLabel, likesValue, onLikes), Triple("收藏", "${stats.favs}", null),
+            Triple("歌单", "${stats.playlists}", null))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            entries.forEachIndexed { index, (label, value, action) ->
+                if (index > 0) Box(
+                    Modifier.width(0.5.dp).height(26.dp).background(colors.divider.copy(alpha = 0.55f)),
+                )
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).semantics(mergeDescendants = true) {}
                     .then(if (action != null) Modifier.clickable(role = Role.Button, onClick = action)
-                        .testTag("profile_platform_likes") else Modifier),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(value, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
+                        .testTag("profile_platform_likes") else Modifier)
+                    .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(value, fontSize = 21.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold, color = colors.labelPrimary)
                     Text(label, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                 }
             }
         }
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth >= 280.dp * LocalDensity.current.fontScale + 10.dp) 2 else 1
-        FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = columns,
-            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val tile = Modifier.weight(1f).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .035f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-            Column(tile, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("听歌天数", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
-                Text("${stats.playDays} 天", fontSize = 15.sp, lineHeight = 20.sp)
-            }
-            Column(tile.then(onListening?.let { Modifier.clickable(role = Role.Button, onClick = it).testTag("profile_listening_duration") }
-                ?: Modifier), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("听歌时长", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
-                Text(listeningDuration(stats.listenMs), fontSize = 15.sp, lineHeight = 20.sp)
-            }
+        val tileShape = RoundedCornerShape(14.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ProfileStatTile(
+                label = "听歌天数",
+                value = "${stats.playDays} 天",
+                shape = tileShape,
+            )
+            ProfileStatTile(
+                label = "听歌时长",
+                value = listeningDuration(stats.listenMs),
+                shape = tileShape,
+                onClick = onListening,
+                tag = "profile_listening_duration",
+            )
         }
-        }
+    }
+}
+
+@Composable
+private fun RowScope.ProfileStatTile(
+    label: String,
+    value: String,
+    shape: RoundedCornerShape,
+    onClick: (() -> Unit)? = null,
+    tag: String? = null,
+) {
+    val colors = COUITheme.colorScheme
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clip(shape)
+            .background(colors.fillThin)
+            .semantics(mergeDescendants = true) {}
+            .then(
+                onClick?.let {
+                    Modifier
+                        .clickable(role = Role.Button, onClick = it)
+                        .then(if (tag != null) Modifier.testTag(tag) else Modifier)
+                } ?: Modifier,
+            )
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(label, fontSize = 12.sp, lineHeight = 16.sp, color = colors.labelSecondaryVariant)
+        Text(
+            value,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.labelPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

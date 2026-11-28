@@ -43,6 +43,8 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
     } },
     private val databaseLyricsBytes: (suspend () -> Long)? = null,
     private val clearDatabaseLyrics: (suspend () -> Unit)? = null,
+    private val isManagedOtherCache: (String) -> Boolean = { it == "banner_video" || it.startsWith("banner_video.") },
+    private val clearManagedOtherCaches: (suspend () -> Unit)? = null,
 ) {
     /** The audio cache lives under cacheDir but is reported and cleared on its own. */
     private val audioDirName: String get() = File(context.cacheDir, "audio").name
@@ -95,8 +97,11 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
         if (category == null || category == DataCacheCategory.LYRICS) {
             runCatching { clearDatabaseLyrics?.invoke() }
         }
+        if (category == null || category == DataCacheCategory.OTHER) {
+            runCatching { clearManagedOtherCaches?.invoke() }
+        }
         val files = when (category) {
-            null -> cacheEntries().filterNot { isImages(it.name) }
+            null -> cacheEntries().filterNot { isImages(it.name) || isManagedOtherCache(it.name) }
             DataCacheCategory.IMAGES -> emptyList()
             DataCacheCategory.LYRICS -> cacheEntries().filter { isLyrics(it.name) }
             DataCacheCategory.SHARES -> cacheEntries().filter { it.name == "song-shares" }
@@ -120,7 +125,7 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
     private fun isLyrics(name: String) = name == "lyrics" || name.startsWith("lyrics.")
 
     private fun otherCacheEntries(): List<File> = cacheEntries()
-        .filterNot { isImages(it.name) || isLyrics(it.name) || it.name == "song-shares" }
+        .filterNot { isImages(it.name) || isLyrics(it.name) || it.name == "song-shares" || isManagedOtherCache(it.name) }
 
     private fun essentialBytes(): Long = runCatching {
         val info = context.applicationInfo

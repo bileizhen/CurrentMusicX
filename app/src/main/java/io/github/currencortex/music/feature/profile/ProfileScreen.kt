@@ -3,18 +3,22 @@ package io.github.currencortex.music.feature.profile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -27,14 +31,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.data.settings.MusicPlatform
@@ -45,14 +50,15 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.basic.Card
-import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.extended.Contacts
+import io.github.suqi8.coui.kmp.basic.CardDefaults
 import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Community
+import io.github.suqi8.coui.kmp.icon.extended.Contacts
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import kotlinx.coroutines.launch
 
 @Composable fun UserAvatar(user: ProfileUser, container: AppContainer, size: androidx.compose.ui.unit.Dp = 64.dp,
     decoration: String = user.decoration, reserveOverlay: Boolean = true, flightState: AvatarFlightState? = null) {
@@ -104,8 +110,6 @@ import kotlinx.coroutines.launch
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val bottomInset = LocalMusicBottomInset.current
     val avatarFlight = LocalAvatarFlight.current
-    val placement = LocalRootTabPlacement.current
-    val density = LocalDensity.current
     val listState = rememberLazyListState()
     var avatarPreview by rememberSaveable(account.profile?.uid) { mutableStateOf(false) }
     LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
@@ -115,33 +119,55 @@ import kotlinx.coroutines.launch
     }
     ProfilePageLayout(navigate, onSettings) { topInset ->
     SpringLazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
-        contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
+        contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
-        account.profile?.let { native -> item("identity") { Card(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
-                    .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
-                    val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
-                    val radius = with(density) { 32.dp.toPx() }
-                    val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
-                    if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) avatarFlight?.profileLanding = landing
-                    if (avatarFlight?.returning != true) avatarFlight?.destination = landing
-                }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
-                    UserAvatar(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar), container,
-                        reserveOverlay = false, flightState = avatarFlight)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(native.nickname, fontSize = 23.sp, fontWeight = FontWeight.SemiBold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(if (account.stale) "网易云登录已过期" else "网易云音乐", fontSize = 13.sp,
-                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
-                }
+        account.profile?.let { native -> item("identity") { Card(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            val avatarSize = 72.dp
+            val ringSize = avatarSize + 7.dp
+            val overlap = 70.dp
+            val bannerModel = native.backgroundUrl.takeIf { it.isNotBlank() }?.let {
+                if (it.startsWith("http://")) "https://${it.removePrefix("http://")}" else it
+            }
+            ProfileHeroHeader(
+                overlap = overlap,
+                banner = {
+                    ProfileBannerHero(
+                        model = bannerModel,
+                        editable = false,
+                        hasBanner = bannerModel != null,
+                        enabled = false,
+                        onPick = {},
+                    )
+                },
+                overlay = {
+                    ProfileCenteredAvatar(
+                        user = ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar),
+                        container = container,
+                        avatarSize = avatarSize,
+                        ringSize = ringSize,
+                        listState = listState,
+                        avatarFlight = avatarFlight,
+                        onClick = { avatarPreview = true },
+                    )
+                },
+            )
+            Column(Modifier.fillMaxWidth().padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(native.nickname, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(if (account.stale) "网易云登录已过期" else "网易云音乐", fontSize = 13.sp,
+                    textAlign = TextAlign.Center, color = COUITheme.colorScheme.labelSecondaryVariant)
             }
         } } }
-        if (account.profile == null) item("identity") { Card(Modifier.fillMaxWidth()) {
-            ProfileDestination("登录 CurrentMusic", "登录后同步资料与音乐收藏", COUIIcons.Contacts,
-                "open_currentmusic_login", iconColor = COUITheme.colorScheme.blue) { navigate("user/login") }
+        if (account.profile == null) item("identity") { Card(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            CardListGroup {
+                item {
+                    ProfileDestination("登录 CurrentMusic", "登录后同步资料与音乐收藏", COUIIcons.Contacts,
+                        "open_currentmusic_login", iconColor = COUITheme.colorScheme.blue) { navigate("user/login") }
+                }
+            }
         } }
         item("library") { ProfileLibrarySection(navigate) }
         item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
@@ -169,9 +195,16 @@ import kotlinx.coroutines.launch
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
     val kugouAccount by vm.container.kugou.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val bannerDraft by vm.bannerDraft.collectAsStateWithLifecycle()
+    val bannerStatus by vm.bannerStatus.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val server = vm.container.projectSession().server
     var avatarPreview by rememberSaveable(vm.container.accountRepository.server, account.account?.id) { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) { avatarPreview = false; vm.avatar.value = uri; vm.dialog.value = "avatar" }
+    }
+    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        vm.editBanner(uri, context)
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
@@ -182,8 +215,6 @@ import kotlinx.coroutines.launch
     val bottomInset = LocalMusicBottomInset.current
     val listState = rememberLazyListState()
     val avatarFlight = LocalAvatarFlight.current.takeIf { onBack == null }
-    val placement = LocalRootTabPlacement.current
-    val density = LocalDensity.current
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
     // A failed load is reported as a snackbar with 重试 instead of a banner above the content.
@@ -200,44 +231,90 @@ import kotlinx.coroutines.launch
     }
     ProfilePageLayout(navigate, onSettings, public = onBack != null, loading = state.loading, reload = vm::reload, onBack = onBack) { topInset ->
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize(), enabled = onBack != null) {
-    SpringLazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
+    SpringLazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
-        if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
+        if ((state.loading || account.loading) && user == null) item { LoadingProfileCard(Modifier.padding(bottom = 16.dp)) }
 
         if (user != null) {
-            item("identity") { Card(Modifier.testTag("profile_identity").fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
-                        .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
-                        val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
-                        val radius = with(density) { 32.dp.toPx() }
-                        val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
-                        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) avatarFlight?.profileLanding = landing
-                        if (avatarFlight?.returning != true && (avatarFlight?.active != true || (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)))
-                            avatarFlight?.destination = landing
-                    }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
-                        UserAvatar(user, vm.container, 64.dp, reserveOverlay = false, flightState = avatarFlight)
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(user.nickname.ifBlank { user.username }, fontSize = 22.sp, lineHeight = 28.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            item("identity") { Card(Modifier.testTag("profile_identity").fillMaxWidth().padding(bottom = 16.dp)) {
+                val colors = COUITheme.colorScheme
+                val bannerUrl = remember(server, user.id, user.bannerUrl) { vm.container.profileRepository.bannerImageUrl(server, user) }
+                val pageActive = io.github.currencortex.music.ui.component.LocalMusicPageActive.current
+                val containerSettled = io.github.currencortex.music.ui.component.LocalPageContainerSettled.current
+                val videoActive = pageActive && containerSettled && listState.firstVisibleItemIndex <= 1
+                val avatarSize = 72.dp
+                val ringSize = avatarSize + 7.dp
+                val overlap = 70.dp
+                ProfileHeroHeader(
+                    overlap = overlap,
+                    banner = {
+                        ProfileBannerHero(
+                            model = bannerUrl,
+                            editable = privateOwnProfile,
+                            hasBanner = bannerUrl != null,
+                            enabled = !busy && state.profile != null,
+                            onPick = {
+                                if (vm.beginBannerPick())
+                                    bannerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                            },
+                            isVideo = user.isVideoBanner,
+                            httpClient = vm.container.mediaHttpClient,
+                            videoCache = vm.container.bannerVideoCache,
+                            videoActive = videoActive,
+                            modifier = Modifier.testTag("profile_banner"),
+                        )
+                    },
+                    overlay = {
+                        ProfileCenteredAvatar(
+                            user = user,
+                            container = vm.container,
+                            avatarSize = avatarSize,
+                            ringSize = ringSize,
+                            listState = listState,
+                            avatarFlight = avatarFlight,
+                            onClick = { avatarPreview = true },
+                        )
+                    },
+                )
+                Column(Modifier.fillMaxWidth().padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(user.nickname.ifBlank { user.username }, fontSize = 22.sp, lineHeight = 28.sp,
+                        fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (user.role != null || user.level != null || user.title.isNotBlank()) {
+                        FlowRow(Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                             verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             UserRoleBadge(user.role)
                             UserLevelBadge(user.level)
                             UserTitleBadge(user.title)
                         }
-                        UserIdentityDetails("", user.ipRegion)
                     }
-                }
-                Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).then(if (privateOwnProfile) Modifier.testTag("edit_profile")
+                    UserIdentityDetails("", user.ipRegion, centered = true)
+                    Text(
+                        text = if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
+                        modifier = Modifier.padding(top = 2.dp).then(
+                            if (privateOwnProfile) Modifier
+                                .testTag("edit_profile")
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable(enabled = !busy && state.profile != null, role = Role.Button) { vm.dialog.value = "edit" }
-                                .semantics { contentDescription = "编辑资料" } else Modifier),
-                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            color = COUITheme.colorScheme.labelSecondaryVariant)
+                                .semantics { contentDescription = "编辑简介" }
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                            else Modifier,
+                        ),
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = colors.labelSecondaryVariant,
+                    )
+                }
+                if (state.profile?.stat != null) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(0.5.dp).background(colors.divider.copy(alpha = 0.55f)))
+                }
                 state.profile?.stat?.let { stats ->
                     ProfileStatsBlock(stats,
                         likesLabel = if (privateOwnProfile) "喜欢" else "点赞",
@@ -250,6 +327,21 @@ import kotlinx.coroutines.launch
                         onListening = if (privateOwnProfile) ({ navigate("user/listening") }) else null)
                 }
             } }
+            if (user.id > 0) item("posts") {
+                ProfileCardGroup("社区") {
+                    CardListGroup {
+                        item {
+                            ProfileDestination(
+                                if (privateOwnProfile) "我的帖子" else "TA 的帖子",
+                                if (privateOwnProfile) "查看与管理已发布的动态" else "查看 TA 发布的动态",
+                                COUIIcons.Community,
+                                "profile_posts_entry",
+                                iconColor = COUITheme.colorScheme.blue,
+                            ) { navigate("user/posts/${user.id}") }
+                        }
+                    }
+                }
+            }
             if (privateOwnProfile) {
                 item("library") { ProfileLibrarySection(navigate, platform, showLikes = !privateOwnProfile) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
@@ -258,34 +350,52 @@ import kotlinx.coroutines.launch
                 item("account") { ProfileAccountSection(navigate) }
             }
             if (platform == MusicPlatform.NETEASE || !privateOwnProfile) {
-                state.profile?.current?.let { song -> item { PreferenceCategory(title = "当前在听", marginStartType = PreferenceCategoryMarginStartType.Small)
-                    SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
-                        { vm.container.playerController.add(song.toDomain(), true) },
-                        { vm.container.playerController.add(song.toDomain()) })
+                state.profile?.current?.let { song -> item("current_song") {
+                    ProfileCardGroup("当前在听") {
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
+                                { vm.container.playerController.add(song.toDomain(), true) },
+                                { vm.container.playerController.add(song.toDomain()) })
+                        }
+                    }
                 } }
                 val recent = state.profile?.recent.orEmpty().map { it.toDomain() }
-                if (recent.isNotEmpty()) item { PreferenceCategory(title = "最近听过", marginStartType = PreferenceCategoryMarginStartType.Small) }
+                if (recent.isNotEmpty()) item("recent_header") {
+                    PreferenceCategory(title = "最近听过", marginStartType = PreferenceCategoryMarginStartType.Small)
+                }
                 itemsIndexed(recent, key = { _, song -> "recent-${song.id}" }) { index, song ->
-                    SongRow(SongRowUi(song), { play(recent, index) },
-                        { vm.container.playerController.add(song, true) },
-                        { vm.container.playerController.add(song) })
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = if (index == recent.lastIndex) 16.dp else 0.dp)
+                            .clip(groupedCardItemShape(index, recent.size))
+                            .background(COUITheme.colorScheme.cardBackground),
+                    ) {
+                        if (index > 0) SettingsDivider(80.dp)
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            SongRow(SongRowUi(song), { play(recent, index) },
+                                { vm.container.playerController.add(song, true) },
+                                { vm.container.playerController.add(song) })
+                        }
+                    }
                 }
                 val lists = state.profile?.playlists.orEmpty()
-                if (lists.isNotEmpty()) item { PreferenceCategory(title = if (privateOwnProfile) "我的歌单" else "公开歌单", marginStartType = PreferenceCategoryMarginStartType.Small) }
-                items(lists, key = { "playlist-${it.source}-${it.id}" }) { list ->
-                    Card(Modifier.padding(bottom = 12.dp).fillMaxWidth()) {
+                if (lists.isNotEmpty()) item("playlists_group") {
+                    ProfileCardGroup(if (privateOwnProfile) "我的歌单" else "公开歌单") {
                         CardListGroup {
-                            item {
-                                ArrowPreference(
-                                    title = list.name,
-                                    summary = "${list.count} 首" +
-                                        if (list.source in setOf("ncm", "netease")) " · 网易云" else "",
-                                    startAction = { MusicCover(list.cover, Modifier.size(48.dp)) },
-                                    onClick = {
-                                        navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}")
-                                    },
-                                    modifier = Modifier.testTag("profile_playlist_${list.id}"),
-                                )
+                            lists.forEach { list ->
+                                item(key = "playlist-${list.source}-${list.id}") {
+                                    ArrowPreference(
+                                        title = list.name,
+                                        summary = "${list.count} 首" +
+                                            if (list.source in setOf("ncm", "netease")) " · 网易云" else "",
+                                        startAction = { MusicCover(list.cover, Modifier.size(48.dp), cornerRadius = 12.dp) },
+                                        onClick = {
+                                            navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}")
+                                        },
+                                        modifier = Modifier.testTag("profile_playlist_${list.id}"),
+                                    )
+                                }
                             }
                         }
                     }
@@ -301,6 +411,24 @@ import kotlinx.coroutines.launch
         onDismiss = { avatarPreview = false },
         onChange = if (privateOwnProfile && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
         onDecorations = if (privateOwnProfile) ({ avatarPreview = false; navigate("user/decorations") }) else null)
+    if (privateOwnProfile) when (val draft = bannerDraft) {
+        is ProfileViewModel.BannerDraft.Image -> ProfileBannerCropDialog(
+            uri = draft.uri,
+            busy = busy,
+            onCancel = vm::dismissBanner,
+            onSave = { crop -> vm.saveBanner(context.contentResolver, crop) },
+        )
+        is ProfileViewModel.BannerDraft.Video -> ProfileBannerVideoDialog(
+            uri = draft.uri,
+            info = draft.info,
+            maxDurationMs = draft.maxDurationMs,
+            busy = busy,
+            statusText = bannerStatus,
+            onCancel = vm::dismissBanner,
+            onSave = { startMs, endMs -> vm.saveVideoBanner(context, startMs, endMs) },
+        )
+        null -> Unit
+    }
 }
 
 /** Accounts and security are one page: switching accounts and changing credentials are the same job. */
@@ -406,6 +534,81 @@ import kotlinx.coroutines.launch
         }
     }
 }
+}
+
+/** Centers the profile avatar ring in the banner seam and reports its stationary landing rect inside RootMotionItem. */
+@Composable
+private fun ProfileCenteredAvatar(
+    user: ProfileUser,
+    container: AppContainer,
+    avatarSize: Dp,
+    ringSize: Dp,
+    listState: LazyListState,
+    avatarFlight: AvatarFlightState?,
+    onClick: () -> Unit,
+) {
+    val placement = LocalRootTabPlacement.current
+    val density = LocalDensity.current
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.size(ringSize).background(COUITheme.colorScheme.cardBackground, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier.testTag("my_profile_avatar")
+                    .clickable(role = Role.Button, onClick = onClick)
+                    .semantics { contentDescription = "查看头像" }
+                    .onGloballyPositioned {
+                        val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
+                        val radius = with(density) { (avatarSize / 2).toPx() }
+                        val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                        val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                        if (atTop) avatarFlight?.profileLanding = landing
+                        if (avatarFlight?.returning != true && (avatarFlight?.active != true || atTop)) {
+                            avatarFlight?.destination = landing
+                        }
+                    }
+                    .graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f },
+            ) {
+                UserAvatar(user, container, avatarSize, reserveOverlay = false, flightState = avatarFlight)
+            }
+        }
+    }
+}
+
+/** Places the overlapping avatar/actions across the bottom edge of the banner without extra gaps. */
+@Composable
+private fun ProfileHeroHeader(
+    overlap: Dp,
+    banner: @Composable () -> Unit,
+    overlay: @Composable () -> Unit,
+) {
+    Layout(
+        content = {
+            banner()
+            overlay()
+        },
+    ) { measurables, constraints ->
+        val bannerPlaceable = measurables[0].measure(constraints)
+        val overlayPlaceable = measurables[1].measure(constraints.copy(minHeight = 0))
+        val overlapPx = overlap.roundToPx().coerceIn(0, bannerPlaceable.height)
+        val overlayY = bannerPlaceable.height - overlapPx
+        val totalHeight = maxOf(bannerPlaceable.height, overlayY + overlayPlaceable.height)
+        layout(constraints.maxWidth, totalHeight) {
+            bannerPlaceable.placeRelative(0, 0)
+            overlayPlaceable.placeRelative(0, overlayY)
+        }
+    }
+}
+
+private fun groupedCardItemShape(index: Int, count: Int): Shape {
+    val radius = CardDefaults.CornerRadius
+    val top = if (index == 0) radius else 0.dp
+    val bottom = if (index == count - 1) radius else 0.dp
+    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
 }
 
 /** The account row keeps the nickname as title; the username joins the subtitle only when distinct. */

@@ -17,9 +17,6 @@ import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.LyricsSource
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.ui.component.MusicDestinationRow
-import io.github.currencortex.music.ui.component.MusicChoiceDialog
-import io.github.currencortex.music.ui.component.MusicDialogButton
-import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.TextField
@@ -41,7 +38,7 @@ import io.github.suqi8.coui.kmp.basic.TextField
     var removeServerSource by remember { mutableStateOf(false) }
     DisposableEffect(vm) { onDispose { vm.closeServerAudioCatalog() } }
     SettingsPage("音源与网络", "network_settings") {
-        item("source") { SettingsSection("音乐音源", MusicIcons.Headphones) {
+        item("source") { SettingsSection("音乐音源") {
             val serverSource = provider.serverSource
             val options = AudioProvider.entries.filter { it != AudioProvider.SERVER || serverSource != null }
             val selected = if (provider.provider == AudioProvider.SERVER) serverSource?.name ?: provider.provider.label else provider.provider.label
@@ -84,7 +81,7 @@ import io.github.suqi8.coui.kmp.basic.TextField
             }
             LxSourceSettings(vm, platform)
         }
-        item("lyrics") { SettingsSection("歌词来源", MusicIcons.File) {
+        item("lyrics") { SettingsSection("歌词来源") {
             SettingsOptionsRow("默认来源", when (settings.lyricsSource) {
                 LyricsSource.AUTO -> "自动择优"
                 LyricsSource.CURRENT_MUSIC -> "CurrentMusic"
@@ -100,7 +97,7 @@ import io.github.suqi8.coui.kmp.basic.TextField
                     }, onSelect = { vm.lyricsSource(source) })
             }, Modifier.testTag("lyrics_source"))
         } }
-        item("server") { SettingsSection("CurrentMusic 服务", MusicIcons.Storage) {
+        item("server") { SettingsSection("CurrentMusic 服务") {
             MusicDestinationRow("服务器线路", { serverDialogOpen = true }, Modifier.testTag("server_source"),
                 summary = when (settings.serverMode) {
                     CurrentMusicServer.AUTO -> "自动 · ${CurrentMusicServer.presets.firstOrNull { it.url == automatic }?.label.orEmpty()}"
@@ -111,35 +108,34 @@ import io.github.suqi8.coui.kmp.basic.TextField
             SettingsPreference(if (state.busy) "正在测试…" else "测试连接", state.message,
                 Modifier.testTag("server_test"), enabled = !state.busy, onClick = { vm.test() })
         } }
-        item("library") { SettingsSection("自建曲库", MusicIcons.List) {
+        item("library") { SettingsSection("自建曲库") {
             MusicDestinationRow("Navidrome", onNavidrome, Modifier.testTag("open_navidrome"),
                 summary = "连接自己的音乐服务器 · Subsonic")
             SettingsDivider()
             MusicDestinationRow("Emby", onEmby, Modifier.testTag("open_emby"), summary = "专辑、歌曲、艺术家与歌单 · 原音质播放")
         } }
     }
-    if (serverDialogOpen) CurrentMusicServerDialog(vm, onDismiss = { serverDialogOpen = false }, onCustom = {
+    CurrentMusicServerDialog(serverDialogOpen, vm, onDismiss = { serverDialogOpen = false }, onCustom = {
         serverDialogOpen = false; customServerOpen = true
     })
-    if (customServerOpen) CustomMusicServerDialog(settings.customServer, state, onSave = { vm.server(it) },
+    CustomMusicServerDialog(customServerOpen, settings.customServer, state, onSave = { vm.server(it) },
         onDismiss = { customServerOpen = false })
-    catalog?.let {
-        ServerAudioSourceDialog(it, vm::closeServerAudioCatalog, vm::openServerAudioCatalog, vm::importServerAudioSource) {
-            vm.closeServerAudioCatalog()
-            onLogin()
-        }
+    ServerAudioSourceDialog(catalog != null, catalog,
+        vm::closeServerAudioCatalog, vm::openServerAudioCatalog, vm::importServerAudioSource) {
+        vm.closeServerAudioCatalog()
+        onLogin()
     }
-    if (removeServerSource) {
-        val dismiss = { removeServerSource = false }
-        MusicChoiceDialog("移除已导入音源？", dismiss, footer = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MusicDialogButton("取消", dismiss, Modifier.weight(1f))
-                MusicDialogButton("移除", { dismiss(); vm.removeServerAudioSource() }, Modifier.weight(1f),
-                    destructive = true)
-            }
-        }) {
-            SettingsHint("若正在使用此音源，移除后切回平台直连。")
-        }
-    }
+    val dismissRemoveSource = { removeServerSource = false }
+    SettingsDialog(
+        show = removeServerSource,
+        title = "移除已导入音源？",
+        onDismissRequest = dismissRemoveSource,
+        summary = "若正在使用此音源，移除后切回平台直连。",
+        positiveText = "移除",
+        onPositive = { dismissRemoveSource(); vm.removeServerAudioSource() },
+        negativeText = "取消",
+        onNegative = dismissRemoveSource,
+        destructive = true,
+    )
     }
 }

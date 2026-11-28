@@ -112,13 +112,26 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     }
     private fun profile(raw: JsonObject): BoundProfile? {
         val info = (raw["profile"] ?: raw.obj("data")["profile"]) as? JsonObject ?: return null
-        return BoundProfile(info.long("userId"), info.text("nickname"), info.text("avatarUrl")).takeIf { it.uid > 0 }
+        val background = info.text("backgroundUrl").let {
+            if (it.startsWith("http://")) "https://${it.removePrefix("http://")}" else it
+        }
+        return BoundProfile(info.long("userId"), info.text("nickname"), info.text("avatarUrl"),
+            background).takeIf { it.uid > 0 }
     }
     private suspend fun acceptLogin(response: NeteaseResponse, expected: NeteaseSession, loginGuard: () -> Unit): BoundProfile {
         loginGuard()
         if (response.cookies["MUSIC_U"].isNullOrBlank()) throw ApiException(ErrorKind.Parse)
-        val user = profile(response.body) ?: profile(transport.request("/api/w/nuser/account/get", encoding = NeteaseEncoding.WEB,
-            session = expected, cookieOverride = response.cookies, saveCookies = false).body) ?: throw ApiException(ErrorKind.Parse)
+        val parsed = profile(response.body)
+        val user = when {
+            parsed == null -> profile(transport.request("/api/w/nuser/account/get", encoding = NeteaseEncoding.WEB,
+                session = expected, cookieOverride = response.cookies, saveCookies = false).body)
+                ?: throw ApiException(ErrorKind.Parse)
+            parsed.backgroundUrl.isNotBlank() -> parsed
+            else -> (appResult {
+                profile(transport.request("/api/w/nuser/account/get", encoding = NeteaseEncoding.WEB,
+                    session = expected, cookieOverride = response.cookies, saveCookies = false).body)
+            } as? AppResult.Success)?.value ?: parsed
+        }
         currentCoroutineContext().ensureActive()
         sessions.login(response.cookies, user, expected, beforeCommit = loginGuard)
         return user
@@ -232,6 +245,22 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             "song/chorus" -> {
                 require(id.toLongOrNull()?.let { it > 0 } == true)
                 return official("/api/song/chorus", data("ids" to "[$id]"), expected = expected)
+            }
+            "song/dynamic/cover" -> {
+                require(id.toLongOrNull()?.let { it > 0 } == true)
+                if (expected.credential.cookies["MUSIC_U"].isNullOrBlank() || expected.credential.stale)
+                    throw ApiException(ErrorKind.NeteaseBindingRequired)
+                // Keep authenticated = false so a rejected optional cover endpoint never marks MUSIC_U stale.
+                val raw = official("/api/songplay/dynamic-cover", data("songId" to id),
+                    expected = expected, authenticated = false,
+                    clientProfile = NeteaseClientProfile.ANDROID, saveCookies = false)
+                val url = raw.obj("data").text("videoPlayUrl").replace("http:", "https:")
+                    .takeIf { it.toHttpUrlOrNull()?.scheme in setOf("http", "https") }
+                    .orEmpty()
+                return buildJsonObject {
+                    put("code", 200)
+                    put("videoUrl", url)
+                }
             }
             "song/url", "song/url/v1" -> {
                 suspend fun trackAt(level: String): JsonObject? {

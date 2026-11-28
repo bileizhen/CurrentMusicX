@@ -1,18 +1,9 @@
 package io.github.currencortex.music.feature.about
 
-import io.github.currencortex.music.ui.component.nativeui.SettingsSection
-import io.github.currencortex.music.ui.component.nativeui.SettingsDivider
-import io.github.currencortex.music.ui.component.MusicIcons
 
-import io.github.currencortex.music.ui.component.nativeui.SettingsTopBar
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-
-import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import io.github.currencortex.music.ui.component.SpringLazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -23,18 +14,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.config.AppMetadata
+import io.github.currencortex.music.ui.component.SpringLazyColumn
+import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.SettingsDivider
+import io.github.currencortex.music.ui.component.nativeui.SettingsSection
+import io.github.currencortex.music.ui.component.nativeui.SettingsTopBar
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
+import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.Text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import io.github.suqi8.coui.kmp.basic.BasicComponent
-import io.github.suqi8.coui.kmp.basic.Text
 
 enum class LegalDocument(val title: String, val asset: String) {
     LICENSE("开源许可", "legal/GPL-3.0.txt"),
@@ -70,7 +66,7 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
     }) { topInset ->
     SpringLazyColumn(Modifier.fillMaxSize().testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset+24.dp, 16.dp, 48.dp))) {
         if (document == LegalDocument.LICENSE) item {
-            SettingsSection("组件许可", MusicIcons.File) {
+            SettingsSection("组件许可") {
             io.github.currencortex.music.ui.component.PageNavigationPreference(title = "Apache License 2.0",
                 summary = "COUI、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })
             io.github.currencortex.music.ui.component.PageNavigationPreference(title = "GNU LGPL 3.0",

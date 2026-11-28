@@ -93,7 +93,7 @@ jobs:
           else
             echo "Required Android SDK packages already installed."
           fi
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
         if: needs.scope.outputs.required == 'true'
         with:
           # The action otherwise defaults to read-only on every PR. Allow
@@ -141,7 +141,7 @@ jobs:
           else
             echo "Required Android SDK packages already installed."
           fi
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
         with:
           # The compile job owns Gradle cache writes; concurrent lint reads only.
           cache-read-only: true

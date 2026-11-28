@@ -32,7 +32,9 @@ import kotlinx.serialization.SerialName
     val superHash: String = "", val dolbyHash: String = "", val mvHash: String = "", val fileId: Int = 0,
     val viperMasterHash: String = "", val viperClearHash: String = "", val viperAtmosHash: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
-    val sampleRate: Int = 0, val channels: Int = 0)
+    val sampleRate: Int = 0, val channels: Int = 0,
+    val trackGainDb: Float? = null, val albumGainDb: Float? = null,
+    val trackPeak: Float? = null, val albumPeak: Float? = null)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
     val kugouId: String? = null, val appleMusicId: String? = null, val spotifyId: String? = null)
 @Serializable data class LyricContextDto(val t: Long? = null, val txt: String = "", val matched: Boolean = false)
@@ -83,11 +85,13 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
                                   val expi: Long = 0, val source: String = "", val requestedLevel: String = "",
     val matchSource: String = "", val br: Long = 0, val bits: Int = 0, val size: Long = 0,
     val durationMs: Long = 0, val expectedDurationMs: Long = 0,
-    val freeTrialInfo: kotlinx.serialization.json.JsonElement? = null)
+    val freeTrialInfo: kotlinx.serialization.json.JsonElement? = null,
+    val gain: Float? = null, val peak: Float? = null)
 @Serializable data class AudioSource(val url: String, val level: String, val sampleRate: Int, val channelCount: Int, val format: String = "", val md5: String = "",
                                     val validForSeconds: Long = 30, val source: String = "", val requestedLevel: String = "",
     val matchSource: String = "", val bitrate: Long = 0, val bits: Int = 0, val size: Long = 0,
-    val durationMs: Long = 0, val expectedDurationMs: Long = 0) {
+    val durationMs: Long = 0, val expectedDurationMs: Long = 0,
+    val gainDb: Float? = null, val peak: Float? = null) {
     val matched get() = level == "matched" || source == "netease-match"
     val qualityLabel get() = if (matched) "匹配音源" else when (level) {
         "flac24bit" -> "24bit"
@@ -109,4 +113,4 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
 @Serializable data class LyricLine(val t: Long, val txt: String, val trans: String = "")
 
 @Serializable data class EmbyTrackRef(val id: String, val identity: String, val mediaSourceId: String = "",
-    val format: String = "", val sampleRate: Int = 0, val channels: Int = 0)
+    val format: String = "", val sampleRate: Int = 0, val channels: Int = 0, val normalizationGainDb: Float? = null)

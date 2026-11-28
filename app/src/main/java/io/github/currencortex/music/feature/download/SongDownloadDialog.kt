@@ -32,6 +32,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.AudioQualitySheet
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -57,6 +58,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val info by remember(manager, song.id, song.musicSource, owner) { manager.observe(song, owner) }.collectAsStateWithLifecycle(null)
     var selectedQuality by rememberSaveable(song.id, song.musicSource) { mutableStateOf<String?>(null) }
     val quality = selectedQuality?.let(AudioQuality::from) ?: settings.downloadQualityFor(song.musicSource)
+    // Per-download overrides; the persistent defaults live under Settings → Playback → Download files.
+    var saveLyricsFileOverride by rememberSaveable(song.id, song.musicSource) { mutableStateOf<Boolean?>(null) }
+    var saveCoverFileOverride by rememberSaveable(song.id, song.musicSource) { mutableStateOf<Boolean?>(null) }
+    val saveLyricsFile = saveLyricsFileOverride ?: settings.downloadLyricsFile
+    val saveCoverFile = saveCoverFileOverride ?: settings.downloadCoverFile
     var choosingQuality by rememberSaveable { mutableStateOf(false) }
     var afterFolder by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -74,19 +80,23 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 if (!account.loggedIn) { context.showMusicError("请先登录 QQ 音乐"); return }
                 manager.start(song, quality, container.accountRepository.state.value.account?.id ?: 0L,
                     container.accountRepository.server, container.qqAudioIdentity(),
-                    navidromeRevision = account.revision.toString())
+                    navidromeRevision = account.revision.toString(),
+                    lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
             } else if (song.emby != null) {
                 val account = container.emby.state.value
                 if (!account.download) { context.showMusicError("此 Emby 账号不允许下载"); return }
                 manager.start(song, quality, 0, account.server, "emby:" + account.identity,
-                    navidromeRevision = account.revision)
+                    navidromeRevision = account.revision,
+                    lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
             } else if (song.navidrome != null) {
                 val account = container.navidrome.state.value
                 manager.start(song, quality, 0, account.server, "navidrome:" + account.identity,
-                    navidromeRevision = account.revision)
+                    navidromeRevision = account.revision,
+                    lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
             } else manager.start(song, quality, container.accountRepository.state.value.account?.id ?: 0L,
                 container.accountRepository.server, container.audioSettings.access().identity,
-                if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
+                if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1,
+                lyricsFile = saveLyricsFile, coverFile = saveCoverFile)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { context.showMusicError("无法开始下载，请重试") }
     }
@@ -132,7 +142,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹"
             MusicDestinationRow("保存位置", { afterFolder = false; folderLauncher.launch(directory) }, summary = location,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_directory"))
-            Text("原格式保存，内嵌歌曲信息、封面和歌词；同时保存同名封面与 LRC。", fontSize = 12.sp,
+            Text("原格式保存，歌词与封面始终写入歌曲文件；这两个选项仅影响本次下载。", fontSize = 12.sp,
                 color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             if (active) {
                 val data = info?.progress
@@ -144,6 +154,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     Text("${downloadSize(received)} / ${downloadSize(total)}", fontSize = 12.sp)
                 } else { LinearProgressIndicator(Modifier.fillMaxWidth()); if (received > 0) Text(downloadSize(received), fontSize = 12.sp) }
             }
+            SettingsSwitch("保存歌词文件", saveLyricsFile, { saveLyricsFileOverride = it },
+                summary = "另存同名 LRC 文件", enabled = !active && !deleting,
+                modifier = Modifier.testTag("song_download_lyrics_file"))
+            SettingsSwitch("保存封面文件", saveCoverFile, { saveCoverFileOverride = it },
+                summary = "另存同名封面图片", enabled = !active && !deleting,
+                modifier = Modifier.testTag("song_download_cover_file"))
             when (info?.state) {
                 WorkInfo.State.SUCCEEDED -> {
                     Text("下载完成 · ${info?.outputData?.getString("quality").orEmpty()}", Modifier.testTag("song_download_complete"))

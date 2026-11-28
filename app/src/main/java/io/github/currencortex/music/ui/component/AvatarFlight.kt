@@ -81,7 +81,7 @@ val LocalAvatarFlight = staticCompositionLocalOf<AvatarFlightState?> { null }
         .onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }) {
         AvatarFlightPicture(state.url, Modifier.size(64.dp).graphicsLayer {
             val from = source ?: return@graphicsLayer
-            val to = target ?: from
+            val to = state.destination ?: target ?: from
             val t = progress.value; val q = 1f - t
             val start = from.center; val end = to.center
             val control = Offset((start.x + end.x) / 2, (start.y + end.y) / 2 - minOf(96.dp.toPx(), abs(start.x - end.x) * .28f))

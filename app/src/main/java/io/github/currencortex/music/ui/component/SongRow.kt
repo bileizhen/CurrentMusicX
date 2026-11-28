@@ -46,8 +46,12 @@ fun coverRequestUrl(url: String, pixels: Int): String {
         modifier = Modifier.matchParentSize())
     }
 }
+/**
+ * [leading] reserves a fixed slot before the cover, used by ranked chart lists. It stays
+ * before [extraActions] so existing trailing-lambda call sites keep binding to extraActions.
+ */
 @Composable fun SongRow(row: SongRowUi, onPlay: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit,
-    extraActions: (@Composable () -> Unit)? = null) {
+    leading: (@Composable () -> Unit)? = null, extraActions: (@Composable () -> Unit)? = null) {
     var menu by remember { mutableStateOf<SongMenu?>(null) }
     var coverBounds by remember { mutableStateOf(Rect.Zero) }
     val host = LocalSongMenu.current
@@ -61,6 +65,7 @@ fun coverRequestUrl(url: String, pixels: Int): String {
     Row(Modifier.fillMaxWidth().testTag("song_row_${row.song.id}").combinedClickable(enabled = !pending, onClick = primary,
         onLongClickLabel = "预览歌曲与操作", onLongClick = { if (!coverBounds.isEmpty) openMenu(coverBounds) }).padding(vertical = 8.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            leading?.invoke()
             MusicCover(row.song.cover, Modifier.size(52.dp).onGloballyPositioned { coordinates ->
                 coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
                     coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))

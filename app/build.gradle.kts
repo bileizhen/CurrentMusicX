@@ -205,7 +205,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
     implementation("io.coil-kt.coil3:coil-gif:3.3.0")
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
@@ -214,6 +214,8 @@ dependencies {
     implementation("androidx.media3:media3-session:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.1")
+    implementation("androidx.media3:media3-transformer:1.11.1")
+    implementation("androidx.media3:media3-effect:1.11.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.10.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     implementation("androidx.core:core-ktx:1.17.0")
@@ -223,6 +225,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.11.0")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     implementation("androidx.compose.material:material-icons-core:1.7.8")
+    // Publishes the playing song and timed lyrics to Lyricon (词幕) for status-bar display.
+    implementation("io.github.proify.lyricon:provider:0.1.70")
 
     implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.1.0")
     implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.1.0")

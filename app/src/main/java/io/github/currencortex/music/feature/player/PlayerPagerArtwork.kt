@@ -1,26 +1,42 @@
 package io.github.currencortex.music.feature.player
 
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
@@ -31,11 +47,13 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.song.Song
 import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.round
+import kotlin.math.roundToInt
 
 internal enum class PlayerPagerArtworkRole { COVER, LYRICS, QUEUE }
 internal val PlayerPagerArtworkGeometry = SemanticsPropertyKey<PlayerArtworkFrame>("PlayerPagerArtworkGeometry")
@@ -87,6 +105,8 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
     val ready get() = root?.isAttached == true && mainPage?.isAttached == true && container?.isAttached == true &&
         coverPage?.isAttached == true && lyricsPage?.isAttached == true && cover?.isAttached == true && lyrics?.isAttached == true
     val queueReady get() = ready && queuePage?.isAttached == true && queue?.isAttached == true && queueBounds != null
+    /** The pager is between pages (or on the way to the queue); the canvas owns the glyphs. */
+    fun textFlying(): Boolean = progress() > 0.001f || queueProgress() > 0.001f
     fun textReady(subtitle: Boolean): Boolean {
         val layouts = if (subtitle) subtitleLayouts else titleLayouts
         return ready && (if (subtitle) subtitleEndpoints else titleEndpoints) != null &&
@@ -148,6 +168,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
         val q = if (queueReady) queueProgress().coerceIn(0f, 1f) else 0f
         return bounds.size.minDimension * (if (square) .05f else .5f) * (1 - immersion()) * (1 - q) + queueRadius * q
     }
+    fun settledCoverBounds(): Rect? = if (ready && !immersive) endpoints?.first?.translate(paneOffset) else null
 }
 internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtworkTransition?> { null }
 
@@ -160,8 +181,15 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     DisposableEffect(transfer, role, subtitle) { onDispose {
         if (nodes[role] === coordinates) { nodes.remove(role); transfer.updateBounds() }
     } }
+    val sheetText = LocalPlayerSheetText.current
     onGloballyPositioned { coordinates = it; nodes[role] = it; transfer.updateBounds() }
-        .graphicsLayer { alpha = if (transfer.textReady(subtitle)) 0f else 1f }
+        .graphicsLayer {
+            // At rest the real Text is visible, so a marquee scrolls; during a page or sheet
+            // flight the canvas draws cached glyphs instead and this copy steps aside.
+            val canvasDraws = transfer.textReady(subtitle) &&
+                (transfer.textFlying() || sheetText?.moving(subtitle) == true)
+            alpha = if (canvasDraws) 0f else 1f
+        }
 }
 
 /** Capture each endpoint's real font, line breaks and ellipsis once during normal measurement. */
@@ -180,6 +208,101 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     } }
     Text(text, modifier.playerSharedText(role, subtitle), color = color, fontSize = fontSize,
         fontWeight = fontWeight, maxLines = maxLines, overflow = overflow, onTextLayout = { snapshot.layout = it })
+}
+
+/**
+ * One line that scrolls when it does not fit, like the ColorOS player title. Compose's
+ * `basicMarquee` stayed still in this player's composition, so the scroll is driven here: the
+ * text is measured unbounded, clipped by its box, and translated by an infinite transition.
+ * The line scrolls only until its last glyph reaches the right edge, then returns, so no frame
+ * is left blank. A [rememberInfiniteTransition] owns the motion so a re-measure or a page swipe
+ * cannot cancel the loop mid-scroll.
+ */
+@Composable internal fun PlayerMarqueeText(text: String, modifier: Modifier = Modifier,
+    role: PlayerPagerArtworkRole? = null, subtitle: Boolean = false, color: Color, fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.Normal) {
+    val transfer = LocalPlayerPagerArtwork.current
+    val snapshots = if (subtitle) transfer?.subtitleLayouts else transfer?.titleLayouts
+    val snapshot = remember(transfer, role, subtitle) { PlayerSharedTextSnapshot(text) }
+    SideEffect {
+        snapshot.text = text
+        if (role != null) snapshots?.set(role, snapshot)
+    }
+    DisposableEffect(snapshots, role, snapshot) { onDispose {
+        if (role != null && snapshots?.get(role) === snapshot) snapshots.remove(role)
+    } }
+    val shared = modifier.playerSharedText(role, subtitle)
+    val density = LocalDensity.current
+    val fadePx = with(density) { 24.dp.toPx() }
+    BoxWithConstraints(shared.fillMaxWidth()) {
+        val availablePx = constraints.maxWidth
+        var textWidthPx by remember(text) { mutableIntStateOf(0) }
+        val speedPx = with(density) { 40.dp.toPx() } // 40dp per second
+        val overflows = textWidthPx > availablePx && availablePx != Int.MAX_VALUE
+        // Travel exactly the hidden part, so the line stops with its last glyph at the right
+        // edge and never leaves a blank frame; the return leg then springs back to the start.
+        val distance = (textWidthPx - availablePx).coerceAtLeast(0)
+        // Only a scrolling line requests frames; a title that fits stays perfectly still.
+        val scrollProgress = if (overflows) {
+            val scrollMs = (distance / speedPx * 1000f).toInt().coerceAtLeast(600)
+            val returnMs = (distance / speedPx * 800f).toInt().coerceAtLeast(500)
+            val holdMs = 1200
+            val endHoldMs = 900
+            rememberInfiniteTransition(label = "player_marquee").animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = holdMs + scrollMs + endHoldMs + returnMs
+                        0f at holdMs using LinearEasing
+                        1f at holdMs + scrollMs using LinearEasing
+                        1f at holdMs + scrollMs + endHoldMs
+                        0f at holdMs + scrollMs + endHoldMs + returnMs using FastOutSlowInEasing
+                    },
+                    repeatMode = RepeatMode.Restart,
+                ),
+                label = "player_marquee_progress",
+            )
+        } else null
+        // Soft edges, like ColorOS: a side fades only while it actually hides glyphs, so the
+        // first character is not dimmed at rest and the last one is not dimmed at the end.
+        Box(
+            Modifier.fillMaxWidth().clipToBounds().drawWithContent {
+                if (!overflows) { drawContent(); return@drawWithContent }
+                val canvas = drawContext.canvas
+                canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
+                drawContent()
+                val progress = scrollProgress?.value ?: 0f
+                val left = if (progress > 0.002f) fadePx else 0f
+                val right = if (progress < 0.998f) fadePx else 0f
+                val width = size.width.coerceAtLeast(1f)
+                val stops: List<Pair<Float, Color>> = buildList {
+                    if (left > 0f) { add(0f to Color.Transparent); add((left / width).coerceAtMost(1f) to Color.Black) }
+                    else add(0f to Color.Black)
+                    if (right > 0f) { add(((width - right) / width).coerceAtLeast(0f) to Color.Black); add(1f to Color.Transparent) }
+                    else add(1f to Color.Black)
+                }
+                drawRect(
+                    brush = Brush.horizontalGradient(colorStops = *stops.toTypedArray()),
+                    blendMode = BlendMode.DstIn,
+                )
+                canvas.restore()
+            },
+        ) {
+        Text(text,
+            Modifier.wrapContentWidth(align = Alignment.Start, unbounded = true)
+                // Read the animation in the placement phase: reading it here in composition
+                // would recompose the player title every frame.
+                .offset {
+                    val progress = scrollProgress?.value ?: 0f
+                    val dx = if (overflows) -(progress * distance).roundToInt() else 0
+                    IntOffset(dx, 0)
+                },
+            color = color, fontSize = fontSize, fontWeight = fontWeight,
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+            onTextLayout = { snapshot.layout = it; textWidthPx = it.size.width })
+        }
+    }
 }
 
 /** One artwork and one pair of text layers bridge cover, lyrics and queue, including reversed drags. */
@@ -313,7 +436,8 @@ internal fun playerTextDrawMetrics(layouts: List<TextLayoutResult?>): PlayerText
             this[PlayerSharedTextLayouts] = PlayerPagerArtworkRole.entries.mapNotNull { snapshots[it]?.layout }
             this[PlayerSharedTextWeights] = weights()
         }) {
-        if (!transfer.textReady(subtitle) || sheetText?.moving(subtitle) == true) return@Canvas
+        if (!transfer.textReady(subtitle) || !transfer.textFlying() ||
+            sheetText?.moving(subtitle) == true) return@Canvas
         val rect = transfer.textFrame(subtitle, bend)?.translate(transfer.paneOffset) ?: return@Canvas
         drawPlayerSharedText(rect, metrics.value, weights(), paint, playerSheetContentAlpha(sheetProgress()))
     }

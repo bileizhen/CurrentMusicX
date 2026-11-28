@@ -23,9 +23,18 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     val platformLikedCount = MutableStateFlow<Int?>(null)
     val busy = MutableStateFlow(false)
     val passwordCodeUntil = MutableStateFlow(0L)
+    sealed interface BannerDraft {
+        data class Image(val uri: Uri) : BannerDraft
+        data class Video(val uri: Uri, val info: BannerVideoInfo, val maxDurationMs: Long) : BannerDraft
+    }
+
     val message = MutableStateFlow<String?>(null)
     val dialog = MutableStateFlow<String?>(null)
     val avatar = MutableStateFlow<Uri?>(null)
+    val bannerDraft = MutableStateFlow<BannerDraft?>(null)
+    val bannerStatus = MutableStateFlow<String?>(null)
+    private var bannerOwner: RequestSession? = null
+    private var bannerInspectJob: kotlinx.coroutines.Job? = null
     private val refresh = MutableStateFlow(0)
     private var platformLikesGeneration = 0L
     private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
@@ -60,7 +69,11 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.profileRepository.revision, refresh)
                 { _, _, _, _ -> Unit }
                 .combine(libraryChanges) { _, _ -> Unit }
-                .collectLatest { state.value = ProfileState(); load() }
+                .collectLatest {
+                    if (bannerOwner != null && bannerOwner != session()) dismissBanner()
+                    state.value = ProfileState()
+                    load()
+                }
         }
     }
     fun reload() { refresh.update { it + 1 } }
@@ -144,12 +157,12 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     }
     private fun io.github.currencortex.music.data.song.Song.dto() = io.github.currencortex.music.data.song.SongDto(
         id, name, artists, album, cover, durationMs, mv = mv, artistIds = artistIds)
-    fun action(success: String, block: suspend () -> Unit) {
+    fun action(success: String?, block: suspend () -> Unit) {
         if (busy.value) return
         busy.value = true
         viewModelScope.launch {
             try { when (val r = appResult { block() }) {
-                is AppResult.Success -> message.value = success
+                is AppResult.Success -> if (success != null) message.value = success
                 is AppResult.Failure -> container.errorNotices.show(r.message)
             } } finally { busy.value = false }
         }
@@ -169,6 +182,156 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         val bytes = withContext(Dispatchers.IO) { avatarBytes(resolver, uri, crop) }
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         applyUser(container.profileRepository.avatar(bytes, expected, previousAvatar), expected)
+    }
+
+    fun beginBannerPick(): Boolean {
+        val expected = session()
+        if (userId != null || busy.value || expected.token.isNullOrBlank() || state.value.profile == null) return false
+        bannerInspectJob?.cancel()
+        bannerOwner = expected
+        bannerDraft.value = null
+        bannerStatus.value = null
+        return true
+    }
+
+    fun editBanner(uri: Uri?, context: android.content.Context) {
+        val expected = bannerOwner ?: return
+        if (uri == null || expected != session() || busy.value) {
+            dismissBanner()
+            return
+        }
+        val appContext = context.applicationContext
+        val profileUser = state.value.profile?.user
+        val account = container.accountRepository.state.value.account
+        val role = if (profileUser != null) profileUser.role else account?.let {
+            userRole(it.isAdmin, it.isSuper, it.isOwner)
+        }
+        val maxDurationMs = BannerVideoRules.maxDurationMs(role)
+        bannerInspectJob?.cancel()
+        bannerDraft.value = null
+        bannerStatus.value = "正在读取媒体信息…"
+        busy.value = true
+        bannerInspectJob = viewModelScope.launch {
+            try {
+                val draft = withContext(Dispatchers.IO) {
+                    when (detectBannerMediaKind(appContext, uri)) {
+                        BannerMediaKind.IMAGE -> BannerDraft.Image(uri)
+                        BannerMediaKind.VIDEO -> {
+                            val info = inspectBannerVideo(appContext, uri)
+                                ?: throw ApiException(ErrorKind.Unknown, userMessage = "无法读取该视频，请换一个 MP4 或 MOV 文件")
+                            BannerDraft.Video(uri, info, maxDurationMs)
+                        }
+                        BannerMediaKind.UNSUPPORTED ->
+                            throw ApiException(ErrorKind.Unknown, userMessage = "仅支持图片、MP4 或 MOV 格式的主页横幅")
+                    }
+                }
+                if (bannerOwner != expected || expected != session()) {
+                    dismissBanner()
+                } else {
+                    bannerDraft.value = draft
+                }
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                dismissBanner()
+                message.value = e.userMessage ?: e.kind.message
+            } catch (_: Exception) {
+                dismissBanner()
+                message.value = "无法读取所选文件，请重试"
+            } finally {
+                bannerStatus.value = null
+                busy.value = false
+            }
+        }
+    }
+
+    fun dismissBanner() {
+        bannerInspectJob?.cancel()
+        bannerInspectJob = null
+        bannerOwner = null
+        bannerDraft.value = null
+        bannerStatus.value = null
+    }
+
+    fun saveBanner(resolver: ContentResolver, crop: BannerCrop) {
+        val uri = (bannerDraft.value as? BannerDraft.Image)?.uri ?: return
+        val expected = bannerOwner?.takeIf { it == session() } ?: return
+        action("主页横幅已更新") {
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching { bannerCropBytes(resolver, uri, crop, PROFILE_BANNER_ASPECT) }.getOrElse {
+                    throw ApiException(ErrorKind.Unknown, userMessage = "无法处理横幅图片，请换一张再试")
+                }
+            }
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            val uploaded = container.profileRepository.bannerUpload(bytes, expected)
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            applyBannerUpdate(expected.server, uploaded)
+            dismissBanner()
+        }
+    }
+
+    fun saveVideoBanner(context: android.content.Context, startMs: Long, endMs: Long) {
+        val draft = bannerDraft.value as? BannerDraft.Video ?: return
+        val expected = bannerOwner?.takeIf { it == session() } ?: return
+        val appContext = context.applicationContext
+        action("主页横幅已更新") {
+            var prepared: PreparedBannerVideo? = null
+            try {
+                prepared = prepareBannerVideoForUpload(
+                    context = appContext,
+                    uri = draft.uri,
+                    info = draft.info,
+                    startMs = startMs,
+                    endMs = endMs,
+                    maxDurationMs = draft.maxDurationMs,
+                    onStage = { stage -> bannerStatus.value = stage },
+                )
+                if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+                bannerStatus.value = "正在上传视频横幅…"
+                val uploaded = container.profileRepository.bannerVideo(
+                    file = prepared.file,
+                    contentType = prepared.mimeType,
+                    expected = expected,
+                )
+                if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+                applyBannerUpdate(expected.server, uploaded)
+                dismissBanner()
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                throw e
+            } catch (e: Exception) {
+                throw ApiException(
+                    ErrorKind.Unknown,
+                    userMessage = e.message?.takeIf { it.isNotBlank() } ?: "无法处理视频横幅，请换一段再试",
+                )
+            } finally {
+                bannerStatus.value = null
+                prepared?.file?.delete()
+            }
+        }
+    }
+
+    private fun applyBannerUpdate(server: String, uploaded: ProfileBannerUpload) {
+        val previousUser = state.value.profile?.user
+        val previousUrl = previousUser?.let { container.profileRepository.bannerImageUrl(server, it) }
+        val updatedUser = previousUser?.copy(bannerUrl = uploaded.bannerUrl, bannerType = uploaded.bannerType)
+        val updatedUrl = updatedUser?.let { container.profileRepository.bannerImageUrl(server, it) }
+        state.update { current ->
+            current.copy(
+                profile = current.profile?.let {
+                    it.copy(
+                        user = it.user.copy(
+                            bannerUrl = uploaded.bannerUrl,
+                            bannerType = uploaded.bannerType,
+                        ),
+                    )
+                },
+            )
+        }
+        if (previousUrl != null && previousUrl != updatedUrl) {
+            viewModelScope.launch { container.evictBannerCache(previousUrl) }
+        }
     }
     fun password(old: String, new: String) = action("密码已更新，请确认当前会话") {
         container.profileRepository.password(old, new); dialog.value = null

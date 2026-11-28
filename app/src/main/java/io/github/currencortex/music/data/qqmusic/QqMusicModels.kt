@@ -89,3 +89,31 @@ data class QqListeningRankPage(
     val from: String = "",
     val token: String = "",
 )
+
+/** A top-3 preview row bundled with a chart card in the rank hall (GetAll.song). */
+data class QqChartSong(val rank: Int, val title: String, val singer: String = "", val cover: String = "")
+data class QqChart(
+    val id: String,
+    val name: String,
+    val cover: String = "",
+    val logo: String = "",
+    val headerCover: String = "",
+    val intro: String = "",
+    val updateTips: String = "",
+    val updateTime: String = "",
+    val period: String = "",
+    val listenNum: Long = 0,
+    val total: Int = 0,
+    val cornerMark: Int = 0,
+    val cardStyle: Int = 0,
+    val previews: List<QqChartSong> = emptyList(),
+)
+/** Rank hall section: type 0 is the full-width 巅峰榜 list, 1 is a grid, 2 scrolls sideways. */
+data class QqChartGroup(val id: Int, val name: String, val type: Int = 0, val charts: List<QqChart> = emptyList())
+/** rankType mirrors QQ's RankType enum: 1 up, 2 down, 3 re-entry, 4 new, 6 percentage. */
+data class QqChartEntry(val song: Song, val rank: Int = 0, val rankType: Int = 0, val rankValue: String = "")
+data class QqChartDetail(
+    val chart: QqChart,
+    val entries: List<QqChartEntry> = emptyList(),
+    val total: Int = 0,
+)

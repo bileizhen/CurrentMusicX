@@ -22,6 +22,8 @@ internal data class ServerAudioCatalogState(val server: String, val busy: Boolea
 
 class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
+    val audioOutput = container.audioOutput.state
+    val volumeNormalizationRuntime = container.volumeNormalizationRuntime
     val state = MutableStateFlow(NetworkSettingsState())
     val cacheBytes = container.audioCache.bytes
     val cacheState = MutableStateFlow(AudioCacheSettingsState())
@@ -161,6 +163,46 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         try { container.musicSettings.setListeningSource(value) }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { container.errorNotices.show("听歌足迹数据来源保存失败，请重试") }
+    }
+    fun bluetoothLyrics(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setBluetoothLyrics(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("蓝牙歌词设置保存失败，请重试") }
+    }
+    fun lyriconStatusBar(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setLyriconStatusBar(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("词幕歌词设置保存失败，请重试") }
+    }
+    fun downloadLyricsFile(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setDownloadLyricsFile(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("下载文件设置保存失败，请重试") }
+    }
+    fun downloadCoverFile(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setDownloadCoverFile(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("下载文件设置保存失败，请重试") }
+    }
+    fun volumeNormalizationEnabled(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setVolumeNormalizationEnabled(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("音量均衡设置保存失败，请重试") }
+    }
+    fun volumeNormalizationTarget(value: io.github.currencortex.music.data.settings.VolumeNormalizationTarget) = viewModelScope.launch {
+        try { container.musicSettings.setVolumeNormalizationTarget(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("音量均衡目标响度保存失败，请重试") }
+    }
+    fun volumeNormalizationAdaptive(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setVolumeNormalizationAdaptive(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("自适应响度设置保存失败，请重试") }
+    }
+    fun volumeNormalizationAlbumGain(value: Boolean) = viewModelScope.launch {
+        try { container.musicSettings.setVolumeNormalizationAlbumGain(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("专辑响度设置保存失败，请重试") }
     }
     fun lyricsSource(value: io.github.currencortex.music.data.settings.LyricsSource) = viewModelScope.launch {
         try { container.musicSettings.setLyricsSource(value) }

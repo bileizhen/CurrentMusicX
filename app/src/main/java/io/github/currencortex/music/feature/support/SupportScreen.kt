@@ -5,17 +5,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.currencortex.music.ui.component.MusicIcons
+import androidx.core.graphics.drawable.toBitmap
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.showMusicError
-import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
@@ -40,18 +38,17 @@ fun SupportScreen(onBack: () -> Unit, afdianUrl: String = SupportConfig.afdianUr
             }
         }
         item("official") {
-            SettingsSection("官方捐赠", MusicIcons.Heart) {
+            SettingsSection("官方捐赠") {
                 SettingsPreference("支持 CurrentMusic 官方", "登录后扫码捐赠、登记交易单号并查看本人记录",
-                    Modifier.testTag("support_official_donation"), onClick = onOfficialDonation,
-                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                    Modifier.testTag("support_official_donation"), onClick = onOfficialDonation)
             }
         }
         item("afdian") {
-            SettingsSection("爱发电", MusicIcons.Heart) {
+            SettingsSection("爱发电") {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("通过爱发电支持 CurrentMusic 的持续开发。", fontSize = 15.sp, lineHeight = 22.sp)
                     val available = supportHttpsUrl(afdianUrl) != null
-                    GlassActionButton(if (available) "前往爱发电" else "暂未开放", {
+                    SettingsActionButton(if (available) "前往爱发电" else "暂未开放", {
                         if (gate.acquire()) when (openSupportLink(context, afdianUrl)) {
                             SupportLinkResult.INVALID -> context.showMusicError("链接无效")
                             SupportLinkResult.NO_APP -> context.showMusicError("未找到可以打开链接的应用")

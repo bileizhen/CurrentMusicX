@@ -629,12 +629,14 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                             songs = playlist.songs, playlist = playlist, more = playlist.songs.size < playlist.count)
                     }
                     "chart" if qqNative -> {
-                        val chart = container.qqMusic.chart(remotePlaylistId)
+                        val detail = container.qqMusic.chartDetail(remotePlaylistId)
+                        val songs = detail.entries.map { it.song }
                         previous.copy(
-                            title = chart.name,
-                            description = io.github.currencortex.music.feature.qqmusic.readableText(chart.description),
-                            cover = chart.cover.ifBlank { chart.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
-                            songs = chart.songs,
+                            title = detail.chart.name,
+                            description = io.github.currencortex.music.feature.qqmusic.readableText(detail.chart.intro),
+                            cover = detail.chart.headerCover.ifBlank { detail.chart.cover }
+                                .ifBlank { songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
+                            songs = songs,
                             more = false,
                         )
                     }

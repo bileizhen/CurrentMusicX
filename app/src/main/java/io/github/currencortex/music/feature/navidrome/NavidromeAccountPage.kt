@@ -1,13 +1,7 @@
 package io.github.currencortex.music.feature.navidrome
 
-import io.github.currencortex.music.ui.component.nativeui.*
-
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
-import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
@@ -21,6 +15,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
@@ -43,7 +40,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     SpringLazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp,topInset+8.dp,16.dp,32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { SettingsHint("兼容 Navidrome / Subsonic，歌曲原音质直连播放，账号加密保存在本机。") }
         if (account.configured) {
-            item { SettingsSection("当前账号", MusicIcons.Device) {
+            item { SettingsSection("当前账号") {
                 SettingsPreference(account.username, account.server)
                 if (account.version.isNotBlank()) SettingsHint("Navidrome ${account.version}")
                 SettingsDivider()
@@ -55,7 +52,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 }, enabled = !busy, modifier = Modifier.testTag("navidrome_edit_account"), chevron = false)
             } }
         }
-        if (edit) item { SettingsSection("服务器连接", MusicIcons.Storage) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (edit) item { SettingsSection("服务器连接") { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(server, { server = it; vm.clearError() }, label = "服务器地址", singleLine = true, enabled = !busy,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next), modifier = Modifier.testTag("navidrome_server"))
             TextField(username, { username = it; vm.clearError() }, label = "用户名", singleLine = true, enabled = !busy,
@@ -70,7 +67,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         // Keep the primary action in its own lazy item. A form taller than the IME viewport
         // otherwise brings the whole card into view and can place its action under the header.
         if (edit) item("connect") {
-            GlassActionButton(if (busy) "正在连接…" else if (account.configured) "确认更换" else "连接服务器", ::connect,
+            SettingsActionButton(if (busy) "正在连接…" else if (account.configured) "确认更换" else "连接服务器", ::connect,
                 primary=true,enabled = canConnect, modifier = Modifier.fillMaxWidth().testTag("navidrome_connect"))
         }
         if (!edit) error?.let { item { Text(it, color = COUITheme.colorScheme.error, fontSize = 13.sp) } }

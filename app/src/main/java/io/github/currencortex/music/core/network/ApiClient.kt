@@ -5,8 +5,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
+import java.io.File
 import java.util.concurrent.TimeUnit
 import io.github.currencortex.music.core.netease.NeteaseGateway
 
@@ -23,6 +25,12 @@ class ApiClient(
     val routeServer: (String) -> String = { it },
 ) {
     companion object {
+        private val postDetailPath = Regex("posts/[0-9]+")
+        private val legacyMissingRoute = Regex(
+            """(?:未知接口(?:\s+.*)?|(?:404\s+)?(?:not found|page not found|route not found|endpoint not found)\.?|cannot get /.*)""",
+            RegexOption.IGNORE_CASE,
+        )
+
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
             .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build()
@@ -34,6 +42,9 @@ class ApiClient(
         .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE).build()
     private val feedbackUploadHttp = feedbackHttp.newBuilder()
         .readTimeout(180, TimeUnit.SECONDS).callTimeout(240, TimeUnit.SECONDS).build()
+    private val bannerUploadHttp = singleAttemptHttp.newBuilder()
+        .readTimeout(180, TimeUnit.SECONDS).writeTimeout(180, TimeUnit.SECONDS)
+        .callTimeout(240, TimeUnit.SECONDS).build()
     private val audioSourceHttp = http.newBuilder().followRedirects(false).followSslRedirects(false)
         .cookieJar(okhttp3.CookieJar.NO_COOKIES).build()
     val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
@@ -157,6 +168,33 @@ class ApiClient(
         expectedSession, "PUT", "feedback/$requestId/media/$slot", payload, mediaUpload = true,
     )
 
+    internal suspend fun uploadProfileBannerVideo(
+        expectedSession: RequestSession,
+        file: File,
+        contentType: String,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val session = RequestSession(server(), token())
+        val revision = currentMusicSessionRevision()
+        fun checkSession() {
+            if (session.server != expectedSession.server || session.token != expectedSession.token ||
+                session != RequestSession(server(), token()) || revision != currentMusicSessionRevision()) {
+                throw ApiException(ErrorKind.Unauthorized)
+            }
+        }
+        checkSession()
+        if (session.token.isNullOrBlank()) {
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录 CurrentMusic 账号")
+        }
+        val url = ServerUrl.endpoint(routeServer(session.server), "profile/banner", emptyMap())
+        val request = Request.Builder()
+            .url(url)
+            .tag(RequestSession::class.java, session)
+            .header("Accept", "application/json")
+            .put(file.asRequestBody(contentType.toMediaType()))
+            .build()
+        executeProjectRequest("profile/banner", bannerUploadHttp.newCall(request), ::checkSession)
+    }
+
     internal suspend fun deleteFeedbackMedia(expectedSession: RequestSession, requestId: String, slot: String) {
         feedbackMutation(expectedSession, "DELETE", "feedback/$requestId/media/$slot", ByteArray(0).toRequestBody())
     }
@@ -218,21 +256,35 @@ class ApiClient(
             if (code == 401 && authenticated && !path.startsWith("qqmusic/") && !errorText.contains("绑定")) onUnauthorized(session)
             // Account validation is user-facing upstream text, not a generic HTTP failure.
             // Other routes and server failures retain their existing bounded error mapping.
-            val accountError = if (code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
+            val postDetailNotFound = code == 404 && request.method == "GET" && postDetailPath.matches(path)
+            val bannerError = path == "profile/banner" && (code in 400..499 || code == 503)
+            val errorPayload = if (postDetailNotFound || bannerError || code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
                     "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
                     "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
                     "auth/register", "auth/email/code", "auth/phone/code",
                     "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password")))
-                runCatching {
-                    val error = ApiJson.parseToJsonElement(errorText).jsonObject
-                    ((error["error"] ?: error["message"]) as? JsonPrimitive)
-                        ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
-                }.getOrNull() else null
+                runCatching { ApiJson.parseToJsonElement(errorText) as? JsonObject }.getOrNull() else null
+            val parsedErrorMessage = ((errorPayload?.get("error") ?: errorPayload?.get("message")) as? JsonPrimitive)
+                ?.takeIf(JsonPrimitive::isString)?.content?.trim()?.takeIf(String::isNotEmpty)?.take(240)
+            val errorMessage = parsedErrorMessage ?: if (bannerError) when (code) {
+                413 -> "横幅视频文件不能超过 16 MiB"
+                415 -> "仅支持 MP4 或 MOV 格式的视频"
+                503 -> "服务器视频处理组件暂不可用，请稍后再试"
+                else -> null
+            } else null
+            // Legacy dispatchers and reverse proxies often return a generic 404 for an unknown route.
+            // Keep domain-specific API errors (such as a deleted post) available to the caller.
+            val errorCode = (errorPayload?.get("code") as? JsonPrimitive)?.contentOrNull
+            val missingRoute = postDetailNotFound && when (errorCode?.lowercase()) {
+                "route_not_found", "unknown_route", "endpoint_not_found" -> true
+                null, "", "404", "not_found" -> errorMessage == null || legacyMissingRoute.matches(errorMessage)
+                else -> false
+            }
             throw ApiException(when (code) {
                 401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
                 403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
                 in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-            }, code, accountError)
+            }, code, errorMessage, missingRoute)
         }
         return if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
     }

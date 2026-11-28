@@ -23,7 +23,7 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val lyricsOffsetMs: Long = 0,
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
                          val neteaseMainLibrary: Boolean = true,
-                         val allowConcurrentPlayback: Boolean = false,
+                         val allowConcurrentPlayback: Boolean = true,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
                          val crossfadeSeconds: Int = 5,
                          val lyricsSource: LyricsSource = LyricsSource.AUTO,
@@ -37,7 +37,19 @@ data class MusicSettings(val server: String = ServerDefaults.URL,
                          val qqDownloadQuality: AudioQuality = AudioQuality.AUTO,
                          val kugouMobileQuality: AudioQuality = AudioQuality.AUTO,
                          val kugouWirelessQuality: AudioQuality = AudioQuality.AUTO,
-                         val kugouDownloadQuality: AudioQuality = AudioQuality.AUTO) {
+                         val kugouDownloadQuality: AudioQuality = AudioQuality.AUTO,
+                         /** Mirror the current lyric line into the system media card, lockscreen and Bluetooth AVRCP title. */
+                         val bluetoothLyrics: Boolean = false,
+                         /** Publish timed lyrics to Lyricon (词幕) for its status-bar display. */
+                         val lyriconStatusBar: Boolean = true,
+                         /** Save a companion LRC beside the downloaded audio; lyrics are always embedded. */
+                         val downloadLyricsFile: Boolean = true,
+                         /** Save companion artwork beside the downloaded audio; artwork is always embedded. */
+                         val downloadCoverFile: Boolean = true,
+                         val volumeNormalizationEnabled: Boolean = false,
+                         val volumeNormalizationTarget: VolumeNormalizationTarget = VolumeNormalizationTarget.STANDARD,
+                         val volumeNormalizationAdaptive: Boolean = true,
+                         val volumeNormalizationAlbumGain: Boolean = false) {
     fun qualityFor(source: MusicSource?, network: PlaybackNetworkKind = PlaybackNetworkKind.MOBILE): AudioQuality = when (source) {
         MusicSource.QQ_MUSIC -> if (network == PlaybackNetworkKind.WIRELESS) qqWirelessQuality else qqMobileQuality
         MusicSource.KUGOU -> if (network == PlaybackNetworkKind.WIRELESS) kugouWirelessQuality else kugouMobileQuality
@@ -73,6 +85,14 @@ enum class LyricsSource(val label: String) {
 
 enum class MusicTransitionMode { OFF, SMART, CROSSFADE;
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: OFF }
+}
+
+enum class VolumeNormalizationTarget(val targetLufs: Float, val label: String, val summary: String) {
+    QUIET(-18f, "柔和 (-18 LUFS)", "ReplayGain 标准，保留更大动态范围"),
+    GENTLE(-16f, "均衡 (-16 LUFS)", "接近 Apple 音量平衡，兼顾动态与响度"),
+    STANDARD(-14f, "标准 (-14 LUFS)", "主流流媒体响度基准，日常聆听推荐"),
+    LOUD(-11f, "响亮 (-11 LUFS)", "适合嘈杂环境或外放，内置防削波限幅");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: STANDARD }
 }
 
 enum class KaraokeScope(val label: String) {
@@ -151,6 +171,10 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
     private val lyricsSource = stringPreferencesKey("lyrics.source")
     private val lyricsSourceMigration = intPreferencesKey("lyrics.source.automaticMigrationVersion")
+    private val bluetoothLyrics = booleanPreferencesKey("lyrics.bluetooth")
+    private val lyriconStatusBar = booleanPreferencesKey("lyrics.lyricon")
+    private val downloadLyricsFile = booleanPreferencesKey("download.lyricsFile")
+    private val downloadCoverFile = booleanPreferencesKey("download.coverFile")
     private val centered = booleanPreferencesKey("lyrics.centered")
     private val fontWeight = intPreferencesKey("lyrics.fontWeight")
     private val blur = booleanPreferencesKey("lyrics.blur")
@@ -176,6 +200,10 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
     private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
+    private val volumeNormalizationEnabled = booleanPreferencesKey("playback.volumeNormalization")
+    private val volumeNormalizationTarget = stringPreferencesKey("playback.volumeNormalizationTarget")
+    private val volumeNormalizationAdaptive = booleanPreferencesKey("playback.volumeNormalizationAdaptive")
+    private val volumeNormalizationAlbumGain = booleanPreferencesKey("playback.volumeNormalizationAlbumGain")
     init {
         scope.launch {
             try {
@@ -222,7 +250,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: false, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false,
             LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p)).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
+        p[concurrentPlayback] ?: true, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
             p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
@@ -233,10 +261,18 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[qqDownloadQuality]?.let(AudioQuality::from) ?: legacyQuality,
             p[kugouMobileQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
             p[kugouWirelessQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
-            p[kugouDownloadQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO)
+            p[kugouDownloadQuality]?.let(AudioQuality::from) ?: AudioQuality.AUTO,
+            p[bluetoothLyrics] ?: false,
+            p[lyriconStatusBar] ?: true,
+            p[downloadLyricsFile] ?: true,
+            p[downloadCoverFile] ?: true,
+            p[volumeNormalizationEnabled] ?: false,
+            VolumeNormalizationTarget.from(p[volumeNormalizationTarget]),
+            p[volumeNormalizationAdaptive] ?: true,
+            p[volumeNormalizationAlbumGain] ?: false)
     }
     // Read the persisted value directly, without the StateFlow's initial defaults.
-    val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
+    val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: true }.distinctUntilChanged()
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     val serverSelection = store.data.map {
@@ -302,6 +338,14 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setLyricsFontFile(value: String) { store.edit { it[lyricsFontFile] = value; it[lyricsFont] = LyricsFont.IMPORTED.name } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
     suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
+    suspend fun setBluetoothLyrics(value: Boolean) { store.edit { it[bluetoothLyrics] = value } }
+    suspend fun setLyriconStatusBar(value: Boolean) { store.edit { it[lyriconStatusBar] = value } }
+    suspend fun setDownloadLyricsFile(value: Boolean) { store.edit { it[downloadLyricsFile] = value } }
+    suspend fun setDownloadCoverFile(value: Boolean) { store.edit { it[downloadCoverFile] = value } }
+    suspend fun setVolumeNormalizationEnabled(value: Boolean) { store.edit { it[volumeNormalizationEnabled] = value } }
+    suspend fun setVolumeNormalizationTarget(value: VolumeNormalizationTarget) { store.edit { it[volumeNormalizationTarget] = value.name } }
+    suspend fun setVolumeNormalizationAdaptive(value: Boolean) { store.edit { it[volumeNormalizationAdaptive] = value } }
+    suspend fun setVolumeNormalizationAlbumGain(value: Boolean) { store.edit { it[volumeNormalizationAlbumGain] = value } }
     suspend fun setLyricsSource(value: LyricsSource) {
         store.edit {
             it[lyricsSource] = value.name

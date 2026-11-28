@@ -25,7 +25,9 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
             setForeground(notification(song, SongDownloadProgress("准备下载")))
             val engine = createEngine()
             val result = engine.download(song, AudioQuality.from(inputData.getString("quality").orEmpty()),
-                inputData.getString("directory")?.let(Uri::parse), id.toString()) { progress ->
+                inputData.getString("directory")?.let(Uri::parse), id.toString(),
+                SongDownloadOptions(inputData.getBoolean("lyrics_file", true),
+                    inputData.getBoolean("cover_file", true))) { progress ->
                 setProgress(workDataOf("phase" to progress.phase, "received" to progress.received, "total" to progress.total))
                 setForeground(notification(song, progress))
             }

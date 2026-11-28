@@ -17,7 +17,7 @@ import kotlin.math.min
 
 // Match the floating header's ease-in/out fade. Sampling once avoids a sharp
 // slope change halfway through the artwork and a visible cutoff at its tail.
-private val ImmersiveCoverFadeStops = CubicBezierEasing(.42f, 0f, .58f, 1f).let { easing ->
+internal val ImmersiveCoverFadeStops = CubicBezierEasing(.42f, 0f, .58f, 1f).let { easing ->
     Array(33) { index ->
         val fraction = index / 32f
         fraction to Color.White.copy(alpha = 1 - easing.transform(fraction))

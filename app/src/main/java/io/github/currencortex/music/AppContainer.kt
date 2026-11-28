@@ -58,6 +58,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val postDraftStore = io.github.currencortex.music.data.profile.PostDraftStore(context.applicationContext, storageSuffix, appScope)
     internal val feedbackStore = io.github.currencortex.music.data.feedback.FeedbackSubmissionStore(context, storageSuffix)
     internal val feedbackMediaStore = io.github.currencortex.music.data.feedback.FeedbackMediaStore(context, storageSuffix)
     private val settingsStore = PreferenceDataStoreFactory.create(
@@ -103,6 +104,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val soundEffectsSettings = io.github.currencortex.music.data.settings.SoundEffectsSettingsRepository(settingsStore, appScope)
     val adaptiveAudio = io.github.currencortex.music.data.settings.AdaptiveAudioSettingsRepository(settingsStore, appScope)
     val adaptiveAudioRuntime = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.core.media.AdaptiveAudioRuntime())
+    internal val trackLoudnessStore = TrackLoudnessStore(context.applicationContext, storageSuffix)
+    internal val localLoudnessTags = LocalLoudnessTagReader(context.applicationContext)
+    val volumeNormalizationRuntime = kotlinx.coroutines.flow.MutableStateFlow(VolumeNormalizationRuntime())
     val musicHapticsSupported by lazy {
         @Suppress("DEPRECATION")
         val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
@@ -268,6 +272,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.data.qqmusic.QqDirectMusicClient(
             apiHttpClient ?: ApiClient.defaultHttpClient(),
             log = { logger.info("Network", it) },
+            deviceGuid = io.github.currencortex.music.data.qqmusic.qqPlaybackGuid(context),
         ))
     val kugou = io.github.currencortex.music.data.kugou.KugouMusicRepository(SecureTokenStore(context, ".kugou$storageSuffix"),
         io.github.currencortex.music.data.kugou.KugouClient(
@@ -277,6 +282,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val serverAudioSources = ServerAudioSources(apiClient)
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
         lx = lxSources, emby = emby, qqMusic = qqMusic, kugou = kugou, serverAudioSources = serverAudioSources)
+    val dynamicCovers = io.github.currencortex.music.data.song.DynamicCoverRepository(
+        api = apiClient,
+        qqMusic = qqMusic,
+        httpClient = apiHttpClient ?: ApiClient.defaultHttpClient(),
+        allowExternalLookup = storageNamespace.isEmpty(),
+    )
     internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
         qqAudioIdentity(qqMusic.audioIdentity, access)
 
@@ -349,13 +360,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 neteaseSongActions.setLiked(id, true, expected, song, expectedUid = uid)
             })
     }
+    private val appContext = context.applicationContext
+    val bannerVideoCache = BannerVideoCache(appContext, java.io.File(appContext.cacheDir, "banner_video$storageSuffix"))
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia,
         initialMaxBytes = AudioCache.UNLIMITED_BYTES, initialCapacityReady = false)
     // The lyrics cache is mostly rows in the music database, so the storage page measures and
     // clears them through it rather than only counting cache/lyrics files.
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache,
         databaseLyricsBytes = { database.music().lyricsBytes() },
-        clearDatabaseLyrics = { database.music().clearLyrics() })
+        clearDatabaseLyrics = { database.music().clearLyrics() },
+        isManagedOtherCache = { name -> name == "banner_video$storageSuffix" },
+        clearManagedOtherCaches = { bannerVideoCache.clear() })
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
         currentProvider = { audioSettings.access().identity },
@@ -427,18 +442,33 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
+    internal val mediaHttpClient: okhttp3.OkHttpClient by lazy { apiHttpClient ?: ApiClient.defaultHttpClient() }
+    internal val postsRepository = io.github.currencortex.music.data.profile.PostsRepository(apiClient, ::projectSession)
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
+    private val remoteProfileImage by lazy { io.github.currencortex.music.data.profile.RemoteAvatarImage() }
     private val neteaseAvatarImporter by lazy {
-        val image = io.github.currencortex.music.data.profile.RemoteAvatarImage()
         io.github.currencortex.music.data.profile.NeteaseAvatarImporter(accountRepository, authRepository,
-            profileRepository, bindingRepository, { musicSession() }, image::download)
+            profileRepository, bindingRepository, { musicSession() }, remoteProfileImage::download)
+    }
+    private val neteaseBannerImporter by lazy {
+        io.github.currencortex.music.data.profile.NeteaseBannerImporter(accountRepository,
+            profileRepository, bindingRepository, { musicSession() }, remoteProfileImage::downloadBanner)
     }
     fun importNeteaseAvatarAfterLogin(expected: RequestSession) {
+        importNeteaseProfileAfterLogin(expected)
+    }
+    fun importNeteaseProfileAfterLogin(expected: RequestSession) {
         appScope.launch {
             when (val result = appResult { neteaseAvatarImporter.importAfterLogin(expected) }) {
                 is AppResult.Success -> Unit
                 is AppResult.Failure -> logger.warn("Profile", "NetEase avatar import failed: ${result.kind}")
+            }
+        }
+        appScope.launch {
+            when (val result = appResult { neteaseBannerImporter.importAfterLogin(expected) }) {
+                is AppResult.Success -> Unit
+                is AppResult.Failure -> logger.warn("Profile", "NetEase banner import failed: ${result.kind}")
             }
         }
     }
@@ -648,6 +678,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             musicSettings.state.map { it.server to it.lyricsSource }.distinctUntilChanged()) { song, account, netease, navidrome, lyricsSettings ->
             io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, lyricsSettings))
         }, songLyrics.state), lyricsRepository::load, playerScope, songLyrics.state)
+    private val lyriconBridge = io.github.currencortex.music.feature.lyrics.data.LyriconBridge(
+        context.applicationContext, musicSettings.state, playerController.state, playbackLyrics.state, playerScope)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
@@ -819,6 +851,26 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val settings = SettingsRepository(settingsStore, appScope)
     val playerBackgrounds = io.github.currencortex.music.data.settings.PlayerBackgroundStore(context, settings, storageSuffix)
+    val rootBackgrounds = io.github.currencortex.music.data.settings.CustomBackgroundStore(
+        context = context,
+        settings = settings,
+        directoryName = "root-background",
+        readName = io.github.currencortex.music.data.settings.AppearanceSettings::rootBackground,
+        writeName = { s, name -> s.copy(rootBackground = name) },
+        suffix = storageSuffix,
+    )
+
+    suspend fun evictBannerCache(url: String?) {
+        val target = url?.takeIf { it.isNotBlank() } ?: return
+        bannerVideoCache.evict(target)
+        runCatching {
+            val loader = coil3.SingletonImageLoader.get(appContext)
+            loader.memoryCache?.let { memory ->
+                memory.keys.filter { it.key == target }.forEach(memory::remove)
+            }
+            loader.diskCache?.remove(target)
+        }
+    }
     val updateSettings = UpdateSettingsRepository(settingsStore, appScope)
     val updates = UpdateService(
         checker = releaseChecker ?: GitHubUpdateChecker(
@@ -847,11 +899,14 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         originalSoundEffects.close()
         smartTuning.close()
         equalizer.close()
+        lyriconBridge.close()
         roomSession.disconnect()
         listenTogether.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()
         audioCache.close()
+        bannerVideoCache.close()
+        trackLoudnessStore.close()
     }
 }

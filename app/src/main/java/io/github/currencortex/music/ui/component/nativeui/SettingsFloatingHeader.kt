@@ -23,6 +23,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
+import io.github.currencortex.music.ui.component.LocalRootBackgroundActive
+import io.github.currencortex.music.ui.component.LocalRootBackgroundBackdrop
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.RootMotionItem
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
@@ -82,18 +84,24 @@ internal val SettingsToolbarHeight=72.dp
     footer:@Composable androidx.compose.foundation.layout.BoxScope.()->Unit={},
     glassOverContent:Boolean=true,
     content:@Composable (topInset:Dp)->Unit) {
-    val base=rememberGlassBackdrop()
+    val rootBgActive=LocalRootBackgroundActive.current && background==COUITheme.colorScheme.background
+    val rootBackdrop=if(rootBgActive) LocalRootBackgroundBackdrop.current else null
+    val base=if(rootBgActive) rootBackdrop else rememberGlassBackdrop()
     val body=if(glassOverContent) rememberGlassBackdrop() else null
     val combined=if(base!=null&&body!=null)rememberCombinedBackdrop(base,body)else base
     val inset=WindowInsets.statusBars.asPaddingValues().calculateTopPadding()+toolbarHeight
     Box(modifier) {
-        Box(Modifier.matchParentSize().then(if(base!=null)Modifier.layerBackdrop(base)else Modifier).background(background))
-        // Rows only sample the flat fill. The floating bars below still sample the real list.
-        CompositionLocalProvider(LocalGlassBackdrop provides rememberSolidGlassBackdrop(base, background)) {
+        if(!rootBgActive) {
+            Box(Modifier.matchParentSize().then(if(base!=null)Modifier.layerBackdrop(base)else Modifier).background(background))
+        }
+        // Rows only sample the flat fill (or shared root wallpaper when active). The floating bars below still sample the real list.
+        val rowBackdrop=if(rootBgActive) rootBackdrop else rememberSolidGlassBackdrop(base, background)
+        CompositionLocalProvider(LocalGlassBackdrop provides rowBackdrop) {
             Box(Modifier.fillMaxSize().then(if(body!=null)Modifier.layerBackdrop(body)else Modifier)){content(inset)}
         }
         CompositionLocalProvider(LocalGlassBackdrop provides combined) {
-            SettingsFloatingHeader(background=background,toolbarHeight=toolbarHeight,content=topBar)
+            SettingsFloatingHeader(background=background,toolbarHeight=toolbarHeight,
+                opacity={if(rootBgActive) .38f else .9f},content=topBar)
             footer()
         }
     }

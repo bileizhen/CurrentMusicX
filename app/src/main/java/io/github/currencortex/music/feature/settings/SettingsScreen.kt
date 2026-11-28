@@ -14,12 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -37,9 +38,9 @@ import io.github.currencortex.music.ui.component.DecoratedAvatar
 import io.github.currencortex.music.ui.component.LocalPageContainerSource
 import io.github.currencortex.music.ui.component.PageContainerOrigin
 import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.rootMotionItems
 import io.github.currencortex.music.ui.component.springChainSettingsItems
-import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
@@ -47,15 +48,13 @@ import io.github.suqi8.coui.kmp.blur.TopAppBarGlowDefaults
 import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.*
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 import io.github.suqi8.coui.kmp.theme.COUITheme
-import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
-import io.github.suqi8.coui.kmp.effect.springChain
-import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
-import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 
 private data class SettingsDestination(
@@ -131,8 +130,9 @@ fun SettingsScreen(
     }
     val colors = COUITheme.colorScheme
     val backgroundColor = colors.background
+    val rootBackgroundActive = onBack == null && io.github.currencortex.music.ui.component.LocalRootBackgroundActive.current
     val isDark = COUITheme.isDark
-    val backdrop = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
+    val backdrop = if (!rootBackgroundActive && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()) {
         rememberLayerBackdrop {
             drawRect(backgroundColor)
             drawContent()
@@ -154,11 +154,11 @@ fun SettingsScreen(
             colors.blue, onAccount),
         SettingsDestination("updates", updateTitle, updateSummary, COUIIcons.Update,
             colors.blue) { onUpdates(null) },
-        SettingsDestination("appearance", "外观", "主题、颜色与界面效果", COUIIcons.Theme,
+        SettingsDestination("appearance", "外观", "主题、颜色、背景与界面效果", COUIIcons.Theme,
             colors.orange, onAppearance),
         SettingsDestination("desktop_lyrics", "桌面悬浮歌词", "实时预览、字幕样式与窗口控制",
             COUIIcons.ScreenMirroring, colors.azure, onDesktopLyrics),
-        SettingsDestination("playback", "播放", "音质、歌曲衔接、预加载与播放行为", COUIIcons.Play,
+        SettingsDestination("playback", "播放", "音质、音量均衡、响度平衡、下载文件、歌曲衔接、预加载与播放行为", COUIIcons.Play,
             colors.green, onPlayback),
         SettingsDestination("network", "音源与网络", "音乐音源、歌词来源与服务器", COUIIcons.CloudFill,
             colors.blue, onNetwork),
@@ -182,7 +182,7 @@ fun SettingsScreen(
         SettingsUiScope {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                containerColor = backgroundColor,
+                containerColor = if (rootBackgroundActive) Color.Transparent else backgroundColor,
                 topBar = {
                     SettingsHomeHeader(
                         title = "设置",
@@ -192,6 +192,7 @@ fun SettingsScreen(
                         backdrop = backdrop,
                         isDark = isDark,
                         baseColor = backgroundColor,
+                        rootBackgroundActive = rootBackgroundActive,
                         query = query,
                         onQueryChange = { query = it },
                         searching = searching,
@@ -380,6 +381,7 @@ private fun SettingsHomeHeader(
     backdrop: Backdrop?,
     isDark: Boolean,
     baseColor: Color,
+    rootBackgroundActive: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
     searching: Boolean,
@@ -389,7 +391,21 @@ private fun SettingsHomeHeader(
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val titleAreaHeight = (titleHeight * (1f - collapseFraction)).coerceAtLeast(0.dp)
     Box(Modifier.fillMaxWidth().testTag("settings_root_toolbar")) {
-        if (backdrop != null) {
+        if (rootBackgroundActive) {
+            Box(
+                Modifier.matchParentSize()
+                    .padding(bottom = TopAppBarGlowDefaults.ExtraHeight)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                baseColor.copy(alpha = 0.22f + 0.56f * collapseFraction),
+                                baseColor.copy(alpha = 0.08f + 0.36f * collapseFraction),
+                                Color.Transparent,
+                            ),
+                        ),
+                    ),
+            )
+        } else if (backdrop != null) {
             TopAppBarGlow(
                 backdrop = backdrop,
                 scrollOffsetPx = scrollOffsetPx,
@@ -576,14 +592,7 @@ private fun SettingsCategoryCard(
 ) {
     Column {
         if (title != null) PreferenceCategory(title = title)
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                .squircleSurface(
-                    color = COUITheme.colorScheme.cardBackground,
-                    cornerRadius = 24.dp,
-                    weight = SquircleDefaults.Weight,
-                ),
-        ) {
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             CardListGroup(content = content)
         }
     }
@@ -594,13 +603,7 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: CardListGroupScope.() -> Unit,
 ) {
-    Column(
-        modifier = modifier.squircleSurface(
-            color = COUITheme.colorScheme.cardBackground,
-            cornerRadius = 24.dp,
-            weight = SquircleDefaults.Weight,
-        ),
-    ) {
+    Card(modifier = modifier) {
         CardListGroup(content = content)
     }
 }

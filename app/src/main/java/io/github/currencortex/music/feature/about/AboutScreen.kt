@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.about
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,11 +43,20 @@ import io.github.suqi8.coui.kmp.basic.BasicComponent
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.CardListGroup
+import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.Tooltip
+import io.github.suqi8.coui.kmp.basic.TooltipAnchorPosition
+import io.github.suqi8.coui.kmp.basic.TooltipBox
+import io.github.suqi8.coui.kmp.basic.rememberTooltipState
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Info
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
+import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import kotlinx.coroutines.launch
 
 @Composable
 fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, enableBlur: Boolean,
@@ -124,6 +134,9 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
     val context = LocalContext.current
     // Five taps on the version row unlock the developer options; the counter resets once it fires.
     var versionTaps by remember { mutableIntStateOf(0) }
+    val platform = remember { androidPlatformInfo() }
+    val platformTooltip = rememberTooltipState()
+    val coroutineScope = rememberCoroutineScope()
     val projectLinks = state.links.filter { it.fullText in setOf("GitHub", "QQ 群", "网站") }
     val legalLinks = state.links.filterNot { it.fullText == "在线隐私政策" || it.fullText in setOf("GitHub", "QQ 群", "网站") }
     SettingsPage(state.title, "about_screen", actions.onBack, largeTitle = true) {
@@ -154,7 +167,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
             }
         }
         item("details") {
-            PreferenceCategory(title = "详细信息")
+            PreferenceCategory(title = "详细信息", marginStartType = PreferenceCategoryMarginStartType.Small)
             Card(Modifier.fillMaxWidth()) {
                 CardListGroup {
                     item {
@@ -178,14 +191,41 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
                         BasicComponent(title = "设计语言", endActions = { AboutValue("ColorOS 17 · COUI 17") })
                     }
                     item(showDivider = false) {
-                        BasicComponent(title = "平台", endActions = { AboutValue("Android") })
+                        val warning = platform.warning
+                        if (warning == null) {
+                            BasicComponent(
+                                title = "平台",
+                                endActions = { AboutValue(platform.label) },
+                                modifier = Modifier.testTag("about_platform"),
+                            )
+                        } else {
+                            // Older systems miss some COUI material components; the value turns yellow
+                            // and opens a tooltip that spells out which ones.
+                            TooltipBox(
+                                state = platformTooltip,
+                                tooltip = {
+                                    Tooltip(text = warning)
+                                },
+                                placement = TooltipAnchorPosition.Above,
+                                dismissOnTouchOutside = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                BasicComponent(
+                                    title = "平台",
+                                    endActions = { AboutValue(platform.label, warning = true) },
+                                    onClick = { coroutineScope.launch { platformTooltip.show() } },
+                                    onClickLabel = "查看系统兼容性说明",
+                                    modifier = Modifier.testTag("about_platform"),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
         if (projectLinks.isNotEmpty()) {
             item("project") {
-                PreferenceCategory(title = "项目")
+                PreferenceCategory(title = "项目", marginStartType = PreferenceCategoryMarginStartType.Small)
                 Card(Modifier.fillMaxWidth()) {
                     CardListGroup {
                         projectLinks.distinctBy { it.url }.forEachIndexed { index, link ->
@@ -209,7 +249,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
         }
         if (legalLinks.isNotEmpty()) {
             item("legal") {
-                PreferenceCategory(title = "许可")
+                PreferenceCategory(title = "许可", marginStartType = PreferenceCategoryMarginStartType.Small)
                 Card(Modifier.fillMaxWidth()) {
                     CardListGroup {
                         legalLinks.distinctBy { it.url }.forEachIndexed { index, link ->
@@ -330,15 +370,49 @@ private fun AboutHero(state: AboutUiState, updateState: UpdateState,
 }
 
 @Composable
-private fun AboutValue(text: String) {
-    Text(
-        text,
+private fun AboutValue(text: String, warning: Boolean = false) {
+    val color = if (warning) COUITheme.colorScheme.yellow else COUITheme.colorScheme.labelTertiary
+    Row(
         modifier = Modifier.padding(start = 12.dp),
-        fontSize = 14.sp,
-        color = COUITheme.colorScheme.labelTertiary,
-        textAlign = TextAlign.End,
-        maxLines = 1,
-    )
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (warning) {
+            Icon(
+                imageVector = COUIIcons.Info,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = color,
+            )
+        }
+        Text(
+            text,
+            fontSize = 14.sp,
+            color = color,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+    }
+}
+
+private data class AndroidPlatformInfo(val label: String, val warning: String?)
+
+/** 平台行展示系统版本；有组件无法使用时给出黄色提示。 */
+private fun androidPlatformInfo(): AndroidPlatformInfo {
+    val sdk = Build.VERSION.SDK_INT
+    val release = Build.VERSION.RELEASE?.trim().orEmpty()
+    val label = if (release.isBlank()) "Android" else "Android $release"
+    val unavailable = buildList {
+        if (sdk < 31) add("动态取色、页面模糊（需 Android 12+）")
+        if (sdk < 33) add("液态玻璃（需 Android 13+）")
+        if (sdk < 34) add("预测性返回（需 Android 14+）")
+    }
+    if (unavailable.isEmpty()) return AndroidPlatformInfo(label, null)
+    val warning = buildString {
+        append("系统版本较低，以下组件不可用：")
+        unavailable.forEach { append('\n').append(it) }
+    }
+    return AndroidPlatformInfo(label, warning)
 }
 
 @Composable

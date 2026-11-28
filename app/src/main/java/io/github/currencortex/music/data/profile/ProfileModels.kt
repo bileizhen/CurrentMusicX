@@ -28,10 +28,12 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean, isOwner: Boolean = false): User
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
     val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
     @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false,
-    val isBot: Boolean = false, val level: Int? = null, val points: Long? = null) {
+    val isBot: Boolean = false, val level: Int? = null, val points: Long? = null, val bannerUrl: String = "",
+    val bannerType: String = "") {
     val role get() = userRole(isAdmin, isSuper, isOwner)
     val decoration get() = avatarDecoration.ifBlank { legacyDecoration }
     val visible get() = publicSquare ?: public ?: legacyPublic
+    val isVideoBanner get() = bannerType.equals("video", ignoreCase = true) && bannerUrl.isNotBlank()
 }
 @Serializable data class ProfileDto(val user: ProfileUser, val stat: ProfileStats = ProfileStats(),
     val current: SongDto? = null, val recent: List<SongDto> = emptyList(), val playlists: List<PlaylistDto> = emptyList())

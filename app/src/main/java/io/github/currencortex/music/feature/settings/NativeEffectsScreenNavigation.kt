@@ -3,12 +3,12 @@ package io.github.currencortex.music.feature.settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,12 +20,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.ui.component.MusicTextAction
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import io.github.suqi8.coui.kmp.basic.Text
+import io.github.currencortex.music.ui.component.nativeui.SettingsDialog
 
 private const val NETEASE_EFFECTS_PACKAGE = "netease_effects_package"
 private val neteaseEffectDetails = setOf(SoundEffectKind.MOOD.name, SoundEffectKind.SPEAKER.name, SoundEffectKind.AI_MASTER.name)
@@ -119,8 +114,12 @@ private val neteaseEffectDetails = setOf(SoundEffectKind.MOOD.name, SoundEffectK
             }
         }
     }
-    audition.error?.let { message ->
-        MusicDialog(title = "试听提示", onDismiss = vm::stopPreview,
-            content = { Text(message) }, footer = { MusicTextAction("知道了", vm::stopPreview) })
-    }
+    SettingsDialog(
+        show = audition.error != null,
+        title = "试听提示",
+        onDismissRequest = vm::stopPreview,
+        summary = audition.error,
+        positiveText = "知道了",
+        onPositive = vm::stopPreview,
+    )
 }

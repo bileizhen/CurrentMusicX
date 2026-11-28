@@ -1,19 +1,11 @@
 package io.github.currencortex.music.feature.room
 
-import io.github.currencortex.music.ui.component.nativeui.*
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import io.github.currencortex.music.ui.component.SpringLazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -21,14 +13,15 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.ListenTogetherPair
 import io.github.currencortex.music.data.netease.listen.ListenTogetherFateReport
 import io.github.currencortex.music.ui.component.ListeningPairArtwork
-import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicTextAction
+import io.github.currencortex.music.ui.component.SpringLazyColumn
 import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import io.github.suqi8.coui.kmp.basic.*
-import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Native relationship statistics are read-only here. Deletion only requests the caller's confirmation. */
 @Composable internal fun ListenTogetherFateContent(
@@ -131,7 +124,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 } }
                 item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_actions")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GlassActionButton(if (sharing) "正在生成报告…" else "分享缘分报告", { onShare(report) },
+                        SettingsActionButton(if (sharing) "正在生成报告…" else "分享缘分报告", { onShare(report) },
                             Modifier.fillMaxWidth().testTag("listen_fate_share"), primary = true, enabled = !busy && !sharing && !loading)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             MusicTextAction("一起听记录", { onHistory(report.partnerUid) }, Modifier.weight(1f).testTag("listen_fate_history"),

@@ -1,5 +1,6 @@
 package io.github.currencortex.music.data.qqmusic
 
+import android.content.Context
 import android.os.Build
 import io.github.currencortex.music.core.network.ApiClient
 import io.github.currencortex.music.core.network.ApiException
@@ -19,6 +20,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -28,6 +30,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -43,6 +46,7 @@ import kotlin.random.Random
 class QqDirectMusicClient(
     baseClient: OkHttpClient = ApiClient.defaultHttpClient(),
     private val log: (String) -> Unit = {},
+    deviceGuid: String? = null,
 ) {
     private companion object {
         const val CGI = "https://u.y.qq.com/cgi-bin/musicu.fcg"
@@ -50,6 +54,9 @@ class QqDirectMusicClient(
         const val FALLBACK_QIMEI36 = "6c9d3cd110abca9b16311cee10001e717614"
         const val DEFAULT_GUID = "abcdef1234567890abcdef1234567890"
         const val STREAM_ORIGIN = "https://isure.stream.qqmusic.qq.com/"
+        /** QQ refuses vkey batches with `msg` "<ip>;invalidq;" when the playback ticket is rejected. */
+        const val VKEY_SESSION_REJECTED = 104009
+        const val VKEY_REJECTED_MESSAGE = "QQ 音乐拒绝了当前网络或登录会话（104009），请重新扫码登录 QQ 音乐或切换网络后重试"
         const val USER_AGENT = "QQMusic 2005000982(android 15) (Phone)"
         const val ANDROID_USER_AGENT = "QQMusic 14090008(android 10)"
         val JSON = "application/json; charset=utf-8".toMediaType()
@@ -169,10 +176,22 @@ class QqDirectMusicClient(
 
     private val sessions = ConcurrentHashMap<String, QrSession>()
     private val ownedPlaylistDirectories = ConcurrentHashMap<String, String>()
+    /**
+     * Playback guid sent with vkey requests. QQ rejects the well-known placeholder values
+     * (`abcdef…`, `1234567890`) as `invalidq`, and a guid that changes on every launch makes the
+     * account look like a new device, so callers persist one per install.
+     */
+    private val playbackGuid: String = deviceGuid?.trim()?.lowercase()
+        ?.takeIf { it.matches(Regex("[0-9a-f]{32}")) } ?: DEFAULT_GUID
     private val http = baseClient.newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
+        .build()
+    /** Follows CDN redirects; used only for the short playback URL availability probe. */
+    private val streamProbe = http.newBuilder()
+        .followRedirects(true)
+        .followSslRedirects(true)
         .build()
     private val cgiCookieJar = MemoryCookieJar()
     private val cgiHttp = http.newBuilder().cookieJar(cgiCookieJar).build()
@@ -187,7 +206,7 @@ class QqDirectMusicClient(
     private data class AndroidSession(val uid: String, val sid: String)
     private val androidDevice by lazy {
         AndroidDevice(
-            openUdid = DEFAULT_GUID,
+            openUdid = playbackGuid,
             androidId = runCatching {
                 Build.FINGERPRINT.hashCode().toUInt().toString(16).padStart(16, '0')
             }.getOrDefault("0000000000000000"),
@@ -232,6 +251,7 @@ class QqDirectMusicClient(
                 route == "search/suggest" -> suggestions(query)
                 route == "search/hot" -> hotSearch()
                 route == "song/detail" -> songDetail(query)
+                route == "song/dynamic/cover" -> songDynamicCover(query)
                 route == "song/qualities" -> songQualities(query)
                 route == "song/favorite-count" -> songFavoriteCount(query)
                 route == "song/url" -> songUrl(query, credential)
@@ -804,6 +824,63 @@ class QqDirectMusicClient(
         return wrapped(buildJsonObject { put("songs", JsonArray(tracks)) })
     }
 
+    private fun songDynamicCover(query: Map<String, String>): JsonObject {
+        val songMid = query["songMid"].orEmpty().trim()
+        val rawAlbumMid = query["albumMid"].orEmpty().trim()
+        val albumMid = rawAlbumMid.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) } ?: run {
+            if (!songMid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
+            val detail = cgi("music.trackInfo.UniformRuleCtrl", "CgiGetTrackInfo", buildJsonObject {
+                put("ctx", 0)
+                put("client", 1)
+                put("mids", buildJsonArray { add(JsonPrimitive(songMid)) })
+                put("types", buildJsonArray { add(JsonPrimitive(0)) })
+                put("modify_stamp", buildJsonArray { add(JsonPrimitive(0)) })
+            }, null)
+            val track = detail.array("tracks", "track_info", "songs", "songlist", "list")
+                .firstOrNull() as? JsonObject
+            (track?.get("album") as? JsonObject)?.firstText("mid", "albumMid", "albumMID")
+                ?: track?.firstText("albumMid", "albummid", "albumMID")
+                ?: ""
+        }.takeIf { it.matches(Regex("[A-Za-z0-9]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val albumData = cgi("music.musichallAlbum.AlbumInfoServer", "GetAlbumDetail",
+            buildJsonObject { put("albumMid", albumMid) }, null)
+        val basic = (albumData["basicInfo"] as? JsonObject) ?: (albumData["album"] as? JsonObject) ?: albumData
+        val vid = basic.firstText("dynamicCoverVid", "dynamic_cover_vid")
+            .takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) }
+            ?: return wrapped(buildJsonObject { put("videoUrl", "") })
+
+        val streamData = cgi("music.stream.MvUrlProxy", "GetMvUrls", buildJsonObject {
+            put("vids", buildJsonArray { add(JsonPrimitive(vid)) })
+            put("request_type", 10003)
+            put("guid", playbackGuid)
+            put("videoformat", 1)
+            put("format", 264)
+            put("dolby", 0)
+            put("use_new_domain", 1)
+            put("use_ipv6", 1)
+        }, null)
+        val vidObj = (streamData[vid] as? JsonObject)
+            ?: (streamData.values.firstOrNull { it is JsonObject } as? JsonObject)
+        val mp4Entries = vidObj?.array("mp4").orEmpty().mapNotNull { it as? JsonObject }
+        val bestEntry = mp4Entries
+            .filter { entry ->
+                entry.firstLong("code") == 0L &&
+                    entry.array("freeflow_url").any { (it as? JsonPrimitive)?.contentOrNull?.startsWith("http") == true }
+            }
+            .maxByOrNull { entry -> entry.firstLong("filetype") }
+        val urls = bestEntry?.array("freeflow_url")
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+            .orEmpty()
+        val videoUrl = (urls.firstOrNull { it.startsWith("https://") }
+            ?: urls.firstOrNull { it.startsWith("http://") }).orEmpty()
+        return wrapped(buildJsonObject {
+            put("vid", vid)
+            put("videoUrl", videoUrl)
+        })
+    }
+
     private fun songQualities(query: Map<String, String>): JsonObject {
         val mid = query["mid"].orEmpty()
         if (!mid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
@@ -858,50 +935,169 @@ class QqDirectMusicClient(
         val requested = query["level"].orEmpty().ifBlank { "standard" }
         val candidates = QqMusicStreamQuality.candidates(requested, supportsDolby = true, supportsDtsX = true)
         var lastResult = 0L
+        var rejected = false
         for (candidate in candidates) {
-            val filename = candidate.filename(mid, mediaMid)
-            val data = cgi("music.vkey.GetVkey", "UrlGetVkey", buildJsonObject {
-                put("uin", credential?.stringMusicId ?: "0")
-                put("filename", buildJsonArray { add(JsonPrimitive(filename)) })
-                put("guid", randomGuid())
-                put("songmid", buildJsonArray { add(JsonPrimitive(mid)) })
-                put("songtype", buildJsonArray { add(JsonPrimitive(0)) })
-                put("ctx", 0)
-            }, credential, extraComm = buildJsonObject {
-                put("cv", 14_090_008)
-                put("v", 14_090_008)
-                put("chid", "10003505")
-                put("QIMEI", "")
-                put("OpenUDID", DEFAULT_GUID)
-                put("udid", DEFAULT_GUID)
-                put("OpenUDID2", DEFAULT_GUID)
-                put("aid", DEFAULT_GUID.substring(0, 16))
-                put("os_ver", "15")
-                put("phonetype", "MI 6")
-                put("devicelevel", "29")
-                put("newdevicelevel", "29")
-                put("rom", "xiaomi/iarim/sagit:10/eomam.200122.001/7654321:user/release-keys")
-            }, userAgent = "QQMusic 14090008(android 15)")
-            val row = data.array("midurlinfo").firstOrNull() as? JsonObject ?: continue
-            lastResult = row.firstLong("result")
-            val purl = row.firstText("purl", "wifiurl", "flowurl")
-            if (purl.isBlank()) continue
-            val url = if (purl.startsWith("http")) purl else STREAM_ORIGIN + purl.trimStart('/')
+            val resolved = playbackFile(candidate.filename(mid, mediaMid), mid, credential)
+            lastResult = resolved.result
+            if (resolved.url.isBlank()) {
+                if (resolved.rejected) { rejected = true; break }
+                continue
+            }
+            val url = if (resolved.url.startsWith("http")) resolved.url
+                else STREAM_ORIGIN + resolved.url.trimStart('/')
+            // QQ hands out purls for encodings it does not actually host (for example OGG 320 on
+            // a song that only has MP3 320). Such a purl answers `404 file not exist` on the CDN,
+            // so verify the file before handing a dead URL to the player and move to the next
+            // encoding when it is missing.
+            if (!streamAvailable(url)) {
+                log("QQ direct stream ${candidate.prefix} unavailable")
+                continue
+            }
             return wrapped(buildJsonObject {
                 put("url", url)
                 put("level", candidate.level)
                 put("requestedLevel", requested)
                 put("type", candidate.format)
-                put("expi", (data.firstLong("expiration").takeIf { it > 0 } ?: 120) / 2)
+                put("expi", (resolved.data.firstLong("expiration").takeIf { it > 0 } ?: 120) / 2)
                 put("size", payloadSize(candidate.prefix))
                 put("br", candidate.nominalBitrate.takeIf { it > 0 } ?: payloadBitrate(candidate.prefix))
             })
         }
+        // A rejected ticket fails for every quality, so it is reported as a session problem rather
+        // than as "this song has no playable source". Server keeps the cached-audio fallback that a
+        // forbidden-looking kind would suppress.
+        if (rejected) throw ApiException(ErrorKind.Server, VKEY_SESSION_REJECTED, VKEY_REJECTED_MESSAGE)
         throw ApiException(
             ErrorKind.AudioUnavailable,
             lastResult.toInt(),
             "QQ 音乐未提供可播放音源，请检查登录状态、会员权限或地区限制",
         )
+    }
+
+    private data class PlaybackFile(
+        val url: String,
+        val result: Long,
+        val data: JsonObject,
+        val rejected: Boolean = false,
+    )
+
+    /**
+     * Ask the CDN for the first bytes of a resolved stream. The vkey API only proves that QQ
+     * issued a URL, not that the encoding exists; a missing file answers 404 with a JSON body,
+     * while a playable one answers 206 (or 200 when the CDN ignores `Range`).
+     *
+     * Only a client error establishes that the encoding is absent. A transport failure or a 5xx
+     * (500/502/503/504) says nothing about the file, so the URL is kept: dropping it would let a
+     * flaky probe downgrade a tier or report a playable song as unavailable.
+     */
+    private fun streamAvailable(url: String): Boolean {
+        val call = streamProbe.newCall(Request.Builder().url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Range", "bytes=0-1")
+            .get().build())
+        return try {
+            call.timeout().timeout(6, TimeUnit.SECONDS)
+            call.execute().use { response ->
+                response.isSuccessful || response.code !in 400..499
+            }
+        } catch (failure: IOException) {
+            log("QQ direct stream probe skipped: ${failure.message.orEmpty().take(80)}")
+            true
+        }
+    }
+
+    /**
+     * One file's playback address. QQ answers `104009` (`msg` "<ip>;invalidq;") when it rejects the
+     * playback ticket, either as the batch code or per file in `midurlinfo`. Each rejected attempt
+     * falls through to the next route — the stable guid, a fresh guid, then the EVkey CGI, which
+     * accepts the same credential — and only a ticket every route refuses is reported as rejected.
+     */
+    private fun playbackFile(filename: String, mid: String, credential: DirectCredential?): PlaybackFile {
+        var last = PlaybackFile("", 0L, JsonObject(emptyMap()), rejected = true)
+        for (route in 0..2) {
+            val data = try {
+                when (route) {
+                    0 -> vkeyBatch(filename, mid, credential, playbackGuid)
+                    1 -> vkeyBatch(filename, mid, credential, randomGuid())
+                    else -> evkeyBatch(filename, mid, credential)
+                }
+            } catch (failure: ApiException) {
+                if (failure.status != VKEY_SESSION_REJECTED) throw failure
+                log("QQ direct playback route $route rejected: ${failure.userMessage.orEmpty().take(120)}")
+                continue
+            }
+            val row = data.array("midurlinfo").firstOrNull() as? JsonObject
+            val result = row?.firstLong("result") ?: data.firstLong("retcode")
+            val purl = row?.firstText("purl", "wifiurl", "flowurl").orEmpty()
+            if (purl.isNotBlank()) return PlaybackFile(purl, result, data)
+            val rejected = result.toInt() == VKEY_SESSION_REJECTED ||
+                data.firstLong("retcode").toInt() == VKEY_SESSION_REJECTED
+            last = PlaybackFile("", result, data, rejected)
+            // A file QQ refuses on its own (no rights, wrong media mid) will not change with another
+            // route; only a rejected ticket is worth retrying elsewhere.
+            if (!rejected) return last
+        }
+        return last
+    }
+
+    private fun vkeyBatch(filename: String, mid: String, credential: DirectCredential?, guid: String): JsonObject =
+        cgi("music.vkey.GetVkey", "UrlGetVkey", buildJsonObject {
+            put("uin", credential?.stringMusicId ?: "0")
+            put("filename", buildJsonArray { add(JsonPrimitive(filename)) })
+            put("guid", guid)
+            put("songmid", buildJsonArray { add(JsonPrimitive(mid)) })
+            put("songtype", buildJsonArray { add(JsonPrimitive(0)) })
+            put("ctx", 0)
+        }, credential, extraComm = playbackComm(), userAgent = "QQMusic 14090008(android 15)")
+
+    /**
+     * The `music.vkey.GetEVkey` route the web player uses. It accepts the same credential where
+     * `UrlGetVkey` answers 104009, and is keyed by the `ct:24` / `cv:0` comm shape rather than the
+     * Android client identity, so it builds its own comm instead of [playbackComm].
+     */
+    private fun evkeyBatch(filename: String, mid: String, credential: DirectCredential?): JsonObject =
+        cgi("music.vkey.GetEVkey", "CgiGetEVkey", buildJsonObject {
+            put("filename", buildJsonArray { add(JsonPrimitive(filename)) })
+            put("guid", playbackGuid)
+            put("songmid", buildJsonArray { add(JsonPrimitive(mid)) })
+            put("songtype", buildJsonArray { add(JsonPrimitive(0)) })
+            put("uin", credential?.stringMusicId ?: "0")
+            put("loginflag", 1)
+            put("platform", "20")
+            put("xcdn", 1)
+        }, credential, commOverride = buildJsonObject {
+            put("ct", 24)
+            put("cv", 0)
+            put("format", "json")
+            put("inCharset", "utf-8")
+            put("outCharset", "utf-8")
+            put("notice", 0)
+            put("platform", "yqq.json")
+            put("needNewCode", 1)
+            put("uin", credential?.stringMusicId?.ifBlank { "0" } ?: "0")
+            put("OpenUDID", playbackGuid)
+            put("udid", playbackGuid)
+            if (credential?.valid == true) {
+                put("qq", credential.stringMusicId.ifBlank { credential.musicId.toString() })
+                put("authst", credential.musicKey)
+                put("tmeLoginType", credential.loginType)
+            }
+        })
+
+    private fun playbackComm(): JsonObject = buildJsonObject {
+        put("cv", 14_090_008)
+        put("v", 14_090_008)
+        put("chid", "10003505")
+        put("QIMEI", "")
+        put("OpenUDID", playbackGuid)
+        put("udid", playbackGuid)
+        put("OpenUDID2", playbackGuid)
+        put("aid", playbackGuid.substring(0, 16))
+        put("os_ver", "15")
+        put("phonetype", "MI 6")
+        put("devicelevel", "29")
+        put("newdevicelevel", "29")
+        put("rom", "xiaomi/iarim/sagit:10/eomam.200122.001/7654321:user/release-keys")
     }
 
     private fun lyric(query: Map<String, String>): JsonObject {
@@ -1793,14 +1989,16 @@ class QqDirectMusicClient(
 
     private fun topLists(): JsonObject {
         val data = cgi("music.musicToplist.Toplist", "GetAll", buildJsonObject {}, null)
-        val groups = data.array("groups", "v_group", "group").mapNotNull { value ->
+        val groups = data.array("group", "groups", "v_group").mapNotNull { value ->
             val group = value as? JsonObject ?: return@mapNotNull null
+            val groupId = group.firstLong("groupId", "id").toInt()
             buildJsonObject {
-                put("name", group.firstText("name", "title"))
+                put("id", groupId)
+                put("name", group.firstText("groupName", "name", "title"))
+                put("type", group.firstLong("type", "groupType").toInt())
                 put("toplists", JsonArray(
-                    group.array("toplists", "toplist", "list").mapNotNull { item ->
-                        val row = item as? JsonObject ?: return@mapNotNull null
-                        normalizeToplist(row)
+                    group.array("toplist", "toplists", "list").mapNotNull { item ->
+                        (item as? JsonObject)?.let { normalizeToplist(it, groupId) }
                     }
                 ))
             }
@@ -1817,30 +2015,68 @@ class QqDirectMusicClient(
             if (numericId != null) put("topId", numericId) else put("topId", id)
             put("offset", offset)
             put("num", limit)
+            put("withTags", true)
         }, null)
-        val info = (data["toplist"] as? JsonObject) ?: normalizeToplist(data)
-        val songs = data.array("songlist", "songs", "list")
-        val total = data.firstLong("total", "total_num").takeIf { it > 0 }
-            ?: info.firstLong("total", "song_num").takeIf { it > 0 }
+        // GetDetail nests the chart metadata under data.data and returns playable tracks in
+        // songInfoList; the rank rows (with rankType/rankValue) live in data.data.song.
+        val detail = (data["data"] as? JsonObject) ?: data
+        val info = (data["toplist"] as? JsonObject) ?: normalizeToplist(detail, -1)
+        val rankById = detail.array("song", "songs", "songlist").mapNotNull { value ->
+            val row = value as? JsonObject ?: return@mapNotNull null
+            row.identifier("songId", "id").takeIf(String::isNotBlank)?.let { it to row }
+        }.toMap()
+        val songs = data.array("songInfoList", "songlist", "songs", "list")
+            .ifEmpty { detail.array("songInfoList", "songlist", "songs", "list") }
+            .mapNotNull { value ->
+                val row = value as? JsonObject ?: return@mapNotNull null
+                val rank = rankById[row.identifier("id", "songId")] ?: return@mapNotNull row
+                buildJsonObject {
+                    row.forEach { (key, child) -> put(key, child) }
+                    put("rank", rank.firstLong("rank"))
+                    put("rankType", rank.firstLong("rankType"))
+                    put("rankValue", rank.firstText("rankValue"))
+                }
+            }
+        val total = info.firstLong("totalNum", "songnum", "song_num", "total").takeIf { it > 0 }
+            ?: data.firstLong("total", "totalNum").takeIf { it > 0 }
             ?: (offset + songs.size).toLong()
         return wrapped(buildJsonObject {
             put("toplist", info)
             put("songs", JsonArray(songs))
             put("total", total)
-            put("more", data.flag("hasmore") || (offset + songs.size).toLong() < total)
+            put("more", data.flag("hasmore", "more") || (offset + songs.size).toLong() < total)
         })
     }
 
-    private fun normalizeToplist(value: JsonObject): JsonObject {
+    private fun normalizeToplist(value: JsonObject, groupId: Int): JsonObject {
         val nested = (value["Toplist"] as? JsonObject)
             ?: (value["basic"] as? JsonObject)
+            ?: (value["data"] as? JsonObject)?.let { it["data"] as? JsonObject ?: it }
             ?: value
+        // 巅峰榜 (group 0) cards preview the current No.1 album art; the other groups show
+        // the chart's branded square logo, matching RankHallDataSource in the official app.
+        val hallCover = if (groupId == 0) nested.firstText("mbFrontPicUrl", "itemPicUrl")
+        else nested.firstText("mbFrontLogoUrl", "frontLogoUrl")
+        val cover = hallCover.ifBlank {
+            nested.firstText("mbFrontLogoUrl", "mbFrontPicUrl", "frontPicUrl", "headPicUrl", "pic", "cover")
+        }
+        val headerPic = nested.firstText("mbHeadPicUrl", "headPicUrl", "frontPicUrl", "mbFrontPicUrl", "cover", "pic")
         return buildJsonObject {
             nested.forEach { (key, child) -> put(key, child) }
             put("id", nested.identifier("topId", "id", "tid", "topID"))
             put("title", nested.firstText("title", "name", "topName"))
-            put("pic", nested.firstText("pic", "cover", "headPic"))
-            put("songnum", nested.firstLong("song_num", "songNum", "total"))
+            put("pic", cover)
+            put("cover", cover)
+            put("logo", nested.firstText("logoImgURL", "logo"))
+            put("headerPic", headerPic.ifBlank { cover })
+            put("intro", nested.firstText("intro", "description"))
+            put("updateTips", nested.firstText("updateTips"))
+            put("updateTime", nested.firstText("updateTime", "period"))
+            put("period", nested.firstText("period", "updateTime"))
+            put("listenNum", nested.firstLong("listenNum"))
+            put("songnum", nested.firstLong("song_num", "songNum", "totalNum", "total"))
+            put("cornerMark", nested.firstLong("cornerMark"))
+            put("toplistCardStyle", nested.firstLong("toplistCardStyle"))
         }
     }
 
@@ -2426,13 +2662,17 @@ class QqDirectMusicClient(
     private fun cgiError(code: Int, data: JsonObject): ApiException = ApiException(
         when (code) {
             401, 1000, 104400, 104401 -> ErrorKind.Unauthorized
+            // QQ rejects the playback ticket with "<ip>;invalidq;" here; that diagnostic is not a
+            // user-facing message, so the callers above get the actionable text instead.
+            VKEY_SESSION_REJECTED -> ErrorKind.Forbidden
             403, 20277, 20278, 20450 -> ErrorKind.Forbidden
             429, 104604 -> ErrorKind.RateLimited
             404, 10007, 104003 -> ErrorKind.NotFound
             else -> ErrorKind.Server
         },
         code,
-        data.firstText("msg", "message", "failureHint").take(180).ifBlank { "QQ 音乐请求失败（$code）" },
+        if (code == VKEY_SESSION_REJECTED) VKEY_REJECTED_MESSAGE
+        else data.firstText("msg", "message", "failureHint").take(180).ifBlank { "QQ 音乐请求失败（$code）" },
     )
 
     private fun wrapped(data: JsonObject): JsonObject = buildJsonObject {
@@ -2599,3 +2839,28 @@ private fun JsonElement?.groupItems(key: String): List<JsonElement> =
 
 private operator fun JsonObject.plus(other: JsonObject): JsonObject =
     JsonObject(toMutableMap().apply { putAll(other) })
+
+/**
+ * Stable per-install playback guid for QQ Music vkey requests.
+ *
+ * QQ answers `104009` (`msg` "<ip>;invalidq;") to the well-known placeholder guids, and a guid
+ * that changes on every launch makes the account look like a new device, so one is generated
+ * once and kept outside backups.
+ */
+internal fun qqPlaybackGuid(context: Context): String {
+    val file = File(context.noBackupFilesDir, "qq-playback-guid")
+    runCatching { file.readText().trim() }.getOrNull()
+        ?.takeIf { it.matches(Regex("[0-9a-f]{32}")) }
+        ?.let { return it }
+    val generated = buildString(32) { repeat(32) { append("0123456789abcdef"[Random.nextInt(16)]) } }
+    runCatching {
+        file.parentFile?.mkdirs()
+        val staged = File(file.parentFile, file.name + ".tmp")
+        staged.writeText(generated)
+        if (!staged.renameTo(file)) {
+            file.writeText(generated)
+            staged.delete()
+        }
+    }
+    return generated
+}

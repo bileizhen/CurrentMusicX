@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.Futures
 import io.github.currencortex.music.CurrentMusicApplication
 import io.github.currencortex.music.MainActivity
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.local.QueueSnapshotEntity
 import io.github.currencortex.music.data.lx.LxPlatform
@@ -34,6 +35,11 @@ import kotlinx.coroutines.guava.future
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import io.github.currencortex.music.core.media.engine.*
+import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
+import io.github.currencortex.music.feature.lyrics.timeline.LyricCaptionTimeline
+import io.github.currencortex.music.feature.lyrics.timeline.LyricsPlaybackClock
+import io.github.currencortex.music.feature.lyrics.timeline.PlaybackAnchor
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
@@ -77,6 +83,10 @@ class MusicService : MediaSessionService() {
     private val musicHaptics by lazy { MusicHapticDriver(this) }
     private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer, val formats: AudioFormatState,
         val haptics: MusicHapticTimeline,
+        val loudness: java.util.concurrent.atomic.AtomicReference<TrackLoudnessSpec> =
+            java.util.concurrent.atomic.AtomicReference(TrackLoudnessSpec()),
+        var loudnessJob: Job? = null,
+        var lastLoudnessRuntime: VolumeNormalizationRuntime = VolumeNormalizationRuntime(),
         var originalProcessed: NeteaseOriginalPreset? = null,
         var originalFailed: Pair<NeteaseOriginalPreset, String>? = null)
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
@@ -111,6 +121,7 @@ class MusicService : MediaSessionService() {
     }
     private fun updateEffectDiagnostics() {
         val requested = buildList {
+            if (container.musicSettings.state.value.volumeNormalizationEnabled) add("音量均衡")
             if (container.adaptiveAudio.state.value.enabled) add("动态音频处理系统")
             if (container.smartTuning.effective.value.enabled) add("Android EQ / 智能调音")
             if (container.originalProcessingPreset.value != null) add("网易云原版 PCM 音效")
@@ -119,6 +130,7 @@ class MusicService : MediaSessionService() {
         }
         val plan = AudioEffectPipeline.plan(container.audioOutput.state.value.mode, requested)
         val applied = if (plan.bypass) emptyList() else buildList {
+            if (container.volumeNormalizationRuntime.value.active) add("音量均衡（PCM）")
             if (container.adaptiveAudioRuntime.value.processing) add("动态音频处理系统（PCM）")
             if (container.equalizer.state.value.active) add("Android EQ")
             if (playerSlots[player]?.originalProcessed != null) add("网易云原版 PCM 音效（已观察处理回调）")
@@ -153,6 +165,9 @@ class MusicService : MediaSessionService() {
     }
     private var desktopLyrics: AutoCloseable? = null
     private var session: MediaSession? = null
+    /** Current lyric line exposed through the session metadata; null keeps the song title. */
+    private var sessionLyric: SessionLyricLine? = null
+    private val sessionWindow = Timeline.Window()
     private var loading: Job? = null
     private var lxRetrySongId: Long? = null
     private val lxRetrySources = mutableSetOf<String>()
@@ -227,20 +242,29 @@ class MusicService : MediaSessionService() {
     override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
+        // Media3 falls back to a generic circular play badge; show the app mark instead so the
+        // media notification and MIUI/HyperOS media cards stay visually consistent with the app.
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply {
+                setSmallIcon(R.drawable.ic_notification)
+            }
+        )
         desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHosts.acquire(this, container)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->
                 val resolved = container.audioSources.resolve(offer.request)
+                resolvedTransitionSongs[offer.next.id.toString()] = offer.next
+                resolvedTransitionSongs[trackLoudnessKey(offer.next, resolved.source)] = offer.next
                 val autoDolby = offer.request.selectedDolby(resolved.source)
                 if (autoDolby && !updateDolbySupport()) null else resolved.toMediaItem(offer.next, autoDolby)
-            }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close(); deckVolumes.remove(it) },
+            }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.let { slot -> slot.loudnessJob?.cancel(); slot.equalizer.close() }; deckVolumes.remove(it) },
             currentSong = { container.playbackQueue.state.value.current },
             readVolume = { deckVolumes[it] ?: 1f }, writeVolume = ::deckVolume)
         engine = AudioEngineManager({ player }, container.audioDevices, outputRouter, outputBuffers, container.audioDiagnostics,
             reconfigure = ::reconfigureOutput, releaseOwner = {
                 transitions.close()
-                playerSlots.remove(player)?.equalizer?.close()
+                playerSlots.remove(player)?.let { slot -> slot.loudnessJob?.cancel(); slot.equalizer.close() }
                 player.release()
             }).also { it.initialize() }
         audioFocus = PlaybackAudioFocus(player, container.musicSettings.concurrentPlaybackEnabled, scope)
@@ -250,6 +274,21 @@ class MusicService : MediaSessionService() {
         scope.launch { container.equalizer.state.collect { updateEffectDiagnostics() } }
         scope.launch { container.adaptiveAudioRuntime.collect { updateEffectDiagnostics() } }
         scope.launch { container.adaptiveAudio.state.collect { updateEffectDiagnostics() } }
+        scope.launch { container.volumeNormalizationRuntime.collect { updateEffectDiagnostics() } }
+        scope.launch {
+            var lastNormSettings: VolumeNormalizationSettings? = null
+            container.musicSettings.state.collect { settings ->
+                val norm = VolumeNormalizationSettings.from(settings)
+                if (norm == lastNormSettings) return@collect
+                lastNormSettings = norm
+                if (!norm.enabled) {
+                    container.volumeNormalizationRuntime.value = VolumeNormalizationRuntime()
+                } else if (::transitions.isInitialized) {
+                    playerSlots[player]?.let { slot -> scheduleLoudnessEnrichment(player.currentMediaItem, slot) }
+                }
+                updateEffectDiagnostics()
+            }
+        }
         scope.launch {
             var lastFrameAt = 0L
             var lastDeck: ExoPlayer? = null
@@ -287,6 +326,7 @@ class MusicService : MediaSessionService() {
         session = MediaSession.Builder(this, sessionPlayer()).setSessionActivity(
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
+        startSessionLyrics()
         scope.launch {
             var wasExternal = false
             container.playerController.state.collect { state ->
@@ -415,6 +455,7 @@ class MusicService : MediaSessionService() {
         val meter = DockAudioLevel()
         val formats = AudioFormatState()
         val hapticTimeline = MusicHapticTimeline()
+        val loudnessRef = java.util.concurrent.atomic.AtomicReference(TrackLoudnessSpec())
         val secondaryEqualizer = PlaybackEqualizer().apply {
             val settings = container.smartTuning.effective.value
             configure(if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK &&
@@ -446,7 +487,21 @@ class MusicService : MediaSessionService() {
             diagnostics = container.audioDiagnostics, primary = ::primary, router = outputRouter,
             processingSettings = { container.audioOutput.state.value }, formatState = formats,
             adaptiveSettings = { container.adaptiveAudio.effective.value }, hapticTimeline = hapticTimeline,
-            adaptiveReport = { state -> scope.launch { if (primary()) container.adaptiveAudioRuntime.value = state } }))
+            adaptiveReport = { state -> scope.launch { if (primary()) container.adaptiveAudioRuntime.value = state } },
+            volumeNormalizationSettings = {
+                VolumeNormalizationSettings.from(
+                    container.musicSettings.state.value,
+                    container.audioOutput.state.value.mode.bypassProcessing,
+                )
+            },
+            volumeNormalizationTrack = loudnessRef::get,
+            volumeNormalizationMeasured = container.trackLoudnessStore::record,
+            volumeNormalizationReport = { state ->
+                scope.launch {
+                    playerSlots.values.firstOrNull { it.loudness === loudnessRef }?.lastLoudnessRuntime = state
+                    if (primary()) container.volumeNormalizationRuntime.value = state
+                }
+            }))
             .setLoadControl(outputBuffers.createLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
                 setAudioAttributes(playbackAttributes, false)
@@ -455,10 +510,14 @@ class MusicService : MediaSessionService() {
                 setPreferredAudioDevice(outputManager.preferredOutput(container.audioOutput.state.value.deviceKey))
             }
         created = source
-        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer, formats, hapticTimeline)
+        val slot = PlayerSlot(meter, secondaryEqualizer, formats, hapticTimeline, loudness = loudnessRef)
+        playerSlots[source] = slot
         deckVolume(source, 1f)
         source.addListener(object : Player.Listener {
             private fun primary() = ::transitions.isInitialized && source === player
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                scheduleLoudnessEnrichment(mediaItem, slot)
+            }
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                 if (!primary()) return
                 musicHaptics.stop()
@@ -579,6 +638,7 @@ class MusicService : MediaSessionService() {
         playerSlots[incoming]?.let { slot ->
             slot.originalFailed?.let { (preset, message) -> reportOriginalFailure(preset, message) }
             slot.originalProcessed?.let(::acknowledgeOriginalProcessing)
+            container.volumeNormalizationRuntime.value = slot.lastLoudnessRuntime
         }
         container.audioDiagnostics.update { it.copy(playing = incoming.isPlaying) }
         updateEffectDiagnostics()
@@ -606,6 +666,15 @@ class MusicService : MediaSessionService() {
                         Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
                         Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
                     ).build())
+                }
+                // Bluetooth AVRCP, the lockscreen and media cards read this combined metadata.
+                // A caption for another song must never overwrite the item still being replaced.
+                val lyric = sessionLyric
+                if (lyric != null && !state.timeline.isEmpty) {
+                    val index = state.currentMediaItemIndex.takeIf { it in 0 until state.timeline.windowCount } ?: 0
+                    if (state.timeline.getWindow(index, sessionWindow).mediaItem.mediaId == lyric.songId.toString())
+                        builder.setPlaylist(state.timeline, state.currentTracks,
+                            state.currentMetadata.buildUpon().setTitle(lyric.title).build())
                 }
                 return builder.build()
             }
@@ -666,6 +735,63 @@ class MusicService : MediaSessionService() {
         refreshSession = { forwarding.remoteChanged() }
         return forwarding
     }
+
+    /**
+     * Mirrors the mini-player caption into the session metadata. AVRCP has no lyric attribute, so
+     * the current line replaces the title that Bluetooth, the lockscreen and system media cards read.
+     */
+    private fun startSessionLyrics() {
+        scope.launch {
+            val clock = LyricsPlaybackClock()
+            var captionSongKey: String? = null
+            var captionDocument: LyricsDocument? = null
+            var caption = LyricCaptionTimeline(LyricsDocument())
+            combine(container.musicSettings.state, container.playbackLyrics.state,
+                container.playerController.state) { settings, lyrics, playback ->
+                SessionLyricInput(settings.bluetoothLyrics, lyrics.loading, lyrics.songId,
+                    settings.lyricsOffsetMs - lyrics.songOffsetMs, lyrics.songKey,
+                    lyrics.document.takeIf {
+                        !lyrics.loading && it.lines.isNotEmpty() && lyrics.matches(playback.song)
+                    }, PlaybackAnchor(playback.positionMs, playback.anchorRealtimeMs,
+                        playback.playing && !playback.loading, playback.durationMs,
+                        playback.playbackSpeed, playback.timelineRevision))
+            }.collectLatest { input ->
+                val document = when {
+                    input.document != null -> input.document
+                    // A reload of the same song keeps its caption instead of flashing the song title.
+                    input.enabled && input.loading && input.songKey != null && input.songKey == captionSongKey -> captionDocument
+                    else -> null
+                }
+                if (!input.enabled || document == null) { setSessionLyric(null, null); return@collectLatest }
+                if (captionDocument !== document) {
+                    captionSongKey = input.songKey
+                    captionDocument = document
+                    caption = LyricCaptionTimeline(document)
+                }
+                clock.update(input.songKey, input.anchor, SystemClock.elapsedRealtime())
+                while (true) {
+                    val now = SystemClock.elapsedRealtime()
+                    setSessionLyric(input.songId,
+                        caption.textAt(LyricsSynchronizer.lyricPosition(clock.positionAt(now), input.offsetMs)))
+                    val wait = caption.nextCheckMs(clock, now, input.offsetMs) ?: break
+                    delay((now + wait - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+                }
+            }
+        }
+    }
+
+    private data class SessionLyricInput(val enabled: Boolean, val loading: Boolean, val songId: Long?,
+        val offsetMs: Long, val songKey: String?, val document: LyricsDocument?, val anchor: PlaybackAnchor)
+
+    private data class SessionLyricLine(val songId: Long, val title: String)
+
+    private fun setSessionLyric(songId: Long?, text: String?) {
+        val next = if (songId == null) null else sessionLyricTitle(text)?.let { SessionLyricLine(songId, it) }
+        if (next == sessionLyric) return
+        sessionLyric = next
+        refreshSession()
+    }
+
     private fun requestQueueCheckpoint() {
         // Capture the controller's local queue on Main, after startup has restored it.
         if (container.ready.isCompleted) queueCheckpoints.offer(container.playerController.queueForPersistence())
@@ -754,6 +880,7 @@ class MusicService : MediaSessionService() {
         lxRetryExhausted = false
         musicHaptics.close()
         container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime()
+        container.volumeNormalizationRuntime.value = VolumeNormalizationRuntime()
         transitions.cancel()
         player.pause()
         resetPauseFade()
@@ -850,9 +977,105 @@ class MusicService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
+    private val resolvedTransitionSongs = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, io.github.currencortex.music.data.song.Song>(16, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, io.github.currencortex.music.data.song.Song>?,
+            ): Boolean = size > 16
+        }
+    )
+
+    private fun scheduleLoudnessEnrichment(mediaItem: androidx.media3.common.MediaItem?, slot: PlayerSlot) {
+        slot.loudnessJob?.cancel()
+        slot.lastLoudnessRuntime = VolumeNormalizationRuntime()
+        if (mediaItem == null) {
+            slot.loudness.set(TrackLoudnessSpec())
+            return
+        }
+        val baseSpec = mediaItem.loudnessSpec ?: TrackLoudnessSpec()
+        val cached = if (baseSpec.trackKey.isNotEmpty()) container.trackLoudnessStore.lookup(baseSpec.trackKey) else null
+        val initialSpec = if (cached != null) {
+            baseSpec.copy(
+                cachedLufs = cached.lufs,
+                cachedPeak = cached.peak,
+                cachedGatedBlocks = cached.gatedBlocks,
+            )
+        } else {
+            baseSpec
+        }
+        slot.loudness.set(initialSpec)
+
+        val normSettings = VolumeNormalizationSettings.from(
+            container.musicSettings.state.value,
+            container.audioOutput.state.value.mode.bypassProcessing,
+        )
+        if (!normSettings.enabled) return
+        val meta = initialSpec.metadata
+        if (meta != null && meta.authoritative && (meta.trackLufs != null || meta.albumLufs != null)) return
+        val song = findSongForMediaItem(mediaItem, initialSpec.trackKey) ?: return
+        val expectedKey = initialSpec.trackKey
+        val expectedMediaId = mediaItem.mediaId
+        slot.loudnessJob = scope.launch {
+            val enriched = enrichLoudnessMetadata(song, expectedKey, meta) ?: return@launch
+            val latest = slot.loudness.get()
+            if (latest.trackKey == expectedKey && (expectedKey.isNotEmpty() || expectedMediaId.isNotEmpty())) {
+                slot.loudness.set(latest.copy(metadata = enriched))
+            }
+        }
+    }
+
+    private fun findSongForMediaItem(
+        mediaItem: androidx.media3.common.MediaItem,
+        trackKey: String,
+    ): io.github.currencortex.music.data.song.Song? {
+        val candidates = listOfNotNull(
+            container.playbackQueue.state.value.current,
+            container.playbackQueue.previewNext(),
+            if (trackKey.isNotEmpty()) resolvedTransitionSongs[trackKey] else null,
+            if (mediaItem.mediaId.isNotEmpty()) resolvedTransitionSongs[mediaItem.mediaId] else null,
+        )
+        if (mediaItem.mediaId.isNotEmpty()) {
+            candidates.firstOrNull { it.id.toString() == mediaItem.mediaId }?.let { return it }
+        }
+        return if (trackKey.isNotEmpty()) resolvedTransitionSongs[trackKey] else null
+    }
+
+    private suspend fun enrichLoudnessMetadata(
+        song: io.github.currencortex.music.data.song.Song,
+        trackKey: String,
+        existing: TrackLoudnessMetadata?,
+    ): TrackLoudnessMetadata? = when (song.musicSource) {
+        io.github.currencortex.music.data.song.MusicSource.LOCAL -> container.localLoudnessTags.read(song)
+        io.github.currencortex.music.data.song.MusicSource.NETEASE -> {
+            if (song.neteaseCloud) {
+                null
+            } else {
+                val neteaseId = song.id.takeIf { it > 0L } ?: return null
+                val analysis = try {
+                    container.neteaseSoundEffects.analyze(neteaseId)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                val lufs = analysis?.loudnessLufs?.takeIf { it.isFinite() && it in -60f..6f } ?: return null
+                val substitutedAudio = trackKey.removePrefix("netease:").contains(':')
+                TrackLoudnessMetadata(
+                    trackLufs = lufs,
+                    trackPeak = existing?.trackPeak,
+                    authoritative = !substitutedAudio,
+                    sourceLabel = if (substitutedAudio) "网易云响度参考" else "网易云响度分析",
+                )
+            }
+        }
+        else -> null
+    }
+
     override fun onDestroy() {
+        playerSlots.values.forEach { it.loudnessJob?.cancel() }
         musicHaptics.close()
         container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime()
+        container.volumeNormalizationRuntime.value = VolumeNormalizationRuntime()
         desktopLyrics?.close(); desktopLyrics = null
         listening.update(SystemClock.elapsedRealtime(), false)
         flushListening(); trackedSong = null; videoView?.player = null; videoView = null
@@ -871,3 +1094,19 @@ class MusicService : MediaSessionService() {
         const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE"
     }
 }
+
+/** Trims a caption and keeps it within the AVRCP element budget. */
+internal fun sessionLyricTitle(text: String?): String? =
+    text?.trim()?.takeIf { it.isNotEmpty() }?.let(::truncateAvrcpTitle)
+
+/** AVRCP element values share the L2CAP MTU; stay within 240 UTF-8 bytes on a character boundary. */
+private fun truncateAvrcpTitle(text: String): String {
+    val bytes = text.toByteArray(Charsets.UTF_8)
+    if (bytes.size <= SESSION_LYRIC_MAX_BYTES) return text
+    var end = SESSION_LYRIC_MAX_BYTES
+    while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
+    return String(bytes, 0, end, Charsets.UTF_8)
+}
+
+/** Leave room for the AVRCP protocol header within the L2CAP MTU. */
+private const val SESSION_LYRIC_MAX_BYTES = 240
