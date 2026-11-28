@@ -97,6 +97,58 @@ object KugouProtocol {
     fun loginKey(clientTimeMs: Long, appId: String = APP_ID, key: String = SIGN_KEY): String =
         md5(appId + key + CLIENT_VERSION + clientTimeMs)
 
+    /** `key` of cloudlist write requests (`signParamsKey`): md5(appid + signKey + clientver + clienttime). */
+    fun paramsKey(clientTimeSeconds: Long, appId: String = APP_ID, key: String = SIGN_KEY): String =
+        md5(appId + key + CLIENT_VERSION + clientTimeSeconds)
+
+    /** Random 6-character lower-case session key for the playlist AES envelope (`randomString(6).toLowerCase()`). */
+    fun playlistAesKey(): String {
+        val alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+        val bytes = ByteArray(6)
+        secureRandom.nextBytes(bytes)
+        return bytes.joinToString("") { alphabet[(it.toInt() and 0xff) % alphabet.length].toString() }
+    }
+
+    /**
+     * `playlistAesEncrypt`: AES-128-CBC/PKCS5 with key/iv from md5(sessionKey), returned as Base64.
+     * `cloudlist.service/v2/delete_list` rejects plain JSON bodies and expects this envelope.
+     */
+    fun playlistAesEncrypt(sessionKey: String, plaintext: String): String {
+        val digest = md5(sessionKey)
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            SecretKeySpec(digest.substring(0, 16).toByteArray(Charsets.US_ASCII), "AES"),
+            IvParameterSpec(digest.substring(16, 32).toByteArray(Charsets.US_ASCII)),
+        )
+        return Base64.getEncoder().encodeToString(cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8)))
+    }
+
+    /** `playlistAesDecrypt`: returns null when [cipherBytes] is not an envelope for [sessionKey]. */
+    fun playlistAesDecrypt(sessionKey: String, cipherBytes: ByteArray): String? {
+        fun decrypt(raw: ByteArray): String? = runCatching {
+            val digest = md5(sessionKey)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(digest.substring(0, 16).toByteArray(Charsets.US_ASCII), "AES"),
+                IvParameterSpec(digest.substring(16, 32).toByteArray(Charsets.US_ASCII)),
+            )
+            String(cipher.doFinal(raw), Charsets.UTF_8)
+        }.getOrNull()
+        return decrypt(cipherBytes)
+            ?: runCatching { decrypt(Base64.getDecoder().decode(String(cipherBytes, Charsets.US_ASCII).trim())) }.getOrNull()
+    }
+
+    /** `rsaEncrypt2`: PKCS#1 v1.5 padding (unlike [rsaEncryptLogin]'s raw zero pad), uppercase hex. */
+    fun rsaEncryptPkcs1(plaintext: String, publicKeyBase64: String = LOGIN_RSA_PUBLIC_KEY): String {
+        val pubKey = KeyFactory.getInstance("RSA")
+            .generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)))
+        val cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding")
+        cipher.init(Cipher.ENCRYPT_MODE, pubKey)
+        return cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8)).joinToString("") { "%02X".format(it.toInt() and 0xff) }
+    }
+
     /** `key` for `trackermv.kugou.com/interface/index`: md5(mvHash + "kugoumvcloud"). */
     fun mvKey(mvHash: String): String = md5(mvHash + MV_KEY_SALT)
 

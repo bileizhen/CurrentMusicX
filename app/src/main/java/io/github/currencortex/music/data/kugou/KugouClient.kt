@@ -33,6 +33,7 @@ class KugouClient(
     private val http = baseClient.newBuilder().callTimeout(20, TimeUnit.SECONDS).build()
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val formMediaType = "application/x-www-form-urlencoded".toMediaType()
 
     fun nowMillis(): Long = clock()
     fun nowSeconds(): Long = clock() / 1000
@@ -74,6 +75,25 @@ class KugouClient(
             .post(body.toRequestBody(jsonMediaType))
             .build()
         return parseResponse("POST $path", execute(request), check)
+    }
+
+    /**
+     * Signed form POST whose response is kept as raw bytes. Cloudlist playlist writes
+     * (`v2/delete_list`) answer with an AES envelope that must not be decoded as UTF-8 here.
+     */
+    suspend fun postRaw(
+        base: String, path: String, body: String, params: Map<String, String> = emptyMap(),
+        device: KugouDevice, credentials: KugouCredentials? = null, router: String? = null,
+        key: String = KugouProtocol.SIGN_KEY, appId: String = KugouProtocol.APP_ID,
+        headers: Map<String, String> = emptyMap(), clientTimeSeconds: Long? = null,
+    ): ByteArray {
+        val ts = clientTimeSeconds ?: nowSeconds()
+        val query = buildQuery(params, device, credentials, ts, key, appId, body = body, includeAuth = true)
+        val url = (base + path).toHttpUrl().newBuilder().apply { query.forEach { (name, value) -> addQueryParameter(name, value) } }.build()
+        val request = baseRequest(url.toString(), router, headers)
+            .post(body.toRequestBody(formMediaType))
+            .build()
+        return executeBytes(request)
     }
 
     private fun buildQuery(
@@ -138,6 +158,30 @@ class KugouClient(
                         it.code == 429 -> continuation.resumeWithException(ApiException(ErrorKind.RateLimited, 429))
                         it.code >= 400 -> continuation.resumeWithException(ApiException(ErrorKind.Server, it.code))
                         else -> if (continuation.isActive) continuation.resume(text)
+                    }
+                }
+            }
+        })
+    }
+
+    private suspend fun executeBytes(request: Request): ByteArray = suspendCancellableCoroutine { continuation ->
+        val call = http.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    val bytes = try { it.body?.bytes() ?: ByteArray(0) } catch (e: IOException) {
+                        if (continuation.isActive) continuation.resumeWithException(e)
+                        return
+                    }
+                    when {
+                        it.code == 404 -> continuation.resumeWithException(ApiException(ErrorKind.NotFound, 404))
+                        it.code == 429 -> continuation.resumeWithException(ApiException(ErrorKind.RateLimited, 429))
+                        it.code >= 400 -> continuation.resumeWithException(ApiException(ErrorKind.Server, it.code))
+                        else -> if (continuation.isActive) continuation.resume(bytes)
                     }
                 }
             }

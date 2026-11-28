@@ -475,7 +475,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         if (playlist.source == "kugou") {
             if (playlist.nativeOwned) {
                 val listId = playlist.remoteId.toIntOrNull() ?: playlist.id.toInt()
-                container.kugou.deletePlaylist(listId, listType = 0)
+                container.kugou.deletePlaylist(listId)
             } else {
                 container.kugou.unsubscribePlaylist(playlist)
             }
