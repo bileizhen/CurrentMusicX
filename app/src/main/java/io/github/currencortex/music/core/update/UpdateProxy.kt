@@ -27,5 +27,10 @@ class UpdateProxy(endpoint: String = ENDPOINT) {
             return if (normalized != null && CurrentMusicServer.builtIn(normalized))
                 UpdateProxy(normalized + "x/download/latest") else current
         }
+        /** CI release metadata shared by the backend; a custom server may not implement it. */
+        fun releaseMetadataUrl(server: String): String? {
+            val normalized = runCatching { ServerUrl.normalize(server) }.getOrNull() ?: return null
+            return if (CurrentMusicServer.builtIn(normalized)) normalized + "x/releases?channel=ci" else null
+        }
     }
 }
