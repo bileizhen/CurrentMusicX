@@ -1,0 +1,22 @@
+<resources>
+    <string name="profile_banner_video_trim_limit">Select up to %1$d seconds. Center-cropped to 3:2.</string>
+    <string name="profile_banner_video_keep_audio">Keep original audio</string>
+    <string name="profile_banner_video_remove_audio">This account can only upload silent video banners. Reach Lv.3 to upload one with sound.</string>
+    <string name="profile_banner_image_lossless">Lossless upload</string>
+    <string name="profile_banner_image_lossless_summary">Keep the cropped pixels at full resolution and save as a lossless PNG.</string>
+    <string name="profile_banner_image_compressed">Reach Lv.3 to unlock lossless banner saving.</string>
+    <string name="profile_banner_image_original_error">Couldn’t read the original image, or it exceeds 32 MiB. Turn off Lossless upload and try again.</string>
+    <string name="profile_banner_image_lossless_failed">%1$s. Turn off Lossless upload and try again.</string>
+    <string name="profile_banner_video_keep_audio_summary">Listen while editing and let visitors unmute the full-screen preview.</string>
+    <string name="profile_banner_video_export_with_audio_error">Couldn’t convert the video. Try again with Keep original audio turned off.</string>
+    <string name="profile_banner_video_trim_hint">Preview or trim the clip before saving. Center-cropped to 3:2.</string>
+    <string name="profile_banner_preview">Profile banner preview</string>
+    <string name="profile_banner_view">View profile banner</string>
+    <string name="profile_banner_upload">Upload profile banner</string>
+    <string name="profile_banner_preview_close">Close banner preview</string>
+    <string name="profile_banner_preview_unmute">Unmute video</string>
+    <string name="profile_banner_preview_mute">Mute video</string>
+    <string name="profile_banner_preview_change">Change background</string>
+    <string name="profile_banner_preview_error">Couldn’t load banner</string>
+    <string name="profile_banner_preview_retry">Retry</string>
+</resources>

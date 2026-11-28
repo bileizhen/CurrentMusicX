@@ -1,12 +1,14 @@
 package io.github.currencortex.music.feature.profile
 
 import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.data.settings.MusicPlatform
@@ -15,6 +17,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.net.SocketTimeoutException
 
 data class ProfileState(val loading: Boolean = false, val profile: ProfileDto? = null, val error: String? = null,
     val sectionErrors: List<String> = emptyList())
@@ -23,15 +27,15 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     val platformLikedCount = MutableStateFlow<Int?>(null)
     val busy = MutableStateFlow(false)
     val passwordCodeUntil = MutableStateFlow(0L)
-    sealed interface BannerDraft {
-        data class Image(val uri: Uri) : BannerDraft
-        data class Video(val uri: Uri, val info: BannerVideoInfo, val maxDurationMs: Long) : BannerDraft
+    internal sealed interface BannerDraft {
+        data class Image(val uri: Uri, val original: LosslessBannerImage?, val policy: BannerUploadPolicy) : BannerDraft
+        data class Video(val uri: Uri, val info: BannerVideoInfo, val policy: BannerUploadPolicy) : BannerDraft
     }
 
     val message = MutableStateFlow<String?>(null)
     val dialog = MutableStateFlow<String?>(null)
     val avatar = MutableStateFlow<Uri?>(null)
-    val bannerDraft = MutableStateFlow<BannerDraft?>(null)
+    internal val bannerDraft = MutableStateFlow<BannerDraft?>(null)
     val bannerStatus = MutableStateFlow<String?>(null)
     private var bannerOwner: RequestSession? = null
     private var bannerInspectJob: kotlinx.coroutines.Job? = null
@@ -206,7 +210,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         val role = if (profileUser != null) profileUser.role else account?.let {
             userRole(it.isAdmin, it.isSuper, it.isOwner)
         }
-        val maxDurationMs = BannerVideoRules.maxDurationMs(role)
+        val policy = BannerUploadPolicy.forUser(role, profileUser?.level ?: account?.level)
         bannerInspectJob?.cancel()
         bannerDraft.value = null
         bannerStatus.value = "正在读取媒体信息…"
@@ -215,11 +219,13 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
             try {
                 val draft = withContext(Dispatchers.IO) {
                     when (detectBannerMediaKind(appContext, uri)) {
-                        BannerMediaKind.IMAGE -> BannerDraft.Image(uri)
+                        BannerMediaKind.IMAGE -> BannerDraft.Image(uri, original = if (policy.allowsOriginalMedia) {
+                            inspectLosslessBannerImage(appContext.contentResolver, uri)
+                        } else null, policy = policy)
                         BannerMediaKind.VIDEO -> {
                             val info = inspectBannerVideo(appContext, uri)
                                 ?: throw ApiException(ErrorKind.Unknown, userMessage = "无法读取该视频，请换一个 MP4 或 MOV 文件")
-                            BannerDraft.Video(uri, info, maxDurationMs)
+                            BannerDraft.Video(uri, info, policy)
                         }
                         BannerMediaKind.UNSUPPORTED ->
                             throw ApiException(ErrorKind.Unknown, userMessage = "仅支持图片、MP4 或 MOV 格式的主页横幅")
@@ -253,24 +259,70 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         bannerStatus.value = null
     }
 
-    fun saveBanner(resolver: ContentResolver, crop: BannerCrop) {
-        val uri = (bannerDraft.value as? BannerDraft.Image)?.uri ?: return
+    fun saveBanner(context: Context, crop: BannerCrop, useLossless: Boolean) {
+        val draft = bannerDraft.value as? BannerDraft.Image ?: return
         val expected = bannerOwner?.takeIf { it == session() } ?: return
+        val appContext = context.applicationContext
         action("主页横幅已更新") {
-            val bytes = withContext(Dispatchers.IO) {
-                runCatching { bannerCropBytes(resolver, uri, crop, PROFILE_BANNER_ASPECT) }.getOrElse {
-                    throw ApiException(ErrorKind.Unknown, userMessage = "无法处理横幅图片，请换一张再试")
+            val original = draft.original.takeIf { useLossless && draft.policy.allowsOriginalMedia }
+            val uploaded = if (original != null) {
+                uploadLosslessBanner(appContext, draft.uri, original, crop, expected)
+            } else {
+                val bytes = withContext(Dispatchers.IO) {
+                    runCatching { bannerCropBytes(appContext.contentResolver, draft.uri, crop, PROFILE_BANNER_ASPECT) }
+                        .getOrElse { throw ApiException(ErrorKind.Unknown, userMessage = "无法处理横幅图片，请换一张再试") }
                 }
+                if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+                container.profileRepository.bannerUpload(bytes, expected)
             }
-            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-            val uploaded = container.profileRepository.bannerUpload(bytes, expected)
             if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
             applyBannerUpdate(expected.server, uploaded)
             dismissBanner()
         }
     }
 
-    fun saveVideoBanner(context: android.content.Context, startMs: Long, endMs: Long) {
+    private suspend fun uploadLosslessBanner(
+        context: Context,
+        uri: Uri,
+        image: LosslessBannerImage,
+        crop: BannerCrop,
+        expected: RequestSession,
+    ): ProfileBannerUpload = withContext(Dispatchers.IO) {
+        val file = java.io.File.createTempFile("banner-image-", ".tmp", context.cacheDir)
+        try {
+            val copied = try {
+                copyUriUpToLimit(context.contentResolver, uri, file, PROFILE_BANNER_ORIGINAL_IMAGE_LIMIT)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            if (!copied || file.length() == 0L) {
+                throw ApiException(ErrorKind.Unknown, userMessage = context.getString(R.string.profile_banner_image_original_error))
+            }
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            try {
+                container.profileRepository.bannerLosslessImage(
+                    file, image.mimeType, crop.pixelCrop(image.width, image.height), expected)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                // Covers ApiException too: an original the server refuses, or one the connection
+                // cannot carry, can still go through the compressed path. A session that changed
+                // underneath the upload cannot.
+                val kind = (e as? ApiException)?.kind
+                    ?: if (e is SocketTimeoutException) ErrorKind.Timeout else ErrorKind.Network
+                if (kind == ErrorKind.Unauthorized || kind == ErrorKind.CurrentMusicAccountRequired ||
+                    kind == ErrorKind.NeteaseSessionChanged) throw e
+                throw ApiException(kind, (e as? ApiException)?.status ?: 0, context.getString(
+                    R.string.profile_banner_image_lossless_failed, (e as? ApiException)?.userMessage ?: kind.message))
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    fun saveVideoBanner(context: android.content.Context, startMs: Long, endMs: Long, keepAudio: Boolean) {
         val draft = bannerDraft.value as? BannerDraft.Video ?: return
         val expected = bannerOwner?.takeIf { it == session() } ?: return
         val appContext = context.applicationContext
@@ -283,7 +335,8 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     info = draft.info,
                     startMs = startMs,
                     endMs = endMs,
-                    maxDurationMs = draft.maxDurationMs,
+                    maxDurationMs = draft.policy.maxVideoDurationMs,
+                    keepAudio = draft.policy.allowsOriginalMedia && keepAudio,
                     onStage = { stage -> bannerStatus.value = stage },
                 )
                 if (expected != session()) throw ApiException(ErrorKind.Unauthorized)

@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -44,11 +45,16 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.BannerVideoCache
+import io.github.currencortex.music.data.profile.BannerUploadPolicy
 import io.github.currencortex.music.data.profile.BannerCrop
+import io.github.currencortex.music.data.profile.BannerCropBounds
+import io.github.currencortex.music.data.profile.pixelCrop
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicDialogActions
 import io.github.currencortex.music.ui.component.MusicDialogButton
+import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
 import io.github.suqi8.coui.kmp.basic.Slider
 import io.github.suqi8.coui.kmp.basic.Text
@@ -112,19 +118,18 @@ internal fun DefaultProfileBannerBackdrop(modifier: Modifier = Modifier) {
 @Composable
 internal fun ProfileBannerHero(
     model: Any?,
-    editable: Boolean,
-    hasBanner: Boolean,
-    enabled: Boolean,
-    onPick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     isVideo: Boolean = false,
     httpClient: okhttp3.OkHttpClient? = null,
     videoCache: BannerVideoCache? = null,
     videoActive: Boolean = true,
+    showVideo: Boolean = true,
     seamColor: Color = COUITheme.colorScheme.cardBackground,
 ) {
     val context = LocalContext.current
     val canBlur = Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated
+    val actionDescription = stringResource(if (model != null) R.string.profile_banner_view else R.string.profile_banner_upload)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -132,13 +137,10 @@ internal fun ProfileBannerHero(
             .heightIn(min = 160.dp, max = 380.dp)
             .background(seamColor)
             .then(
-                if (editable) {
-                    Modifier
-                        .clickable(enabled = enabled, role = Role.Button, onClick = onPick)
-                        .semantics { contentDescription = if (hasBanner) "点击更换主页横幅" else "点击上传主页横幅" }
-                } else {
-                    Modifier
-                },
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                        .semantics { contentDescription = actionDescription }
+                } else Modifier,
             ),
     ) {
         Box(
@@ -149,7 +151,7 @@ internal fun ProfileBannerHero(
             DefaultProfileBannerBackdrop(Modifier.matchParentSize())
             if (model != null) {
                 if (isVideo) {
-                    BannerVideoSurface(
+                    if (showVideo) BannerVideoSurface(
                         source = model,
                         httpClient = httpClient,
                         videoCache = videoCache,
@@ -288,11 +290,17 @@ half4 main(float2 p) {
 @Composable
 internal fun ProfileBannerCropDialog(
     uri: Uri,
+    original: LosslessBannerImage?,
+    policy: BannerUploadPolicy,
     busy: Boolean,
     onCancel: () -> Unit,
-    onSave: (BannerCrop) -> Unit,
+    onSave: (BannerCrop, Boolean) -> Unit,
 ) {
     val resolver = LocalContext.current.contentResolver
+    val canUseLossless = original != null && policy.allowsOriginalMedia
+    var useLossless by remember(uri, original) { mutableStateOf(canUseLossless) }
+    // The server cuts the original itself, so the preview shows the exact whole-pixel rectangle it will keep.
+    val lossless = original.takeIf { useLossless }
     var crop by remember(uri) { mutableStateOf(BannerCrop()) }
     var failed by remember(uri) { mutableStateOf(false) }
     val bitmap by produceState<Bitmap?>(null, uri) {
@@ -306,6 +314,8 @@ internal fun ProfileBannerCropDialog(
         }
     }
     val image = remember(bitmap) { bitmap?.asImageBitmap() }
+    val imageWidth = original?.width ?: image?.width ?: 0
+    val imageHeight = original?.height ?: image?.height ?: 0
     MusicDialog("调整主页横幅", { if (!busy) onCancel() }) {
         Box(
             modifier = Modifier
@@ -320,11 +330,11 @@ internal fun ProfileBannerCropDialog(
                         .fillMaxSize()
                         .testTag("profile_banner_crop_preview")
                         .semantics { contentDescription = "横幅裁剪区域，可拖动和双指缩放" }
-                        .pointerInput(image, busy) {
+                        .pointerInput(imageWidth, imageHeight, busy) {
                             if (!busy) detectTransformGestures { focus, pan, zoom, _ ->
                                 crop = crop.transform(
-                                    width = image.width,
-                                    height = image.height,
+                                    width = imageWidth,
+                                    height = imageHeight,
                                     viewportWidth = size.width.toFloat(),
                                     viewportHeight = size.height.toFloat(),
                                     aspectRatio = PROFILE_BANNER_ASPECT,
@@ -337,8 +347,12 @@ internal fun ProfileBannerCropDialog(
                             }
                         },
                 ) {
-                    val selected = crop.constrained(image.width, image.height, PROFILE_BANNER_ASPECT)
-                    val bounds = selected.bounds(image.width, image.height, PROFILE_BANNER_ASPECT)
+                    val bounds = if (lossless != null) {
+                        val pixels = crop.pixelCrop(imageWidth, imageHeight)
+                        BannerCropBounds(pixels.left.toFloat(), pixels.top.toFloat(), pixels.width.toFloat(), pixels.height.toFloat())
+                    } else {
+                        crop.bounds(imageWidth, imageHeight, PROFILE_BANNER_ASPECT)
+                    }
                     val scale = size.width / bounds.width
                     drawRect(Color(0xFF16171B))
                     drawImage(
@@ -348,8 +362,8 @@ internal fun ProfileBannerCropDialog(
                             (-bounds.top * scale).roundToInt(),
                         ),
                         dstSize = IntSize(
-                            (image.width * scale).roundToInt(),
-                            (image.height * scale).roundToInt(),
+                            (imageWidth * scale).roundToInt(),
+                            (imageHeight * scale).roundToInt(),
                         ),
                     )
                     val guideColor = Color.White.copy(alpha = 0.18f)
@@ -377,14 +391,29 @@ internal fun ProfileBannerCropDialog(
         Slider(
             value = crop.zoom,
             onValueChange = { zoom ->
-                bitmap?.let {
-                    crop = crop.copy(zoom = zoom).constrained(it.width, it.height, PROFILE_BANNER_ASPECT)
+                if (imageWidth > 0 && imageHeight > 0) {
+                    crop = crop.copy(zoom = zoom).constrained(imageWidth, imageHeight, PROFILE_BANNER_ASPECT)
                 }
             },
             valueRange = 1f..5f,
             enabled = image != null && !busy,
             modifier = Modifier.fillMaxWidth().testTag("profile_banner_crop_zoom"),
         )
+        when {
+            canUseLossless -> SettingsSwitch(
+                title = stringResource(R.string.profile_banner_image_lossless),
+                summary = stringResource(R.string.profile_banner_image_lossless_summary),
+                checked = useLossless,
+                onCheckedChange = { useLossless = it },
+                enabled = !busy,
+            )
+            // An eligible account with an ineligible original (HEIC, animated, oversized) saves silently.
+            !policy.allowsOriginalMedia -> Text(
+                text = stringResource(R.string.profile_banner_image_compressed),
+                fontSize = 13.sp,
+                color = COUITheme.colorScheme.labelSecondaryVariant,
+            )
+        }
         MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MusicDialogButton(
                 "重置",
@@ -394,7 +423,7 @@ internal fun ProfileBannerCropDialog(
             )
             MusicDialogButton(
                 if (busy) "保存中…" else "保存横幅",
-                { onSave(crop) },
+                { onSave(crop, useLossless && canUseLossless) },
                 enabled = image != null && !busy,
                 modifier = Modifier.weight(1f).testTag("profile_banner_save"),
             )
