@@ -51,6 +51,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     var preferences by remember { mutableStateOf(false) }
     val choice = if (embedded) state.choice else state.catalog.choices.find { it.key == draftKey } ?: state.choice
     val qqMusic = station === container.qqMusicPersonalRoaming
+    val kugou = station === container.kugouPersonalRoaming
+    val guessYouLike = qqMusic || kugou
     val loggedIn = account.loggedIn && !account.stale
     val changed = !state.active || choice.key != state.choice.key
     val selectChoice: (io.github.currencortex.music.data.roaming.RoamingChoice) -> Unit = { selected ->
@@ -87,8 +89,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     val footer: @Composable () -> Unit = {
         val primary: @Composable (Modifier) -> Unit = { modifier ->
-        MusicDialogButton(if (!loggedIn) if (qqMusic) "登录 QQ 音乐" else "登录网易云" else if (state.loading) "正在寻找推荐…"
-            else if (changed) if (state.active) "切换到${choice.title}" else if (qqMusic) "播放推荐歌曲" else "开始漫游"
+        MusicDialogButton(if (!loggedIn) when { qqMusic -> "登录 QQ 音乐"; kugou -> "登录酷狗音乐"; else -> "登录网易云" } else if (state.loading) "正在寻找推荐…"
+            else if (changed) if (state.active) "切换到${choice.title}" else if (guessYouLike) "播放推荐歌曲" else "开始漫游"
             else if (state.error != null) "重试推荐" else "继续聆听",
             onClick = {
                 when {
@@ -110,7 +112,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     val body: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (qqMusic) "猜你喜欢" else "私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
+            Text(if (guessYouLike) "猜你喜欢" else "私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             if (qqMusic) MusicTextAction("音乐偏好", { preferences = true }, Modifier.testTag("qq_music_preferences"))
             MusicTextAction("设置", { settings = true }, Modifier.testTag("roaming_settings"))
@@ -126,7 +128,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     if (index < state.catalog.modes.lastIndex) SettingsDivider()
                 }
             }
-        Text(if (qqMusic) "音乐风格与生活场景" else "场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp),
+        Text(if (guessYouLike) "音乐风格与生活场景" else "场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp),
             fontSize = 13.sp, color = colors.labelSecondaryVariant)
             state.catalog.scenes.chunked(4).forEach { group ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

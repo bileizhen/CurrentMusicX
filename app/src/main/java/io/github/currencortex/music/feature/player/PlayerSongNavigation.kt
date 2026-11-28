@@ -16,25 +16,31 @@ import io.github.currencortex.music.ui.component.MusicChoiceDialog
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import kotlinx.coroutines.withTimeoutOrNull
 
-internal data class PlayerArtistLink(val name: String, val id: Long) {
-    fun route(biography: Boolean) = "lib/artist/$id" + if (biography) "/bio" else ""
+internal data class PlayerArtistLink(val name: String, val id: Long, val kugou: Boolean = false) {
+    fun route(biography: Boolean) = if (kugou) "kugou/artist/$id" else "lib/artist/$id" + if (biography) "/bio" else ""
 }
 
 internal fun playerArtistLinks(song: Song?): List<PlayerArtistLink> {
-    if (song == null || song.musicSource != MusicSource.NETEASE) return emptyList()
-    val names = song.artists.split(" / ")
+    if (song == null || song.musicSource !in setOf(MusicSource.NETEASE, MusicSource.KUGOU)) return emptyList()
+    val isKugou = song.musicSource == MusicSource.KUGOU
+    val names = if (isKugou) song.artists.split("、", " / ") else song.artists.split(" / ")
     return song.artistIds.mapIndexedNotNull { index, id ->
         if (id <= 0) null else PlayerArtistLink(
             if (names.size == song.artistIds.size) names[index].ifBlank { "艺人 ${index + 1}" }
-            else "艺人 ${index + 1}", id)
+            else "艺人 ${index + 1}", id, kugou = isKugou)
     }.distinctBy { it.id }
 }
 
-internal fun playerAlbumRoute(song: Song): String =
-    if (song.musicSource == MusicSource.QQ_MUSIC) song.qqMusic?.albumMid?.takeIf(String::isNotBlank)?.let { "qq/album/$it" }
-        ?: "qq/search/album/${java.net.URLEncoder.encode(song.album, "UTF-8")}"
-    else if (song.musicSource == MusicSource.NETEASE && song.albumId > 0) "lib/album/${song.albumId}"
-    else catalogRoute(true, song.album)
+internal fun playerAlbumRoute(song: Song): String = when {
+    song.musicSource == MusicSource.KUGOU ->
+        song.kugou?.albumId?.takeIf { it.isNotBlank() && it != "0" }?.let { "kugou/album/$it" }
+            ?: catalogRoute(true, song.album)
+    song.musicSource == MusicSource.QQ_MUSIC ->
+        song.qqMusic?.albumMid?.takeIf(String::isNotBlank)?.let { "qq/album/$it" }
+            ?: "qq/search/album/${java.net.URLEncoder.encode(song.album, "UTF-8")}"
+    song.musicSource == MusicSource.NETEASE && song.albumId > 0 -> "lib/album/${song.albumId}"
+    else -> catalogRoute(true, song.album)
+}
 
 internal class PlayerSongNavigation(val artistsEnabled: Boolean, val albumEnabled: Boolean,
     val albumLoading: Boolean, val dialogActive: Boolean, val openArtists: (Boolean) -> Unit, val openAlbum: () -> Unit)
@@ -47,7 +53,9 @@ internal class PlayerSongNavigation(val artistsEnabled: Boolean, val albumEnable
     var chooseBiography by remember(song, server) { mutableStateOf<Boolean?>(null) }
     var albumLoading by remember(song, server) { mutableStateOf(false) }
     val artistsEnabled = artists.isNotEmpty() || !song?.artists.isNullOrBlank()
-    val albumEnabled = !song?.album.isNullOrBlank() || song?.let { it.musicSource == MusicSource.NETEASE && it.albumId > 0 } == true
+    val albumEnabled = !song?.album.isNullOrBlank() ||
+        song?.let { (it.musicSource == MusicSource.NETEASE && it.albumId > 0) ||
+            (it.musicSource == MusicSource.KUGOU && !it.kugou?.albumId.isNullOrBlank() && it.kugou?.albumId != "0") } == true
     LaunchedEffect(song, server, albumLoading) {
         if (!albumLoading || song == null) return@LaunchedEffect
         val id = NeteaseSongActionsRepository.songId(song)

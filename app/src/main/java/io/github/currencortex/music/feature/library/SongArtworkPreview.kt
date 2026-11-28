@@ -21,6 +21,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
     val like = libraryActions.firstOrNull { it.id == "song_like_${song.id}" }
     val nativeLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
+    val kugouLikes by vm.container.kugou.likedState.collectAsStateWithLifecycle()
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
@@ -29,10 +30,12 @@ import io.github.currencortex.music.ui.component.nativeui.*
     LaunchedEffect(song.id, song.musicSource, likesUseNetease) {
         if (song.musicSource == MusicSource.EMBY) appResult { vm.container.emby.detail(song) }
         else if (song.musicSource == MusicSource.QQ_MUSIC) appResult { vm.container.qqMusic.refreshLiked(song) }
+        else if (song.musicSource == MusicSource.KUGOU) appResult { vm.container.kugou.refreshLiked(song) }
         else vm.refreshSearchLikes(listOf(song))
     }
     val liked = when (song.musicSource) {
         MusicSource.QQ_MUSIC -> song.id in qqLikes
+        MusicSource.KUGOU -> song.id in kugouLikes
         MusicSource.EMBY -> embyLikes[song.id] == true
         MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
         else -> if (song.musicSource == MusicSource.NETEASE)
@@ -65,6 +68,13 @@ import io.github.currencortex.music.ui.component.nativeui.*
                 }
                 song.qqMusic?.albumMid?.takeIf { it.isNotBlank() }?.let { mid ->
                     add(GlassMenuItem("album", "查看专辑", onClick = { navigate("qq/album/$mid") }))
+                }
+            } else if (song.musicSource == MusicSource.KUGOU) {
+                song.artistIds.firstOrNull()?.let { id ->
+                    add(GlassMenuItem("artist", "查看歌手", onClick = { navigate("kugou/artist/$id") }))
+                }
+                song.kugou?.albumId?.takeIf { it.isNotBlank() && it != "0" }?.let { albumId ->
+                    add(GlassMenuItem("album", "查看专辑", onClick = { navigate("kugou/album/$albumId") }))
                 }
             } else {
             if (song.artists.isNotBlank()) add(GlassMenuItem("artist", "查看歌手",

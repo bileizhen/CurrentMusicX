@@ -38,6 +38,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     quickActions: (@Composable (Song, Boolean) -> Unit)? = null, onResults: (List<Song>) -> Unit = {},
     onPlayAll: ((List<Song>) -> Unit)? = null,
     qqMusic: Boolean = false,
+    kugouMusic: Boolean = false,
     onPlay: (Song) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val platform by vm.platform.collectAsStateWithLifecycle()
@@ -73,11 +74,16 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     var inputFocused by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf<Rect?>(null) }
-    LaunchedEffect(roomName != null, ownerRevision, qqMusic) {
+    LaunchedEffect(roomName != null, ownerRevision, qqMusic, kugouMusic) {
         if (state.category !in categories) vm.select(categories.first())
         // The app's platform flag can update before the ViewModel has cleared the previous
         // owner's results. Wait for the matching owner revision before starting landing work.
-        if (roomName == null && qqMusic == (platform == MusicPlatform.QQ_MUSIC)) vm.loadLanding()
+        val expectedPlatform = when {
+            kugouMusic -> MusicPlatform.KUGOU
+            qqMusic -> MusicPlatform.QQ_MUSIC
+            else -> MusicPlatform.NETEASE
+        }
+        if (roomName == null && expectedPlatform == platform) vm.loadLanding()
     }
     LaunchedEffect(autoFocus) {
         if (autoFocus) { withFrameNanos { }; requester.requestFocus(); keyboard?.show(); onFocused() }
@@ -156,7 +162,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             val count = when (category) {
                 SearchCategory.SONG -> "${page.total} 首歌曲"
                 SearchCategory.LYRIC -> "${page.total} 首歌词匹配歌曲"
-                SearchCategory.ARTIST -> "${page.total} 位${if (platform == MusicPlatform.QQ_MUSIC) "歌手" else "作者"}"
+                SearchCategory.ARTIST -> "${page.total} 位${if (platform != MusicPlatform.NETEASE) "歌手" else "作者"}"
                 SearchCategory.ALBUM -> "${page.total} 张专辑"
                 SearchCategory.PLAYLIST -> "${page.total} 个歌单"
             }
@@ -173,7 +179,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             val entryId = entry.stableId
             val hasEntryId = entry.remoteId.isNotBlank() || entry.id > 0
             Row(Modifier.fillMaxWidth().clickable(enabled = hasEntryId, role = Role.Button) {
-                if (platform == MusicPlatform.QQ_MUSIC) navigate(qqRoute(category.route, entryId))
+                if (platform == MusicPlatform.KUGOU) navigate("kugou/${category.route}/$entryId")
+                else if (platform == MusicPlatform.QQ_MUSIC) navigate(qqRoute(category.route, entryId))
                 else navigate("lib/${if (category == SearchCategory.PLAYLIST) "ncmplaylist" else category.route}/$entryId")
             }.padding(vertical = 8.dp).testTag("search_${category.route}_$entryId"),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -181,8 +188,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 Column(Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(searchMatchText(entry.name, state.submitted, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(entry.subtitle.ifBlank { when (category) {
-                        SearchCategory.ARTIST -> if (platform == MusicPlatform.QQ_MUSIC) "歌手" else "艺人"
-                        SearchCategory.PLAYLIST -> if (platform == MusicPlatform.QQ_MUSIC) "QQ 音乐歌单" else "网易云歌单"
+                        SearchCategory.ARTIST -> if (platform != MusicPlatform.NETEASE) "歌手" else "艺人"
+                        SearchCategory.PLAYLIST -> when (platform) { MusicPlatform.KUGOU -> "酷狗歌单"; MusicPlatform.QQ_MUSIC -> "QQ 音乐歌单"; else -> "网易云歌单" }
                         else -> "专辑"
                     } }, fontSize = 12.sp,
                         color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f), maxLines = 1, overflow = TextOverflow.Ellipsis)

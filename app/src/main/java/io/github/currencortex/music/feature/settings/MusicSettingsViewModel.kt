@@ -274,16 +274,16 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         })
     }
     fun mobileQuality(value: AudioQuality) = viewModelScope.launch {
-        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
-        container.musicSettings.setMobileQuality(value, qq = qq)
+        val platform = settings.value.musicPlatform
+        container.musicSettings.setMobileQuality(value, qq = platform == MusicPlatform.QQ_MUSIC, kugou = platform == MusicPlatform.KUGOU)
     }
     fun wirelessQuality(value: AudioQuality) = viewModelScope.launch {
-        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
-        container.musicSettings.setWirelessQuality(value, qq = qq)
+        val platform = settings.value.musicPlatform
+        container.musicSettings.setWirelessQuality(value, qq = platform == MusicPlatform.QQ_MUSIC, kugou = platform == MusicPlatform.KUGOU)
     }
     fun downloadQuality(value: AudioQuality) = viewModelScope.launch {
-        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
-        container.musicSettings.setDownloadQuality(value, qq = qq)
+        val platform = settings.value.musicPlatform
+        container.musicSettings.setDownloadQuality(value, qq = platform == MusicPlatform.QQ_MUSIC, kugou = platform == MusicPlatform.KUGOU)
     }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
     fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }
