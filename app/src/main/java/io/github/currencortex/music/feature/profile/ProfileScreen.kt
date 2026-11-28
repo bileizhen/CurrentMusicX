@@ -193,6 +193,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val navidromeAccount by vm.container.navidrome.state.collectAsStateWithLifecycle()
     val embyAccount by vm.container.emby.state.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugouAccount by vm.container.kugou.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val bannerDraft by vm.bannerDraft.collectAsStateWithLifecycle()
     val bannerStatus by vm.bannerStatus.collectAsStateWithLifecycle()
@@ -318,7 +319,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     ProfileStatsBlock(stats,
                         likesLabel = if (privateOwnProfile) "喜欢" else "点赞",
                         likesValue = if (privateOwnProfile) platformLikedCount?.toString() ?: "—" else "${stats.likes}",
-                        onLikes = if (privateOwnProfile) ({ navigate(if (platform == MusicPlatform.QQ_MUSIC) "qq/likes" else "lib/likes") }) else null,
+                        onLikes = if (privateOwnProfile) ({ navigate(when (platform) {
+                            MusicPlatform.QQ_MUSIC -> "qq/likes"
+                            MusicPlatform.KUGOU -> "kugou/likes"
+                            MusicPlatform.NETEASE -> "lib/likes"
+                        }) }) else null,
                         onListening = if (privateOwnProfile) ({ navigate("user/listening") }) else null)
                 }
             } }
@@ -341,7 +346,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 item("library") { ProfileLibrarySection(navigate, platform, showLikes = !privateOwnProfile) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
                     navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured,
-                    platform = platform, qqBound = qqAccount.loggedIn) }
+                    platform = platform, qqBound = qqAccount.loggedIn, kugouBound = kugouAccount.loggedIn) }
                 item("account") { ProfileAccountSection(navigate) }
             }
             if (platform == MusicPlatform.NETEASE || !privateOwnProfile) {

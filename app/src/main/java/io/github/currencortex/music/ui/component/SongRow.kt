@@ -55,7 +55,7 @@ fun coverRequestUrl(url: String, pixels: Int): String {
     var menu by remember { mutableStateOf<SongMenu?>(null) }
     var coverBounds by remember { mutableStateOf(Rect.Zero) }
     val host = LocalSongMenu.current
-    val request = LocalRoomSongRequest.current.takeUnless { row.song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) }
+    val request = LocalRoomSongRequest.current.takeUnless { row.song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC, io.github.currencortex.music.data.song.MusicSource.KUGOU) }
     val primary = { if (request != null) request.request(row.song) else onPlay() }
     fun openMenu(previewAnchor: Rect?) {
         val value = SongMenu(row.song, primary, onNext, onQueue, request != null, extraActions, previewAnchor = previewAnchor)

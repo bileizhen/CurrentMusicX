@@ -18,8 +18,11 @@ internal data class LxSourcePerformance(
     fun coolingDown(now: Long) = failedAtMs > 0 && now >= failedAtMs && now - failedAtMs < 60_000
 }
 
-internal fun LxStoredSource.performanceFor(platform: LxPlatform): LxSourcePerformance =
-    if (platform == LxPlatform.QQ_MUSIC) qqPerformance else performance
+internal fun LxStoredSource.performanceFor(platform: LxPlatform): LxSourcePerformance = when (platform) {
+    LxPlatform.QQ_MUSIC -> qqPerformance
+    LxPlatform.KUGOU -> kugouPerformance
+    LxPlatform.NETEASE -> performance
+}
 
 /** Stable ordering keeps the manually selected plugin first when no measurements exist. */
 internal fun lxOrderedSources(

@@ -40,19 +40,19 @@ data class SearchUiState(val query: String = "", val submitted: String = "", val
 
 internal fun searchCategoriesFor(platform: MusicPlatform, roomSearch: Boolean = false): List<SearchCategory> =
     if (roomSearch) listOf(SearchCategory.SONG, SearchCategory.LYRIC)
-    else if (platform == MusicPlatform.QQ_MUSIC)
+    else if (platform != MusicPlatform.NETEASE)
         listOf(SearchCategory.SONG, SearchCategory.PLAYLIST, SearchCategory.ALBUM, SearchCategory.ARTIST)
     else SearchCategory.entries
 
 internal fun SearchCategory.labelFor(platform: MusicPlatform): String =
-    if (platform == MusicPlatform.QQ_MUSIC && this == SearchCategory.ARTIST) "歌手" else label
+    if (platform != MusicPlatform.NETEASE && this == SearchCategory.ARTIST) "歌手" else label
 
 data class HotSearchWord(val text: String, val description: String = "", val displayText: String = text)
 data class SearchLandingState(val words: List<HotSearchWord> = emptyList(), val loading: Boolean = false, val loaded: Boolean = false, val error: String? = null)
 
 data class SearchSuggestions(val query: String = "", val words: List<String> = emptyList(), val loading: Boolean = false)
 
-private data class SearchOwner(val server: String, val platform: MusicPlatform, val qqRevision: Long)
+private data class SearchOwner(val server: String, val platform: MusicPlatform, val qqRevision: Long, val kugouRevision: Long)
 
 class SearchViewModel(private val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(SearchUiState())
@@ -60,6 +60,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         container.musicSettings.state.value.server,
         container.musicSettings.state.value.musicPlatform,
         container.qqMusic.state.value.revision,
+        container.kugou.state.value.revision,
     )
     private val mutablePlatform = MutableStateFlow(activeOwner.platform)
     val platform: StateFlow<MusicPlatform> = mutablePlatform.asStateFlow()
@@ -85,8 +86,9 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         combine(
             container.musicSettings.state.map { it.server to it.musicPlatform }.distinctUntilChanged(),
             container.qqMusic.state.map { it.revision }.distinctUntilChanged(),
-        ) { settings, qqRevision ->
-            SearchOwner(settings.first, settings.second, qqRevision)
+            container.kugou.state.map { it.revision }.distinctUntilChanged(),
+        ) { settings, qqRevision, kugouRevision ->
+            SearchOwner(settings.first, settings.second, qqRevision, kugouRevision)
         }.distinctUntilChanged().collect { owner ->
             val previous = previousOwner
             previousOwner = owner
@@ -98,13 +100,15 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             val platformChanged = previous.platform != owner.platform
             val serverChanged = previous.server != owner.server
             val qqRevisionChanged = previous.qqRevision != owner.qqRevision
-            if (!platformChanged && !serverChanged && !qqRevisionChanged) return@collect
+            val kugouRevisionChanged = previous.kugouRevision != owner.kugouRevision
+            if (!platformChanged && !serverChanged && !qqRevisionChanged && !kugouRevisionChanged) return@collect
             cancelRequests()
             suggestionJob?.cancel(); suggestions.value = SearchSuggestions()
             landingJob?.cancel(); landing.value = SearchLandingState()
             chartsJob?.cancel(); chartJobs.values.forEach(Job::cancel); chartJobs.clear(); charts.value = SearchChartsState()
             val resetCategory = platformChanged ||
-                (owner.platform == MusicPlatform.QQ_MUSIC && qqRevisionChanged)
+                (owner.platform == MusicPlatform.QQ_MUSIC && qqRevisionChanged) ||
+                (owner.platform == MusicPlatform.KUGOU && kugouRevisionChanged)
             state.value = SearchUiState(query = state.value.query,
                 category = if (resetCategory) SearchCategory.SONG else state.value.category)
             // Publish the new owner only after stale work and results have been cleared. The
@@ -150,7 +154,9 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             val expectedOwner = currentOwner()
             val platform = currentPlatform()
             suggestions.value = SearchSuggestions(query, loading = true)
-            val result = if (platform == MusicPlatform.QQ_MUSIC)
+            val result = if (platform == MusicPlatform.KUGOU)
+                appResult { container.kugou.suggestions(query).distinct().take(8) }
+            else if (platform == MusicPlatform.QQ_MUSIC)
                 appResult { container.qqMusic.suggestions(query).distinct().take(8) }
             else container.musicRepository.searchSuggestions(query)
             ensureActive()
@@ -159,7 +165,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun loadCharts(retry: Boolean = false) {
-        if (currentPlatform() == MusicPlatform.QQ_MUSIC) {
+        if (currentPlatform() != MusicPlatform.NETEASE) {
             if (retry || !charts.value.loaded) charts.value = SearchChartsState(loaded = true)
             return
         }
@@ -180,7 +186,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun loadChart(id: String, retry: Boolean = false) {
-        if (currentPlatform() == MusicPlatform.QQ_MUSIC) return
+        if (currentPlatform() != MusicPlatform.NETEASE) return
         if (chartJobs[id]?.isActive == true || (charts.value.pages[id]?.loaded == true && !retry)) return
         charts.update { it.copy(pages = it.pages + (id to SearchChartPage(loading = true))) }
         chartJobs[id] = viewModelScope.launch {
@@ -201,14 +207,16 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     fun loadLanding(retry: Boolean = false) {
         val expectedOwner = currentOwner()
         val platform = currentPlatform()
-        if (platform == MusicPlatform.QQ_MUSIC) {
+        if (platform != MusicPlatform.NETEASE) {
             if (retry || !charts.value.loaded) charts.value = SearchChartsState(loaded = true)
         } else loadCharts(retry)
         if (landingJob?.isActive == true || (landing.value.loaded && !retry)) return
         landing.value = landing.value.copy(loading = true, error = null)
         landingJob = viewModelScope.launch {
             container.ready.await()
-            val result = if (platform == MusicPlatform.QQ_MUSIC) appResult {
+            val result = if (platform == MusicPlatform.KUGOU) appResult {
+                container.kugou.hotSearch().map { HotSearchWord(it) }
+            } else if (platform == MusicPlatform.QQ_MUSIC) appResult {
                 container.qqMusic.hotSearch().distinct().map { HotSearchWord(it) }
             } else appResult {
                 val expected = container.musicSession()
@@ -258,7 +266,16 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     }
     private suspend fun fetch(category: SearchCategory, query: String, offset: Int, backend: SearchBackend?,
         platform: MusicPlatform): AppResult<SearchCategoryPage> =
-        if (platform == MusicPlatform.QQ_MUSIC) when (val result = appResult {
+        if (platform == MusicPlatform.KUGOU) when (val result = appResult {
+            container.kugou.search(query, offset, category.route)
+        }) {
+            is AppResult.Success -> AppResult.Success(SearchCategoryPage(
+                songs = result.value.songs,
+                entries = result.value.entries.map { entry -> CatalogEntry(0L, entry.name, entry.cover, entry.subtitle, entry.id) },
+                total = result.value.total, nextOffset = offset + 30, more = result.value.hasMore,
+            ))
+            is AppResult.Failure -> result
+        } else if (platform == MusicPlatform.QQ_MUSIC) when (val result = appResult {
             container.qqMusic.search(query, offset, category.route)
         }) {
             is AppResult.Success -> AppResult.Success(SearchCategoryPage(

@@ -47,10 +47,11 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     .distinctUntilChanged(),
                 container.neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
                 container.qqMusic.state.map { it.revision }.distinctUntilChanged(),
-            ) { _, _, _, _ -> Unit }.collectLatest { refreshPlatformLikes(clear = true) }
+                container.kugou.state.map { it.revision }.distinctUntilChanged(),
+            ) { _, _, _, _, _ -> Unit }.collectLatest { refreshPlatformLikes(clear = true) }
         }
         if (userId == null) viewModelScope.launch {
-            combine(container.neteaseSongActions.revision, container.qqMusic.likedState) { _, _ -> Unit }
+            combine(container.neteaseSongActions.revision, container.qqMusic.likedState, container.kugou.likedState) { _, _, _ -> Unit }
                 .drop(1).collectLatest { refreshPlatformLikes() }
         }
         viewModelScope.launch {
@@ -104,6 +105,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         val accountId = container.accountRepository.state.value.account?.id
         val binding = container.bindingRepository.state.value?.let { "${it.bound}:${it.stale}:${it.profile?.uid}" }
         val qqRevision = container.qqMusic.state.value.revision
+        val kugouRevision = container.kugou.state.value.revision
         val generation = ++platformLikesGeneration
         if (clear) platformLikedCount.value = null
         val result = appResult {
@@ -113,13 +115,18 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     if (!container.qqMusic.state.value.loggedIn) throw ApiException(ErrorKind.Unauthorized)
                     container.qqMusic.likedSongCount()
                 }
+                MusicPlatform.KUGOU -> {
+                    if (!container.kugou.state.value.loggedIn) throw ApiException(ErrorKind.Unauthorized)
+                    container.kugou.likedSongCount()
+                }
             }
         }
         if (generation == platformLikesGeneration &&
             platform == container.musicSettings.state.value.musicPlatform &&
             accountId == container.accountRepository.state.value.account?.id &&
             binding == container.bindingRepository.state.value?.let { "${it.bound}:${it.stale}:${it.profile?.uid}" } &&
-            qqRevision == container.qqMusic.state.value.revision) {
+            qqRevision == container.qqMusic.state.value.revision &&
+            kugouRevision == container.kugou.state.value.revision) {
             platformLikedCount.value = (result as? AppResult.Success)?.value
         }
     }

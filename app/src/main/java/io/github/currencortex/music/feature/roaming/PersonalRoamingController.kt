@@ -29,6 +29,12 @@ class QqMusicRoamingSessionStore(private val store: StateFlow<io.github.currenco
     override val snapshot get() = store.value.let { RoamingSessionState(it.loggedIn, false, it.revision, it.uin.toLongOrNull() ?: 0) }
 }
 
+class KugouRoamingSessionStore(private val store: StateFlow<io.github.currencortex.music.data.kugou.KugouAccountState>) : RoamingSessionStore {
+    override val ready = CompletableDeferred<Unit>().apply { complete(Unit) }
+    override val state = store.map { RoamingSessionState(loggedIn = true, stale = false, revision = it.revision, ownerId = it.userId) }
+    override val snapshot get() = store.value.let { RoamingSessionState(loggedIn = true, stale = false, revision = it.revision, ownerId = it.userId) }
+}
+
 data class RoamingState(val catalog: RoamingCatalog = RoamingCatalog.fallback, val catalogLoading: Boolean = false,
     val catalogError: String? = null, val choice: RoamingChoice = RoamingCatalog.fallback.modes.first(),
     val settings: RoamingSettings = RoamingSettings(), val active: Boolean = false,
