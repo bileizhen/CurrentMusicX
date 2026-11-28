@@ -191,7 +191,7 @@ class MusicService : MediaSessionService() {
     private fun updateDolbySupport() = dolbyPlayback.supports(container.playerController.state.value.mode,
         container.audioOutput.state.value).also { dolbyAvailable.value = it }
     private fun audioRequest(song: Song, quality: AudioQuality, allowDolby: Boolean = dolbyAvailable.value) =
-        container.audioRequest(song, quality, supportsDolby = allowDolby)
+        container.audioRequest(song, quality, supportsDolby = allowDolby, supportsVivid = true)
     private fun playbackQuality(song: Song? = container.playbackQueue.state.value.current) =
         container.musicSettings.state.value.qualityFor(song?.musicSource, container.playbackNetworkStatus.value.kind)
 

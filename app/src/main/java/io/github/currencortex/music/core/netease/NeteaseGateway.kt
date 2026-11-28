@@ -275,7 +275,10 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 }
                 val level = arg("level", "auto")
                 if (level == "auto") {
-                    val spatialLevels = if (arg("supportsDolby") == "1") listOf("dolby", "vivid") else listOf("vivid")
+                    val spatialLevels = buildList {
+                        if (arg("supportsDolby") == "1") add("dolby")
+                        if (arg("supportsVivid") == "1") add("vivid")
+                    }
                     for (spatialLevel in spatialLevels) {
                         val track = try { withTimeoutOrNull(4_000) { trackAt(spatialLevel) } } catch (e: ApiException) {
                             if (e.kind !in setOf(ErrorKind.Forbidden, ErrorKind.NotFound, ErrorKind.Server,

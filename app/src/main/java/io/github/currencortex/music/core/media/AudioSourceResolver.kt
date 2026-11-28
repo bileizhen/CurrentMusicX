@@ -10,23 +10,31 @@ import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
     val providerIdentity: String = "netease", val song: io.github.currencortex.music.data.song.Song? = null,
-    val refresh: Boolean = false, val supportsDolby: Boolean = false) {
-    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
+    val refresh: Boolean = false, val supportsDolby: Boolean = false, val supportsVivid: Boolean = false) {
+    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby) +
+        if (supportsVivid) ":prefer-vivid" else ""
+
+    private val neteaseAuto get() = quality == AudioQuality.AUTO &&
+        (providerIdentity == "netease" || providerIdentity == "netease-cloud")
 
     private val dolbyAuto get() = quality == AudioQuality.AUTO &&
         (providerIdentity == "netease" || providerIdentity.startsWith(SERVER_AUDIO_SOURCE_IDENTITY_PREFIX))
 
-    internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
+    internal fun accepts(source: AudioSource): Boolean =
+        (!dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value) &&
+            (!neteaseAuto || supportsVivid || source.level != AudioQuality.VIVID.value)
 
     internal fun offlineAudio(cached: (AudioRequest) -> ResolvedAudio?): Pair<AudioRequest, ResolvedAudio>? {
         cached(this)?.takeIf { accepts(it.source) }?.let { return this to it }
-        if (!dolbyAuto) return null
-        val alternate = copy(supportsDolby = !supportsDolby)
-        return cached(alternate)?.takeIf { accepts(it.source) }?.let { alternate to it }
+        if (dolbyAuto) {
+            val alternate = copy(supportsDolby = !supportsDolby)
+            cached(alternate)?.takeIf { accepts(it.source) }?.let { return alternate to it }
+        }
+        return if (supportsVivid) copy(supportsVivid = false).offlineAudio(cached) else null
     }
 
-    internal fun selectedVivid(source: AudioSource): Boolean = quality == AudioQuality.AUTO &&
-        providerIdentity in setOf("netease", "netease-cloud") && source.level == AudioQuality.VIVID.value
+    internal fun selectedVivid(source: AudioSource): Boolean =
+        neteaseAuto && supportsVivid && source.level == AudioQuality.VIVID.value
 
     internal fun selectedDolby(source: AudioSource): Boolean =
         quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && supportsDolby &&
@@ -63,6 +71,17 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             return null
         }
         return result(entry)
+    }
+    private fun completeAudio(request: AudioRequest): ResolvedAudio? {
+        val key = request.key
+        if (denied[key]?.request == request) return null
+        val selected = cache.matchedSourceKey(key)
+        val vivid = selected?.takeIf { request.supportsVivid && it.startsWith("$key:match:vivid:") }
+        // Match candidates still need the online selection check. Vivid belongs to this same recording.
+        if (selected != null && vivid == null) return null
+        val cacheKey = vivid ?: key
+        val audio = cache.completeSource(cacheKey)?.takeIf(request::accepts)?.takeUnless { it.matched } ?: return null
+        return ResolvedAudio(audio, cacheKey, refreshAfterMs = Long.MAX_VALUE)
     }
     private fun result(entry: Entry): ResolvedAudio {
         val remainingMs = (entry.until - now()) / 1_000_000
@@ -102,9 +121,11 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             denied[key]?.takeIf { it.request == request }?.let { throw it.error }
             // Complete, account/provider/quality-scoped audio does not need a CDN URL.
             // Partial cache must still resolve a live URL to read the missing bytes.
-            cache.completeSource(key)?.takeIf(request::accepts)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
+            val complete = completeAudio(request)
+                ?: request.takeIf { it.supportsVivid }?.copy(supportsVivid = false)?.let(::completeAudio)
+            if (complete != null) {
                 checkRequest(request)
-                return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
+                return@withContext complete
             }
         }
         // A background renewal must not block a switch that already has a valid URL.
