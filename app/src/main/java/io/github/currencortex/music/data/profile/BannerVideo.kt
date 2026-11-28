@@ -25,6 +25,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
+import io.github.currencortex.music.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -46,6 +47,7 @@ data class BannerVideoInfo(
     val displayHeight: Int,
     val sizeBytes: Long,
     val uploadMimeType: String,
+    val hasAudio: Boolean,
 )
 
 data class BannerTrimSelection(
@@ -68,7 +70,6 @@ object BannerVideoRules {
     private const val STANDARD_MAX_DURATION_MS = 5_000L
     private const val ADMIN_MAX_DURATION_MS = 10_000L
     private const val EXPORT_MARGIN_MS = 100L
-    private const val FULL_CLIP_TOLERANCE_MS = 120L
 
     private val MP4_BRANDS = setOf(
         "isom", "iso2", "iso3", "iso4", "iso5", "iso6",
@@ -131,21 +132,24 @@ object BannerVideoRules {
     fun exportClipEndMs(totalDurationMs: Long, startMs: Long, endMs: Long, maxDurationMs: Long): Long {
         val range = normalizeRange(totalDurationMs, startMs, endMs, maxDurationMs)
         val safeDurationMs = maxDurationMs - EXPORT_MARGIN_MS
-        val fullTail = totalDurationMs <= maxDurationMs &&
-            range.startMs == 0L &&
-            range.endMs >= totalDurationMs - FULL_CLIP_TOLERANCE_MS
-        if (fullTail && totalDurationMs <= safeDurationMs) return totalDurationMs
         return min(range.endMs, range.startMs + safeDurationMs)
     }
 
-    fun canUploadDirectly(info: BannerVideoInfo, startMs: Long, endMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): Boolean {
+    fun canUploadDirectly(
+        info: BannerVideoInfo,
+        startMs: Long,
+        endMs: Long,
+        maxDurationMs: Long = STANDARD_MAX_DURATION_MS,
+        keepAudio: Boolean = false,
+    ): Boolean {
+        if (info.hasAudio && !keepAudio) return false
         if (info.uploadMimeType != "video/mp4" && info.uploadMimeType != "video/quicktime") return false
         if (info.durationMs !in 1L..maxDurationMs) return false
         if (info.sizeBytes !in 1L..PROFILE_BANNER_VIDEO_LIMIT) return false
         if (info.displayWidth <= 0 || info.displayHeight <= 0) return false
         if (max(info.displayWidth, info.displayHeight) > PROFILE_BANNER_VIDEO_MAX_DIMENSION) return false
         if (info.displayWidth.toLong() * info.displayHeight.toLong() > PROFILE_BANNER_VIDEO_MAX_PIXELS) return false
-        return startMs <= FULL_CLIP_TOLERANCE_MS && endMs >= info.durationMs - FULL_CLIP_TOLERANCE_MS
+        return startMs == 0L && endMs == info.durationMs
     }
 
     fun detectContainerMimeFromFtyp(header: ByteArray): String? {
@@ -214,7 +218,7 @@ internal fun inspectBannerVideo(context: Context, uri: Uri): BannerVideoInfo? {
     return try {
         setRetrieverDataSource(context, uri, retriever)
         val hasVideo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
-        if (!hasVideo.equals("yes", ignoreCase = true) && !hasVideoTrack(context, uri)) {
+        if (!hasVideo.equals("yes", ignoreCase = true) && hasTrack(context, uri, "video/") != true) {
             return null
         }
         val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
@@ -234,6 +238,9 @@ internal fun inspectBannerVideo(context: Context, uri: Uri): BannerVideoInfo? {
             displayHeight = displayHeight,
             sizeBytes = sizeBytes,
             uploadMimeType = uploadMime,
+            // Unknown audio metadata must not let a source bypass audio removal on upload.
+            hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)
+                .equals("yes", ignoreCase = true) || hasTrack(context, uri, "audio/") != false,
         )
     } catch (_: Exception) {
         null
@@ -286,12 +293,13 @@ internal suspend fun prepareBannerVideoForUpload(
     startMs: Long,
     endMs: Long,
     maxDurationMs: Long,
+    keepAudio: Boolean,
     onStage: (String) -> Unit,
 ): PreparedBannerVideo {
     val range = BannerVideoRules.normalizeRange(info.durationMs, startMs, endMs, maxDurationMs)
     val cacheDir = File(context.cacheDir, "banner_upload").apply { mkdirs() }
 
-    if (BannerVideoRules.canUploadDirectly(info, range.startMs, range.endMs, maxDurationMs)) {
+    if (BannerVideoRules.canUploadDirectly(info, range.startMs, range.endMs, maxDurationMs, keepAudio)) {
         onStage("正在准备视频…")
         val ext = if (info.uploadMimeType == "video/quicktime") ".mov" else ".mp4"
         val outFile = File(cacheDir, "banner-direct-${System.currentTimeMillis()}$ext")
@@ -322,6 +330,7 @@ internal suspend fun prepareBannerVideoForUpload(
         exportTrimmedBannerMp4(
             context = context,
             uri = uri,
+            keepAudio = keepAudio,
             startMs = range.startMs,
             endMs = range.endMs,
             targetWidth = primaryWidth,
@@ -355,6 +364,7 @@ internal suspend fun prepareBannerVideoForUpload(
         exportTrimmedBannerMp4(
             context = context,
             uri = uri,
+            keepAudio = keepAudio,
             startMs = range.startMs,
             endMs = clipEndMs,
             targetWidth = 720,
@@ -384,6 +394,9 @@ internal suspend fun prepareBannerVideoForUpload(
         throw e
     } catch (e: Exception) {
         fallbackFile.delete()
+        if (keepAudio && e is ExportException) {
+            throw IOException(context.getString(R.string.profile_banner_video_export_with_audio_error), e)
+        }
         throw e
     }
 }
@@ -397,6 +410,7 @@ private suspend fun exportTrimmedBannerMp4(
     targetHeight: Int,
     bitrate: Int,
     outputFile: File,
+    keepAudio: Boolean,
 ) {
     outputFile.delete()
     val mainHandler = Handler(Looper.getMainLooper())
@@ -415,7 +429,7 @@ private suspend fun exportTrimmedBannerMp4(
                     )
                     .build()
                 val editedItem = EditedMediaItem.Builder(mediaItem)
-                    .setRemoveAudio(true)
+                    .setRemoveAudio(!keepAudio)
                     .setEffects(
                         Effects(
                             emptyList<AudioProcessor>(),
@@ -439,6 +453,7 @@ private suspend fun exportTrimmedBannerMp4(
                     .build()
                 val built = Transformer.Builder(context)
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
+                    .setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .setEncoderFactory(encoderFactory)
                     .setLooper(Looper.getMainLooper())
                     .addListener(
@@ -566,17 +581,15 @@ private fun setRetrieverDataSource(context: Context, uri: Uri, retriever: MediaM
     }
 }
 
-private fun hasVideoTrack(context: Context, uri: Uri): Boolean {
+private fun hasTrack(context: Context, uri: Uri, mimePrefix: String): Boolean? {
     val extractor = MediaExtractor()
     return try {
         extractor.setDataSource(context, uri, null)
-        for (i in 0 until extractor.trackCount) {
-            val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)
-            if (mime?.startsWith("video/") == true) return true
+        (0 until extractor.trackCount).any { i ->
+            extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith(mimePrefix) == true
         }
-        false
     } catch (_: Exception) {
-        false
+        null
     } finally {
         runCatching { extractor.release() }
     }

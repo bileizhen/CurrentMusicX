@@ -112,6 +112,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val avatarFlight = LocalAvatarFlight.current
     val listState = rememberLazyListState()
     var avatarPreview by rememberSaveable(account.profile?.uid) { mutableStateOf(false) }
+    val bannerModel = account.profile?.backgroundUrl?.takeIf { it.isNotBlank() }?.let {
+        if (it.startsWith("http://")) "https://${it.removePrefix("http://")}" else it
+    }
+    var bannerPreview by rememberSaveable(account.profile?.uid, bannerModel) { mutableStateOf(false) }
     LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
     LaunchedEffect(listState, avatarFlight) {
         snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
@@ -126,18 +130,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             val avatarSize = 72.dp
             val ringSize = avatarSize + 7.dp
             val overlap = 70.dp
-            val bannerModel = native.backgroundUrl.takeIf { it.isNotBlank() }?.let {
-                if (it.startsWith("http://")) "https://${it.removePrefix("http://")}" else it
-            }
             ProfileHeroHeader(
                 overlap = overlap,
                 banner = {
                     ProfileBannerHero(
                         model = bannerModel,
-                        editable = false,
-                        hasBanner = bannerModel != null,
-                        enabled = false,
-                        onPick = {},
+                        onClick = if (bannerModel != null) ({ bannerPreview = true }) else null,
                     )
                 },
                 overlay = {
@@ -180,7 +178,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         AvatarPreviewDialog(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar),
             container, onDismiss = { avatarPreview = false })
     }
+    if (bannerPreview && bannerModel != null) {
+        ProfileBannerPreviewDialog(bannerModel, isVideo = false, onDismiss = { bannerPreview = false })
+    }
 }
+
+private data class BannerPreview(val url: String, val isVideo: Boolean)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
@@ -211,6 +214,19 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     }
     val own = user != null && user.id == account.account?.id
     val privateOwnProfile = own && onBack == null
+    val bannerUrl = remember(server, user?.id, user?.bannerUrl) {
+        user?.let { vm.container.profileRepository.bannerImageUrl(server, it) }
+    }
+    val isVideoBanner = user?.isVideoBanner == true
+    val sessionRevision by vm.container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
+    // Keep the open media through same-session profile refreshes, which temporarily clear user data.
+    var preview by remember(vm, server, sessionRevision) { mutableStateOf<BannerPreview?>(null) }
+    val pickBanner: (() -> Unit)? = if (privateOwnProfile && !busy && state.profile != null) ({
+        if (vm.beginBannerPick()) {
+            preview = null
+            bannerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        }
+    }) else null
     val bottomInset = LocalMusicBottomInset.current
     val listState = rememberLazyListState()
     val avatarFlight = LocalAvatarFlight.current.takeIf { onBack == null }
@@ -238,7 +254,6 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         if (user != null) {
             item("identity") { Card(Modifier.testTag("profile_identity").fillMaxWidth().padding(bottom = 16.dp)) {
                 val colors = COUITheme.colorScheme
-                val bannerUrl = remember(server, user.id, user.bannerUrl) { vm.container.profileRepository.bannerImageUrl(server, user) }
                 val pageActive = io.github.currencortex.music.ui.component.LocalMusicPageActive.current
                 val containerSettled = io.github.currencortex.music.ui.component.LocalPageContainerSettled.current
                 val videoActive = pageActive && containerSettled && listState.firstVisibleItemIndex <= 1
@@ -250,14 +265,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                     banner = {
                         ProfileBannerHero(
                             model = bannerUrl,
-                            editable = privateOwnProfile,
-                            hasBanner = bannerUrl != null,
-                            enabled = !busy && state.profile != null,
-                            onPick = {
-                                if (vm.beginBannerPick())
-                                    bannerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                            },
-                            isVideo = user.isVideoBanner,
+                            onClick = if (bannerUrl != null) ({
+                                preview = BannerPreview(bannerUrl, isVideoBanner)
+                            }) else pickBanner,
+                            isVideo = isVideoBanner,
+                            showVideo = preview == null,
                             httpClient = vm.container.mediaHttpClient,
                             videoCache = vm.container.bannerVideoCache,
                             videoActive = videoActive,
@@ -406,6 +418,16 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         onDismiss = { avatarPreview = false },
         onChange = if (privateOwnProfile && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
         onDecorations = if (privateOwnProfile) ({ avatarPreview = false; navigate("user/decorations") }) else null)
+    preview?.let { media ->
+        ProfileBannerPreviewDialog(
+            source = media.url,
+            isVideo = media.isVideo,
+            onDismiss = { preview = null },
+            httpClient = vm.container.mediaHttpClient,
+            videoCache = vm.container.bannerVideoCache,
+            onChange = pickBanner,
+        )
+    }
     if (privateOwnProfile) when (val draft = bannerDraft) {
         is ProfileViewModel.BannerDraft.Image -> ProfileBannerCropDialog(
             uri = draft.uri,
@@ -420,7 +442,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             busy = busy,
             statusText = bannerStatus,
             onCancel = vm::dismissBanner,
-            onSave = { startMs, endMs -> vm.saveVideoBanner(context, startMs, endMs) },
+            onSave = { startMs, endMs, keepAudio -> vm.saveVideoBanner(context, startMs, endMs, keepAudio) },
         )
         null -> Unit
     }

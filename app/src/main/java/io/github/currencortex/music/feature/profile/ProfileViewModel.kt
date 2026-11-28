@@ -263,7 +263,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         }
     }
 
-    fun saveVideoBanner(context: android.content.Context, startMs: Long, endMs: Long) {
+    fun saveVideoBanner(context: android.content.Context, startMs: Long, endMs: Long, keepAudio: Boolean) {
         val draft = bannerDraft.value as? BannerDraft.Video ?: return
         val expected = bannerOwner?.takeIf { it == session() } ?: return
         val appContext = context.applicationContext
@@ -277,6 +277,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     startMs = startMs,
                     endMs = endMs,
                     maxDurationMs = draft.maxDurationMs,
+                    keepAudio = keepAudio,
                     onStage = { stage -> bannerStatus.value = stage },
                 )
                 if (expected != session()) throw ApiException(ErrorKind.Unauthorized)

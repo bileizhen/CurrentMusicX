@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -44,6 +45,7 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.BannerVideoCache
 import io.github.currencortex.music.data.profile.BannerCrop
 import io.github.currencortex.music.ui.component.MusicDialog
@@ -112,19 +114,18 @@ internal fun DefaultProfileBannerBackdrop(modifier: Modifier = Modifier) {
 @Composable
 internal fun ProfileBannerHero(
     model: Any?,
-    editable: Boolean,
-    hasBanner: Boolean,
-    enabled: Boolean,
-    onPick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     isVideo: Boolean = false,
     httpClient: okhttp3.OkHttpClient? = null,
     videoCache: BannerVideoCache? = null,
     videoActive: Boolean = true,
+    showVideo: Boolean = true,
     seamColor: Color = COUITheme.colorScheme.cardBackground,
 ) {
     val context = LocalContext.current
     val canBlur = Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated
+    val actionDescription = stringResource(if (model != null) R.string.profile_banner_view else R.string.profile_banner_upload)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -132,13 +133,10 @@ internal fun ProfileBannerHero(
             .heightIn(min = 160.dp, max = 380.dp)
             .background(seamColor)
             .then(
-                if (editable) {
-                    Modifier
-                        .clickable(enabled = enabled, role = Role.Button, onClick = onPick)
-                        .semantics { contentDescription = if (hasBanner) "点击更换主页横幅" else "点击上传主页横幅" }
-                } else {
-                    Modifier
-                },
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                        .semantics { contentDescription = actionDescription }
+                } else Modifier,
             ),
     ) {
         Box(
@@ -149,7 +147,7 @@ internal fun ProfileBannerHero(
             DefaultProfileBannerBackdrop(Modifier.matchParentSize())
             if (model != null) {
                 if (isVideo) {
-                    BannerVideoSurface(
+                    if (showVideo) BannerVideoSurface(
                         source = model,
                         httpClient = httpClient,
                         videoCache = videoCache,
