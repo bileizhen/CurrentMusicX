@@ -16,6 +16,7 @@ import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
@@ -388,6 +389,7 @@ internal suspend fun prepareBannerVideoForUpload(
     }
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
 private suspend fun exportTrimmedBannerMp4(
     context: Context,
     uri: Uri,
