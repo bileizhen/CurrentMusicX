@@ -840,6 +840,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             installedVersion = BuildConfig.VERSION_NAME,
             userAgent = "${AppMetadata.APP_NAME}/${BuildConfig.VERSION_NAME}",
             nativeAssetsOnly = true,
+            ciMetadataUrl = {
+                io.github.currencortex.music.core.update.UpdateProxy.releaseMetadataUrl(
+                    serverRouter.resolve(musicSettings.state.value.server))
+            },
+            onMetadataFailure = {
+                logger.warn("Update", "Mirror release metadata unavailable; falling back to GitHub", it)
+            },
         ),
         settings = updateSettings,
         logger = logger,
