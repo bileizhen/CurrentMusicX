@@ -244,9 +244,11 @@ internal object KugouParsing {
         if (listId <= 0) return null
         val name = item.text("name").cleanText().ifBlank { if (listId == KugouProtocol.LIKED_LIST_ID.toLong()) "我喜欢" else return null }
         val creatorUid = item.long("list_create_userid")
-        val collectedType = "type" in item && item.long("type") == 1L
         val liked = listId == KugouProtocol.LIKED_LIST_ID.toLong()
-        val owned = liked || (if (collectedType) creatorUid == ownerId else creatorUid == 0L || creatorUid == ownerId)
+        // `list_create_userid` names the source playlist's creator, so a different uid means a
+        // collected copy. It is the only reliable marker; `type` is just a fallback.
+        val owned = liked || (if (creatorUid > 0L) creatorUid == ownerId
+            else "type" in item && item.long("type") == 0L)
         val rawCover = item.text("pic", "imgurl").ifBlank {
             item.array("pics").firstNotNullOfOrNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }.orEmpty()
         }
