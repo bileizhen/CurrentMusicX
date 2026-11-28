@@ -92,9 +92,12 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
         effectiveLyricsRenderQuality(display.renderQuality, lowRam, android.os.Build.VERSION.SDK_INT)
     }
     val renderDisplay = remember(display, renderQuality) { display.withRenderQuality(renderQuality) }
+    // Blur is the expensive part; a POWER_SAVER device must not keep drawing it just because the
+    // saved preference asked for it.
+    val renderEffects = effects && renderDisplay.blur
     if (renderDisplay.style == io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC) {
         AppleMusicLyrics(document, position, onSeek, modifier, canSeek, translation, romanization,
-            wordAnimation, effects, LyricsTypography.normalize(fontSize), weightMode,
+            wordAnimation, renderEffects, LyricsTypography.normalize(fontSize), weightMode,
             lyricsOffsetMs, renderDisplay, mediaDurationMs, playbackRunning)
         return
     }
@@ -126,7 +129,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     val browsingOffStage = remember { mutableLongStateOf(-1L) }
     Box(modifier.testTag("lyrics_panel")) {
         MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
-            renderDisplay.centered, minimal, perspective, effects, followRequest,
+            renderDisplay.centered, minimal, perspective, renderEffects, followRequest,
             onBrowse = { browseAnchor = it },
             expandWindow = renderDisplay.hideControls && !minimal, playbackTarget = playbackTarget) { index, browsing, tone, focused, focusIndex ->
             val line = document.lines[index]
@@ -138,7 +141,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
                     LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let { target ->
                         onSeek(target); followRequest++
                     }
-                }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone,
+                }, translation, romanization, wordAnimation, renderEffects, size, weightMode, renderDisplay, monetTone = tone,
                 browsing = browsing)
         }
         if (!minimal && interlude != null && browseAnchor == null)

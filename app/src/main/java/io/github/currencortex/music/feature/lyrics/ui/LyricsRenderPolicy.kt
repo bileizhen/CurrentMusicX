@@ -23,7 +23,8 @@ internal fun effectiveLyricsRenderQuality(
 /** Reduce the stage to what the resolved quality allows; layout and timing are untouched. */
 internal fun LyricsDisplayOptions.withRenderQuality(quality: LyricsRenderQuality): LyricsDisplayOptions = when (quality) {
     LyricsRenderQuality.FULL, LyricsRenderQuality.AUTO -> this
-    LyricsRenderQuality.BALANCED -> copy(blur = true, glow = true, wordLift = true, smoke = false, particles = false)
+    // Balanced only removes what it cannot afford; whatever the user turned off stays off.
+    LyricsRenderQuality.BALANCED -> copy(smoke = false, particles = false)
     LyricsRenderQuality.POWER_SAVER -> copy(
         blur = false, glow = false, wordLift = false, smoke = false, particles = false,
         stagger = false, karaokeScope = KaraokeScope.CURRENT,
