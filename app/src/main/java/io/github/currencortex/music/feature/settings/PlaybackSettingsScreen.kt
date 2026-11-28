@@ -126,6 +126,19 @@ import kotlin.math.roundToInt
         } }
         item("lyrics") { SettingsSection("歌词样式") {
             LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle)
+            SettingsDivider()
+            io.github.currencortex.music.data.settings.LyricsRenderQuality.entries.forEach { quality ->
+                SettingsChoiceRow(quality.label, settings.lyricsDisplay.renderQuality == quality,
+                    { vm.lyricsDisplay { options -> options.copy(renderQuality = quality) } },
+                    Modifier.testTag("lyrics_quality_${quality.name.lowercase()}"),
+                    summary = when (quality) {
+                        io.github.currencortex.music.data.settings.LyricsRenderQuality.AUTO ->
+                            "低内存或 Android 12 以下自动降到省电"
+                        io.github.currencortex.music.data.settings.LyricsRenderQuality.FULL -> "模糊、光效、逐字动画全开"
+                        io.github.currencortex.music.data.settings.LyricsRenderQuality.BALANCED -> "保留模糊与光效，关闭烟雾与粒子"
+                        io.github.currencortex.music.data.settings.LyricsRenderQuality.POWER_SAVER -> "关闭模糊与动画，只保留逐行高亮"
+                    })
+            }
             if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
                 SettingsDivider()
                 MusicDestinationRow("Apple Music 自定义", { appleLyricsOpen = true },

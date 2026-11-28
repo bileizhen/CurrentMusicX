@@ -6,9 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import android.app.ActivityManager
+import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -80,13 +83,28 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
     display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
     cover: String = "", mediaDurationMs: Long = 0, playbackRunning: Boolean = true) {
-    if (display.style == io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC) {
+    // Resolve the quality once, then render with the reduced options; the saved preference is untouched.
+    val context = LocalContext.current
+    val lowRam = remember(context) {
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
+    }
+    val renderQuality = remember(display.renderQuality, lowRam) {
+        effectiveLyricsRenderQuality(display.renderQuality, lowRam, android.os.Build.VERSION.SDK_INT)
+    }
+    val renderDisplay = remember(display, renderQuality) { display.withRenderQuality(renderQuality) }
+    // Blur is the expensive part; a POWER_SAVER device must not keep drawing it just because the
+    // saved preference asked for it.
+    val renderEffects = effects && renderDisplay.blur
+    if (renderDisplay.style == io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC) {
         AppleMusicLyrics(document, position, onSeek, modifier, canSeek, translation, romanization,
-            wordAnimation, effects, LyricsTypography.normalize(fontSize), weightMode,
-            lyricsOffsetMs, display, mediaDurationMs, playbackRunning)
+            wordAnimation, renderEffects, LyricsTypography.normalize(fontSize), weightMode,
+            lyricsOffsetMs, renderDisplay, mediaDurationMs, playbackRunning)
         return
     }
-    val smokeColors = if (display.smoke || display.particles) rememberLyricsSmokeColors(cover) else null
+    // The saved mode picks the stage: flipping it to power saver must not move the lyrics layout.
+    val smokeStage = display.smoke || display.particles
+    val smokeEffects = renderDisplay.smoke || renderDisplay.particles
+    val smokeColors = if (smokeStage) rememberLyricsSmokeColors(cover).takeIf { smokeEffects } else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.lyricPosition(position.value, lyricsOffsetMs) } }
@@ -101,22 +119,22 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     val target by remember(timeline, visualPosition) { derivedStateOf { timeline.scrollTarget(visualPosition.value) } }
     val playbackTarget by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
-    if (display.smoke || display.particles) {
+    if (smokeStage) {
         SmokeLyricsStage(document, target, effectivePosition, onSeek = {
             LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let(onSeek)
         },
             modifier = modifier, canSeek = canSeek, translation = translation, romanization = romanization,
-            fontSize = size, weightMode = weightMode, display = display.normalized(), colors = smokeColors,
-            particles = display.particles)
+            fontSize = size, weightMode = weightMode, display = renderDisplay.normalized(), colors = smokeColors,
+            particles = renderDisplay.particles)
         return
     }
     var followRequest by remember(document) { mutableIntStateOf(0) }
     val browsingOffStage = remember { mutableLongStateOf(-1L) }
     Box(modifier.testTag("lyrics_panel")) {
         MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
-            display.centered, minimal, perspective, effects, followRequest,
+            renderDisplay.centered, minimal, perspective, renderEffects, followRequest,
             onBrowse = { browseAnchor = it },
-            expandWindow = display.hideControls && !minimal, playbackTarget = playbackTarget) { index, browsing, tone, focused, focusIndex ->
+            expandWindow = renderDisplay.hideControls && !minimal, playbackTarget = playbackTarget) { index, browsing, tone, focused, focusIndex ->
             val line = document.lines[index]
             // Browsing rows never self-match: bold, glow, karaoke fill and the translation slot
             // belong to the sung line alone. The selection reads through the rail tone lift only.
@@ -126,7 +144,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
                     LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let { target ->
                         onSeek(target); followRequest++
                     }
-                }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone,
+                }, translation, romanization, wordAnimation, renderEffects, size, weightMode, renderDisplay, monetTone = tone,
                 browsing = browsing)
         }
         if (!minimal && interlude != null && browseAnchor == null)
