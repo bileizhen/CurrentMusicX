@@ -94,6 +94,10 @@ class KugouMusicRepository(
     private var likedCache: List<Song>? = null
     private val likedFileIds = mutableMapOf<Long, Int>()
     private val playlistGlobalIds = mutableMapOf<Int, String>()
+    /** Source `global_collection_id` (`list_create_gid`) of a collected playlist copy. */
+    private val playlistOriginGids = mutableMapOf<Int, String>()
+    /** Collected copies whose own song list is empty; their tracks come from the source playlist. */
+    private val originTracksLists = mutableSetOf<Int>()
     private val playlistVersions = mutableMapOf<Int, Int>()
     private val userPlaylistMeta = mutableMapOf<Int, Playlist>()
     private val collectedKeyToListId = mutableMapOf<String, Int>()
@@ -183,6 +187,8 @@ class KugouMusicRepository(
             likedCache = null
             likedFileIds.clear()
             playlistGlobalIds.clear()
+            playlistOriginGids.clear()
+            originTracksLists.clear()
             playlistVersions.clear()
             userPlaylistMeta.clear()
             collectedKeyToListId.clear()
@@ -956,6 +962,8 @@ class KugouMusicRepository(
         }
         synchronized(this) {
             userPlaylistMeta.clear()
+            playlistOriginGids.clear()
+            originTracksLists.clear()
             collectedKeyToListId.clear()
             listIdToCollectedKeys.clear()
             rawItems.forEach { item ->
@@ -972,6 +980,19 @@ class KugouMusicRepository(
                 val listId = item.long("listid").toInt()
                 val playlist = parsedById[listId] ?: return@forEach
                 if (!playlist.nativeOwned && listId > 0) {
+                    val ownGid = item.text("global_collection_id")
+                    val sourceGid = item.text("list_create_gid")
+                        .takeIf { it.isNotBlank() && it != ownGid }
+                        ?: item.long("list_create_userid").takeIf { it > 0 }?.let { creator ->
+                            item.long("list_create_listid").takeIf { it > 0 }?.let { sourceList ->
+                                "collection_3_${creator}_${sourceList}_0"
+                            }
+                        }
+                    if (sourceGid != null) {
+                        // A collected copy is a pointer: its own song list may stay empty while the
+                        // source playlist still owns the tracks.
+                        playlistOriginGids[listId] = sourceGid
+                    }
                     val keys = collectKeysFor(
                         specialId = "",
                         creatorUid = item.long("list_create_userid"),
@@ -1014,6 +1035,8 @@ class KugouMusicRepository(
     private fun removeListIndexesLocked(listId: Int) {
         userPlaylistMeta.remove(listId)
         playlistGlobalIds.remove(listId)
+        playlistOriginGids.remove(listId)
+        originTracksLists.remove(listId)
         playlistVersions.remove(listId)
         listIdToCollectedKeys.remove(listId)?.forEach { collectedKeyToListId.remove(it, listId) }
         collectedKeyToListId.entries.removeAll { it.value == listId }
@@ -1056,22 +1079,30 @@ class KugouMusicRepository(
         }
         val safePage = page.coerceAtLeast(1)
         val cappedPageSize = pageSize.coerceIn(1, 300)
-        val globalCollectionId = synchronized(this) { playlistGlobalIds[listId] }
+        val copyGid = synchronized(this) { playlistGlobalIds[listId] }
             ?: "collection_3_${creds.userId}_${listId}_0"
-        val root = gateway(
-            "pubsongs/v2/get_other_list_file_nofilt",
-            mapOf(
-                "global_collection_id" to globalCollectionId,
-                "page" to safePage.toString(),
-                "pagesize" to cappedPageSize.toString(),
-                "area_code" to "1",
-            ),
-        )
-        val data = root.obj("data")
-        val rawItems = data.array("songs").takeIf { it.isNotEmpty() } ?: data.array("info")
+        val originGid = synchronized(this) { playlistOriginGids[listId] }
+        val collected = originGid != null || meta?.let { it.nativeSubscribed && !it.nativeOwned } == true
+        // A collected copy is only a pointer. When KuGou leaves the copy's own file list empty,
+        // the tracks still live on the source playlist, so later pages keep reading the source.
+        val useOrigin = collected && originGid != null && safePage > 1 &&
+            synchronized(this) { listId in originTracksLists }
+        var data = playlistTrackRoot(if (useOrigin) originGid else copyGid, safePage, cappedPageSize).obj("data")
+        var rawItems = data.array("songs").takeIf { it.isNotEmpty() } ?: data.array("info")
+        var serverCount = data.long("count").toInt()
+        if (!useOrigin && collected && originGid != null && safePage == 1 && rawItems.isEmpty() && serverCount == 0) {
+            val originData = playlistTrackRoot(originGid, safePage, cappedPageSize).obj("data")
+            val originItems = originData.array("songs").takeIf { it.isNotEmpty() } ?: originData.array("info")
+            val originCount = originData.long("count").toInt()
+            if (originItems.isNotEmpty() || originCount > 0) {
+                data = originData
+                rawItems = originItems
+                serverCount = originCount
+                synchronized(this) { originTracksLists += listId }
+            }
+        }
         val rawCount = rawItems.size
         val songs = KugouParsing.songs(rawItems)
-        val serverCount = data.long("count").toInt()
         val total = serverCount.coerceAtLeast(songs.size)
         val fetchedEnd = (safePage - 1) * cappedPageSize + rawCount
         val hasMore = rawCount > 0 && ((serverCount > 0 && fetchedEnd < serverCount) || (serverCount <= 0 && rawCount >= cappedPageSize))
@@ -1094,6 +1125,18 @@ class KugouMusicRepository(
         )
         return KugouUserPlaylistPage(playlist = playlist, hasMore = hasMore)
     }
+
+    private suspend fun playlistTrackRoot(gid: String, page: Int, pageSize: Int): JsonObject = gateway(
+        "pubsongs/v2/get_other_list_file_nofilt",
+        mapOf(
+            "global_collection_id" to gid,
+            // The gateway pages by offset; `page` stays for endpoints that also read it.
+            "begin_idx" to ((page - 1) * pageSize).toString(),
+            "page" to page.toString(),
+            "pagesize" to pageSize.toString(),
+            "area_code" to "1",
+        ),
+    )
 
     suspend fun userPlaylist(listId: Int, name: String = "酷狗歌单", page: Int = 1, pageSize: Int = 300): Playlist =
         userPlaylistPage(listId, name, page, pageSize).playlist
@@ -1253,9 +1296,15 @@ class KugouMusicRepository(
         val data = root.obj("data")
         val newListId = data.long("listid").toInt()
         val newGlobalId = data.text("global_collection_id")
+        // The source id lets the collected copy's page read tracks from the original playlist,
+        // because KuGou keeps the copy itself empty.
+        val sourceGid = globalId.ifBlank {
+            if (creatorUid > 0 && createListId > 0) "collection_3_${creatorUid}_${createListId}_0" else ""
+        }
         synchronized(this) {
             if (newListId > 0) {
                 if (newGlobalId.isNotBlank()) playlistGlobalIds[newListId] = newGlobalId
+                if (sourceGid.isNotBlank()) playlistOriginGids[newListId] = sourceGid
                 indexCollectedListLocked(
                     newListId,
                     collectKeysFor(specialKey, creatorUid, createListId, globalId, newGlobalId),
@@ -1283,21 +1332,60 @@ class KugouMusicRepository(
         val listId = synchronized(this) { findCollectedListIdLocked(playlist) }
             ?: playlist.remoteId.toIntOrNull()?.takeIf { it > 0 && playlist.nativeSubscribed }
             ?: throw ApiException(ErrorKind.NotFound, userMessage = "未找到已收藏的酷狗歌单")
-        deletePlaylist(listId, listType = 1)
+        deletePlaylist(listId)
     }
 
-    suspend fun deletePlaylist(listId: Int, listType: Int? = null) {
-        val (_, creds) = requireCredentials()
+    /**
+     * Delete a created playlist or uncollect one. `cloudlist.service/v2/delete_list` expects the
+     * legacy playlist AES envelope (`{listid,total_ver,type}` in a Base64 AES body) plus an RSA
+     * `p` portrait; a plain signed JSON body is silently rejected, which used to leave the
+     * collected playlist in place. `type` is always 1 for this endpoint, created lists included.
+     */
+    suspend fun deletePlaylist(listId: Int) {
+        val (dev, creds) = requireCredentials()
         if (listId <= 0 || listId == KugouProtocol.LIKED_LIST_ID) throw ApiException(ErrorKind.Forbidden)
-        val type = listType ?: if (synchronized(this) { userPlaylistMeta[listId]?.nativeOwned } == false) 1 else 0
-        val body = buildJsonObject {
-            put("userid", creds.userId)
-            put("token", creds.token)
+        val sessionKey = KugouProtocol.playlistAesKey()
+        val payload = buildJsonObject {
             put("listid", listId)
             put("total_ver", 0)
-            put("type", type)
+            put("type", 1)
+        }.toString()
+        val portrait = buildJsonObject {
+            put("aes", sessionKey)
+            put("uid", creds.userId.toString())
+            put("token", creds.token)
+        }.toString()
+        val ts = client.nowSeconds()
+        val bytes = client.postRaw(
+            gatewayBase, "v2/delete_list", KugouProtocol.playlistAesEncrypt(sessionKey, payload),
+            params = mapOf(
+                "key" to KugouProtocol.paramsKey(ts),
+                "last_area" to "gztx",
+                "last_time" to ts.toString(),
+                "p" to KugouProtocol.rsaEncryptPkcs1(portrait),
+            ),
+            device = dev,
+            credentials = creds,
+            router = "cloudlist.service.kugou.com",
+            headers = mapOf("KG-TID" to KugouProtocol.CLOUDLIST_TID, "Content-Type" to "application/x-www-form-urlencoded"),
+            clientTimeSeconds = ts,
+        )
+        // Success is an encrypted JSON envelope; gateway errors can still come back as plain JSON.
+        val text = KugouProtocol.playlistAesDecrypt(sessionKey, bytes)
+            ?: String(bytes, Charsets.UTF_8).takeIf { it.trimStart().startsWith("{") }
+            ?: throw ApiException(ErrorKind.Server, userMessage = "酷狗未确认取消收藏，请稍后重试")
+        val root = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
+            ?: throw ApiException(ErrorKind.Server, userMessage = "酷狗返回了无法识别的取消收藏结果")
+        val status = root.long("status").toInt()
+        val errorCode = root.long("error_code", "err_code", "errcode").toInt()
+        client.logEvent("KuGou v2/delete_list listId=$listId status=$status err=$errorCode")
+        if (status != 1 && status != 200 && errorCode != 0) {
+            val message = root.text("error", "error_msg", "errmsg", "msg", "info")
+            throw ApiException(
+                ErrorKind.Server, status,
+                message.ifBlank { "酷狗未确认取消收藏，请稍后重试" },
+            )
         }
-        cloudListPost("v2/delete_list", body)
         synchronized(this) {
             removeListIndexesLocked(listId)
         }
