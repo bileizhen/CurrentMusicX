@@ -107,6 +107,19 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var sideDialog by remember { mutableStateOf(false) }
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
+    // MV: 在本页把 MV 当静音背景播放；音频仍归 MusicService，歌词时钟不变。
+    var mvBackground by rememberSaveable { mutableStateOf(false) }
+    var mvUrl by remember { mutableStateOf<String?>(null) }
+    var mvLoading by remember { mutableStateOf(false) }
+    val mvSongId = state.song?.mv?.takeIf { it > 0 }
+    LaunchedEffect(mvBackground, mvSongId) {
+        if (!mvBackground || mvSongId == null) { mvUrl = null; mvLoading = false; return@LaunchedEffect }
+        mvLoading = true
+        mvUrl = runCatching { vm.container.libraryRepository.mvSource(mvSongId) }.getOrNull()
+        mvLoading = false
+        if (mvUrl == null) mvBackground = false
+    }
+    LaunchedEffect(mvSongId) { if (mvSongId == null) { mvBackground = false; mvUrl = null } }
     LaunchedEffect(roamingRequest) {
         if (roamingRequest > 0) { overlay = PlayerOverlay.ROAMING; onRoamingRequestConsumed() }
     }
@@ -347,6 +360,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                if (mvSongId != null && !widePlayer) {
+                    PlayerIconButton(PlayerIcon.VIDEO,
+                        if (mvBackground) "关闭 MV 背景" else "把 MV 当背景播放",
+                        { mvBackground = !mvBackground },
+                        Modifier.testTag("player_mv_background"),
+                        selected = mvBackground, enabled = headerEnabled && !mvLoading)
+                }
                 PlayerIconButton(PlayerIcon.SHARE, "分享歌曲", { overlay = PlayerOverlay.SHARE }, Modifier.testTag("player_share"),
                     enabled = headerEnabled && queue.current != null)
             }
@@ -378,6 +398,17 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur,
             active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground,
             motionSpeed = { backgroundSpeed.value })
+        val mvFrame = mvUrl
+        if (mvBackground && mvFrame != null && !widePlayer) {
+            PlayerMvBackdrop(
+                PlayerMvSource(mvFrame, "https://music.163.com/"),
+                playing = state.playing, active = expanded && overlay == PlayerOverlay.NONE,
+                positionMs = state.positionMs, timelineRevision = state.timelineRevision,
+                poster = queue.current?.cover.orEmpty(),
+                onError = { mvBackground = false },
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
