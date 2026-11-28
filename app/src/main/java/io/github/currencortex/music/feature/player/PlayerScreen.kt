@@ -339,7 +339,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"),
                     enabled = headerEnabled)
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    if (roaming.active) Text(if (state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                    if (roaming.active) Text(if (state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
+                        state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU)
                         "猜你喜欢 · ${roaming.choice.title}" else "私人漫游 · ${roaming.choice.title}",
                         Modifier.testTag("open_roaming_modes")
                             .clickable(enabled = headerEnabled, role = Role.Button) { overlay = PlayerOverlay.ROAMING }
@@ -358,7 +359,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             excludedArea = { controlsCoordinates }, side = {
                 COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
                     if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
-                        onBinding = { sidePage.close(); onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding") },
+                        onBinding = { sidePage.close(); onAiNavigate(when {
+                            vm.container.activePersonalRoamingIsKugou -> "kugou/account"
+                            vm.container.activePersonalRoamingIsQq -> "qq/account"
+                            else -> "user/binding"
+                        }) },
                         onListening = { sidePage.close(); onAiNavigate("user/listening") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current, songNavigation,
@@ -599,13 +604,23 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::onCommentEdited, vm::replyTo, vm::sendComment,
                 vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment,
-                title = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
-                    "QQ 音乐评论" else "网易云评论",
-                fallbackUser = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
-                    "QQ 音乐用户" else "网易云用户")
+                title = when (queue.current?.musicSource) {
+                    io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> "QQ 音乐评论"
+                    io.github.currencortex.music.data.song.MusicSource.KUGOU -> "酷狗评论"
+                    else -> "网易云评论"
+                },
+                fallbackUser = when (queue.current?.musicSource) {
+                    io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> "QQ 音乐用户"
+                    io.github.currencortex.music.data.song.MusicSource.KUGOU -> "酷狗用户"
+                    else -> "网易云用户"
+                })
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
-                onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding")
+                onAiNavigate(when {
+                    vm.container.activePersonalRoamingIsKugou -> "kugou/account"
+                    vm.container.activePersonalRoamingIsQq -> "qq/account"
+                    else -> "user/binding"
+                })
             }
             PlayerOverlay.MODE -> MusicChoiceDialog("播放模式", dismiss) {
                 PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogChoiceRow(mode.label, mode == playbackMode,
@@ -654,7 +669,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     ).ifEmpty { listOf("关闭") }.joinToString(" · "),
                     modifier = Modifier.testTag("open_player_immersion"),
                     onClick = { overlay = PlayerOverlay.IMMERSION })
-                MusicDestinationRow(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) "猜你喜欢" else "私人漫游",
+                MusicDestinationRow(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
+                    queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) "猜你喜欢" else "私人漫游",
                     summary = if (roaming.active) roaming.choice.title else "推荐歌曲",
                     modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
                 if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },
@@ -667,7 +683,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 if (queue.current != null && queue.current?.video != true)
                     MusicDestinationRow("歌词管理", summary = "来源 · 在线匹配 · 单曲偏移 · 导入导出",
                         modifier = Modifier.testTag("open_lyrics_management"), onClick = { overlay = PlayerOverlay.LYRICS_MANAGEMENT })
-                if (onRoom != null && state.song?.privateLibrary != true && state.song?.musicSource != io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
+                if (onRoom != null && state.song?.privateLibrary != true &&
+                    state.song?.musicSource !in setOf(io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC, io.github.currencortex.music.data.song.MusicSource.KUGOU)) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
             PlayerOverlay.AI -> PlayerAiDialog(vm.ai, dismiss) { card ->

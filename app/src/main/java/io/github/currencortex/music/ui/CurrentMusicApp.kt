@@ -139,13 +139,16 @@ import io.github.currencortex.music.feature.room.*
 private fun isPlaylistRoute(route: String) = route == "lib/local" ||
     route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
     route.startsWith("lib/album/") || route.startsWith("qq/playlist/") ||
-    route.startsWith("qq/album/") ||
+    route.startsWith("qq/chart/") || route.startsWith("qq/album/") ||
+    route.startsWith("kugou/playlist/") || route.startsWith("kugou/user-playlist/") ||
+    route.startsWith("kugou/rank/") || route.startsWith("kugou/album/") ||
     route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud",
-        "qq/daily", "qq/foryou", "qq/likes", "qq/recent")
+        "qq/daily", "qq/foryou", "qq/likes", "qq/recent",
+        "kugou/daily", "kugou/new", "kugou/likes")
 
-/** QQ albums use the playlist artwork chrome but do not implement its shelf/ribbon overlays. */
+/** QQ and KuGou albums use the playlist artwork chrome but do not implement its shelf/ribbon overlays. */
 private fun supportsPlaylistOverlay(route: String) =
-    isPlaylistRoute(route) && !route.startsWith("qq/album/")
+    isPlaylistRoute(route) && !route.startsWith("qq/album/") && !route.startsWith("kugou/album/")
 
 private val UnifiedMiniScrollClearance = 36.dp
 private const val ROOT = 0
@@ -201,6 +204,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val settings by container.settings.state.collectAsStateWithLifecycle()
     val lyricsFontSettings by container.musicSettings.state.collectAsStateWithLifecycle()
     val qqSelected = lyricsFontSettings.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC
+    val kugouSelected = lyricsFontSettings.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.KUGOU
     val lyricsFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricsFontSettings)
     AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings, container.rootBackgrounds) })
@@ -406,7 +410,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 searchFocusManager.clearFocus()
                 searchKeyboard?.hide()
             }
-            if (route in setOf("lib/roaming", "qq/roaming")) { roamingRequest++; navigateTo(PLAYER); return }
+            if (route in setOf("lib/roaming", "qq/roaming", "kugou/roaming")) { roamingRequest++; navigateTo(PLAYER); return }
             if (backStack.last() != route) { playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
         }
         LaunchedEffect(Unit) {
@@ -521,7 +525,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             onWebLinkConsumed(request.id)
         }
         fun requestSong(song: Song) {
-            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC, io.github.currencortex.music.data.song.MusicSource.KUGOU)) {
                 libraryVm.message.value = "一起听房间当前支持网易云歌曲"; return
             }
             if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
@@ -689,7 +693,24 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             Box(Modifier.fillMaxSize().then(if (tab == HOME_TAB && navidromeAccount.configured && navidromeAccount.home)
                                 Modifier.statusBarsPadding() else Modifier)) {
                             when (tab) {
-                                HOME_TAB -> if (qqSelected)
+                                HOME_TAB -> if (kugouSelected)
+                                    io.github.currencortex.music.feature.kugou.KugouHomeScreen(
+                                        container = container,
+                                        libraryVm = libraryVm,
+                                        onSearch = { navigateTo(SEARCH) },
+                                        onProfile = { _, _ -> selectTab(ME_TAB) },
+                                        navigate = ::navigateLibrary,
+                                        play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                        profile = myProfile.profile?.user,
+                                        onSearchBounds = { searchBounds = it },
+                                        hideSearch = searchPresented,
+                                        searchQuery = searchQuery,
+                                        onSearchSubmit = {
+                                            navigateTo(SEARCH)
+                                            val query = searchVm.state.value.query
+                                            if (query.isNotBlank()) { searchVm.search(query); searchFocus = false }
+                                        })
+                                else if (qqSelected)
                                     io.github.currencortex.music.feature.qqmusic.QqMusicHomeScreen(
                                         libraryVm = libraryVm,
                                         onSearch = { navigateTo(SEARCH) },
@@ -719,13 +740,21 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 DISCOVER_TAB -> CompositionLocalProvider(
                                     LocalMusicBottomInset provides if (discoverPager.targetPage == 3) 0.dp else scrollBottom,
                                     LocalMusicComposerBottomInset provides if (discoverPager.targetPage == 3) 0.dp else composerBottom) {
-                                    if (qqSelected) DiscoverScreen(discoverVm, discoverPager, ::navigateLibrary,
+                                    if (kugouSelected) DiscoverScreen(discoverVm, discoverPager, ::navigateLibrary,
+                                        musicPage = {
+                                            io.github.currencortex.music.feature.kugou.KugouDiscoverMusicPage(container, ::navigateLibrary)
+                                        })
+                                    else if (qqSelected) DiscoverScreen(discoverVm, discoverPager, ::navigateLibrary,
                                         musicPage = {
                                             io.github.currencortex.music.feature.qqmusic.QqMusicDiscoverMusicPage(container, ::navigateLibrary)
                                         })
                                     else DiscoverScreen(discoverVm, discoverPager, ::navigateLibrary)
                                 }
-                                ME_TAB -> if (qqSelected)
+                                ME_TAB -> if (kugouSelected)
+                                    MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
+                                        play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                        platform = io.github.currencortex.music.data.settings.MusicPlatform.KUGOU)
+                                else if (qqSelected)
                                     MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
                                         play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                         platform = io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
@@ -762,9 +791,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 onPlayAll = { songs -> playWithPermission { container.playerController.playList(songs, 0) } },
                                 actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }, navigate = ::navigateLibrary,
                                 onBack = ::navigateBack, sheet = searchSheet, autoFocus = searchFocus, onFocused = { searchFocus = false },
-                                recommendations = if (qqSelected) emptyList() else libraryHome.daily + libraryHome.forYou,
-                                recent = if (qqSelected) emptyList() else libraryHome.recent,
-                                qqMusic = qqSelected) { song ->
+                                recommendations = if (qqSelected || kugouSelected) emptyList() else libraryHome.daily + libraryHome.forYou,
+                                recent = if (qqSelected || kugouSelected) emptyList() else libraryHome.recent,
+                                qqMusic = qqSelected,
+                                kugouMusic = kugouSelected) { song ->
                                 playWithPermission { container.playerController.playSong(song) }
                             }
                         }
@@ -1027,7 +1057,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             "qq/community-profile" -> MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
                                 play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                 platform = io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
-                            else if (route.startsWith("qq/playlist/") || route in setOf("qq/daily", "qq/foryou", "qq/likes", "qq/recent")) -> {
+                            else if (route.startsWith("qq/playlist/") || route.startsWith("qq/chart/") ||
+                                route in setOf("qq/daily", "qq/foryou", "qq/likes", "qq/recent")) -> {
                                 val detailVm: LibraryDetailViewModel = viewModel(key = route,
                                     factory = viewModelFactory { LibraryDetailViewModel(container, route) })
                                 LibraryDetailScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary,
@@ -1037,6 +1068,26 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             else -> io.github.currencortex.music.feature.qqmusic.QqMusicScreen(container, route, ::navigateBack,
                                 navigate = ::navigateLibrary,
                                 play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                libraryVm = libraryVm)
+                        }
+                    }
+                }
+                backStack.filter { it.startsWith("kugou/") }.distinct().forEach { route ->
+                    entry(route) {
+                        if (route.startsWith("kugou/playlist/") ||
+                            route.startsWith("kugou/user-playlist/") ||
+                            route.startsWith("kugou/rank/") ||
+                            route.startsWith("kugou/album/") ||
+                            route in setOf("kugou/daily", "kugou/new", "kugou/likes")
+                        ) {
+                            val detailVm: LibraryDetailViewModel = viewModel(key = route,
+                                factory = viewModelFactory { LibraryDetailViewModel(container, route) })
+                            LibraryDetailScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary,
+                                play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                playMv = {}, deleted = ::navigateBack, onDialogActive = { playerDialogOpen = it })
+                        } else {
+                            io.github.currencortex.music.feature.kugou.KugouScreen(container, route, ::navigateBack,
+                                ::navigateLibrary, { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                 libraryVm = libraryVm)
                         }
                     }

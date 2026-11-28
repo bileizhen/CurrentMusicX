@@ -39,7 +39,8 @@ class ListeningReportQueue(
 
     fun report(song: Song, owner: RequestSession, milliseconds: Long? = null) {
         if (song.video || song.musicSource == MusicSource.LOCAL || song.musicSource == MusicSource.EMBY ||
-            song.musicSource == MusicSource.QQ_MUSIC || milliseconds != null && milliseconds <= 0) return
+            song.musicSource == MusicSource.QQ_MUSIC || song.musicSource == MusicSource.KUGOU ||
+            milliseconds != null && milliseconds <= 0) return
         val report = Report(song, milliseconds, owner)
         if (song.musicSource == MusicSource.NAVIDROME) privateLibrary.trySend(report)
         else {

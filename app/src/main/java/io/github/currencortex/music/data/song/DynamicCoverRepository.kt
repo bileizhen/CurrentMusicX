@@ -96,7 +96,7 @@ class DynamicCoverRepository(
                 when (song.musicSource) {
                     MusicSource.NETEASE -> resolveNetease(song) ?: resolveAppleMusic(song)
                     MusicSource.QQ_MUSIC -> resolveQq(song) ?: resolveAppleMusic(song)
-                    MusicSource.APPLE_MUSIC, MusicSource.SPOTIFY, MusicSource.NAVIDROME,
+                    MusicSource.KUGOU, MusicSource.APPLE_MUSIC, MusicSource.SPOTIFY, MusicSource.NAVIDROME,
                     MusicSource.LOCAL, MusicSource.EMBY -> resolveAppleMusic(song)
                     MusicSource.SERVICE -> null
                 }

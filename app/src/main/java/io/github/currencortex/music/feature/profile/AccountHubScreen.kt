@@ -25,6 +25,7 @@ fun AccountHubScreen(container: AppContainer, navigate: (String) -> Unit, onBack
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val netease by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val qq by container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugou by container.kugou.state.collectAsStateWithLifecycle()
     // Without a CurrentMusic account the app runs on the built-in Netease session only.
     val native = account.account == null && container.nativeNetease != null
     val bound = if (native) netease.loggedIn else true
@@ -45,6 +46,10 @@ fun AccountHubScreen(container: AppContainer, navigate: (String) -> Unit, onBack
                     ProfileDestination(if (qq.loggedIn) "QQ 音乐账号" else "登录 QQ 音乐",
                         if (qq.loggedIn) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
                         MusicIcons.Account, "account_qq") { navigate("qq/account") }
+                    SettingsDivider(52.dp)
+                    ProfileDestination(if (kugou.loggedIn) "酷狗音乐账号" else "登录酷狗音乐",
+                        if (kugou.loggedIn) "已连接，管理云歌单、我喜欢与 VIP 权益" else "登录后访问云歌单、我喜欢与 VIP 曲库",
+                        MusicIcons.Account, "account_kugou") { navigate("kugou/account") }
                 }
             }
             if (!native) item("account") {

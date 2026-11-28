@@ -64,6 +64,8 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     private suspend fun changeLike(song: Song, desired: Boolean?, expectedSession: RequestSession? = null): AppResult<Unit> = mutationMutex.withLock {
         if (song.musicSource == MusicSource.QQ_MUSIC) return@withLock AppResult.Failure(ErrorKind.NotFound,
             message = "请在 QQ 音乐的我喜欢中管理这首歌")
+        if (song.musicSource == MusicSource.KUGOU) return@withLock AppResult.Failure(ErrorKind.NotFound,
+            message = "请在酷狗音乐的我喜欢中管理这首歌")
         if (accountId() == 0L) return@withLock AppResult.Failure(ErrorKind.Unauthorized)
         val expected = session()
         if (expectedSession != null && expectedSession != expected) return@withLock AppResult.Failure(ErrorKind.Unauthorized)
@@ -106,6 +108,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     }
     suspend fun add(id: Long, songs: List<Song>) {
         require(songs.none { it.musicSource == MusicSource.QQ_MUSIC }) { "QQ 音乐歌曲只能加入 QQ 歌单" }
+        require(songs.none { it.musicSource == MusicSource.KUGOU }) { "酷狗音乐歌曲只能加入酷狗歌单" }
         val expected = session(); editable(id, expected)
         api.request("POST", "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(songs.map(::metadata))) }, authenticated = true, expectedSession = expected)
         revision.update { it + 1 }
@@ -117,14 +120,16 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     }
     suspend fun recordPlay(song: Song, expected: RequestSession = session()) {
         // CurrentMusic statistics must also be updated when the music library uses native Netease.
-        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource != MusicSource.QQ_MUSIC) {
+        if (accountId() != 0L && !song.video && !song.privateLibrary &&
+            song.musicSource !in setOf(MusicSource.QQ_MUSIC, MusicSource.KUGOU)) {
             val body = JsonObject(metadata(song) + ("platform" to JsonPrimitive("x")))
             api.request("POST", "plays/${song.id}", body = body, authenticated = true, expectedSession = expected)
             revision.update { it + 1 }
         }
     }
     suspend fun listen(song: Song, milliseconds: Long, expected: RequestSession = session()) {
-        if (accountId() != 0L && !song.video && !song.privateLibrary && song.musicSource != MusicSource.QQ_MUSIC && milliseconds > 0) api.request("POST", "plays/${song.id}",
+        if (accountId() != 0L && !song.video && !song.privateLibrary &&
+            song.musicSource !in setOf(MusicSource.QQ_MUSIC, MusicSource.KUGOU) && milliseconds > 0) api.request("POST", "plays/${song.id}",
             body = buildJsonObject { put("ms", milliseconds); put("platform", "x") },
             authenticated = true, expectedSession = expected)
     }

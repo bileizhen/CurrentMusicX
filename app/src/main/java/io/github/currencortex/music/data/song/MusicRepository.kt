@@ -17,6 +17,7 @@ class MusicRepository(private val api: ApiClient,
     private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null,
     private val emby: io.github.currencortex.music.data.emby.EmbyRepository? = null,
     private val qqMusic: io.github.currencortex.music.data.qqmusic.QqMusicRepository? = null,
+    private val kugou: io.github.currencortex.music.data.kugou.KugouMusicRepository? = null,
     private val serverAudioSources: ServerAudioSources = ServerAudioSources(api)) {
     val insights = SongInsightsRepository(api)
     suspend fun previewClip(song: Song): SongPreviewClip {
@@ -31,12 +32,15 @@ class MusicRepository(private val api: ApiClient,
     }
     suspend fun detail(song: Song): Song = when (song.musicSource) {
         MusicSource.QQ_MUSIC -> requireNotNull(qqMusic).detail(song)
+        MusicSource.KUGOU -> requireNotNull(kugou).detail(song)
         MusicSource.EMBY -> requireNotNull(emby).detail(song)
         MusicSource.LOCAL -> song
         MusicSource.NAVIDROME -> requireNotNull(navidrome).detail(song)
         else -> if (song.neteaseCloud) song else detail(song.id)
     }
-    suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.QQ_MUSIC) appResult {
+    suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.KUGOU) appResult {
+        requireNotNull(kugou).lyrics(song)
+    } else if (song.musicSource == MusicSource.QQ_MUSIC) appResult {
         requireNotNull(qqMusic).lyrics(song)
     } else if (song.musicSource == MusicSource.EMBY) appResult {
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
@@ -47,6 +51,11 @@ class MusicRepository(private val api: ApiClient,
             val access = audioAccess()
             return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
                 else requireNotNull(qqMusic).source(song, quality)
+        }
+        if (song.musicSource == MusicSource.KUGOU) {
+            val access = audioAccess()
+            return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
+                else requireNotNull(kugou).source(song, quality)
         }
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)

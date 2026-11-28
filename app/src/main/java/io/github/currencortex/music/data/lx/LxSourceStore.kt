@@ -199,8 +199,11 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
             val now = System.currentTimeMillis()
             val performance = if (elapsedMs == null) source.performanceFor(platform).copy(failedAtMs = now)
                 else LxSourcePerformance(elapsedMs.coerceAtLeast(0), now)
-            val measured = if (platform == LxPlatform.QQ_MUSIC) source.copy(qqPerformance = performance)
-                else source.copy(performance = performance)
+            val measured = when (platform) {
+                LxPlatform.QQ_MUSIC -> source.copy(qqPerformance = performance)
+                LxPlatform.KUGOU -> source.copy(kugouPerformance = performance)
+                LxPlatform.NETEASE -> source.copy(performance = performance)
+            }
             val updated = entries.map { if (it.info.id == id) measured else it }
             // A statistics write failure must not discard a usable playback URL.
             try { vault.write(json.encodeToString(serializer, updated)) }
