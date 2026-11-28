@@ -8,7 +8,7 @@ import io.github.currencortex.music.data.song.Song
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 object MediaItemFactory {
     fun create(song: Song, url: String, cacheKey: String? = null, source: io.github.currencortex.music.data.song.AudioSource? = null,
-        autoDolby: Boolean = false) = MediaItem.Builder().setMediaId(song.id.toString()).setUri(url)
+        autoDolby: Boolean = false, autoVivid: Boolean = false) = MediaItem.Builder().setMediaId(song.id.toString()).setUri(url)
         .setCustomCacheKey(cacheKey)
         .setMediaMetadata(MediaMetadata.Builder().setExtras(android.os.Bundle().apply {
             val loudnessKey = trackLoudnessKey(song, source)
@@ -25,17 +25,19 @@ object MediaItemFactory {
                     AudioStreamInfo.serializer(), AudioStreamInfo.from(it)))
                 it.source.takeIf { value -> value.startsWith("lx:") }?.removePrefix("lx:")?.let { id -> putString("cm.lx.source", id) }
                 if (autoDolby) putBoolean("cm.audio.autoDolby", true)
+                if (autoVivid) putBoolean("cm.audio.autoVivid", true)
             }
         }).setTitle(song.name).setArtist(song.artists).setAlbumTitle(song.album)
             .setArtworkUri(song.cover.takeIf { it.isNotBlank() }?.let(Uri::parse)).build()).build()
 }
 
 internal val MediaItem.autoDolby: Boolean get() = mediaMetadata.extras?.getBoolean("cm.audio.autoDolby") == true
+internal val MediaItem.autoVivid: Boolean get() = mediaMetadata.extras?.getBoolean("cm.audio.autoVivid") == true
 internal val MediaItem.lxSourceId: String? get() = mediaMetadata.extras?.getString("cm.lx.source")
 internal val MediaItem.loudnessSpec: TrackLoudnessSpec?
     get() = mediaMetadata.extras?.getString("cm.loudness.track")?.let {
         runCatching { io.github.currencortex.music.core.network.ApiJson.decodeFromString(TrackLoudnessSpec.serializer(), it) }.getOrNull()
     }
 
-internal fun ResolvedAudio.toMediaItem(song: Song, autoDolby: Boolean) =
-    MediaItemFactory.create(song, source.url, key.takeIf(String::isNotBlank), source, autoDolby)
+internal fun ResolvedAudio.toMediaItem(song: Song, autoDolby: Boolean, autoVivid: Boolean = false) =
+    MediaItemFactory.create(song, source.url, key.takeIf(String::isNotBlank), source, autoDolby, autoVivid)

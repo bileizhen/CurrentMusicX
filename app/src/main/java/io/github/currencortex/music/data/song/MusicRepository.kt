@@ -46,7 +46,7 @@ class MusicRepository(private val api: ApiClient,
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
     } else if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
     suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false,
-        supportsDolby: Boolean = false): AudioSource {
+        supportsDolby: Boolean = false, supportsVivid: Boolean = false): AudioSource {
         if (song.musicSource == MusicSource.QQ_MUSIC) {
             val access = audioAccess()
             return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
@@ -59,10 +59,11 @@ class MusicRepository(private val api: ApiClient,
         }
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)
-        if (song.neteaseCloud) return source(song.id, quality, session, refresh, supportsDolby, nativeCloud = true)
+        if (song.neteaseCloud) return source(song.id, quality, session, refresh, supportsDolby,
+            nativeCloud = true, supportsVivid = supportsVivid)
         val access = audioAccess()
         return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
-        else source(song.id, quality, session, refresh, supportsDolby)
+        else source(song.id, quality, session, refresh, supportsDolby, supportsVivid = supportsVivid)
     }
     private suspend fun lxSource(song: Song, quality: AudioQuality, access: AudioSourceAccess): AudioSource {
         val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId, access.lxSmartSwitch) }
@@ -224,7 +225,7 @@ class MusicRepository(private val api: ApiClient,
         else read("ncm/lyric")
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false,
-        supportsDolby: Boolean = false, nativeCloud: Boolean = false): AudioSource {
+        supportsDolby: Boolean = false, nativeCloud: Boolean = false, supportsVivid: Boolean = false): AudioSource {
         val access = audioAccess()
         if (!nativeCloud && access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
         if (!nativeCloud && access.provider == AudioProvider.LEIZ) {
@@ -235,6 +236,7 @@ class MusicRepository(private val api: ApiClient,
         val query = buildMap {
             put("id", "$id"); put("level", quality.value)
             if (quality == AudioQuality.AUTO && supportsDolby) put("supportsDolby", "1")
+            if (quality == AudioQuality.AUTO && supportsVivid) put("supportsVivid", "1")
         }
         fun SongUrlDto.isDolby() = level == AudioQuality.DOLBY.value
         fun SongUrlDto.isUsableDolby() = url?.toHttpUrlOrNull() != null &&

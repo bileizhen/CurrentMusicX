@@ -10,20 +10,36 @@ import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
     val providerIdentity: String = "netease", val song: io.github.currencortex.music.data.song.Song? = null,
-    val refresh: Boolean = false, val supportsDolby: Boolean = false) {
-    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
+    val refresh: Boolean = false, val supportsDolby: Boolean = false, val supportsVivid: Boolean = false) {
+    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby) +
+        if (supportsVivid) ":prefer-vivid" else ""
+
+    internal val neteaseAuto get() = quality == AudioQuality.AUTO &&
+        (providerIdentity == "netease" || providerIdentity == "netease-cloud")
 
     private val dolbyAuto get() = quality == AudioQuality.AUTO &&
         (providerIdentity == "netease" || providerIdentity.startsWith(SERVER_AUDIO_SOURCE_IDENTITY_PREFIX))
 
-    internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
+    internal fun accepts(source: AudioSource): Boolean =
+        (!dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value) &&
+            (!neteaseAuto || supportsVivid || source.level != AudioQuality.VIVID.value)
+
+    private fun dolbyCandidates(): List<AudioRequest> =
+        if (dolbyAuto) listOf(this, copy(supportsDolby = !supportsDolby)) else listOf(this)
 
     internal fun offlineAudio(cached: (AudioRequest) -> ResolvedAudio?): Pair<AudioRequest, ResolvedAudio>? {
-        cached(this)?.takeIf { accepts(it.source) }?.let { return this to it }
-        if (!dolbyAuto) return null
-        val alternate = copy(supportsDolby = !supportsDolby)
-        return cached(alternate)?.takeIf { accepts(it.source) }?.let { alternate to it }
+        val candidates = if (neteaseAuto) {
+            dolbyCandidates() + copy(supportsVivid = !supportsVivid).dolbyCandidates()
+        } else {
+            dolbyCandidates()
+        }
+        return candidates.firstNotNullOfOrNull { candidate ->
+            cached(candidate)?.takeIf { accepts(it.source) }?.let { candidate to it }
+        }
     }
+
+    internal fun selectedVivid(source: AudioSource): Boolean =
+        neteaseAuto && supportsVivid && source.level == AudioQuality.VIVID.value
 
     internal fun selectedDolby(source: AudioSource): Boolean =
         quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && supportsDolby &&
@@ -39,7 +55,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private val loadTrack: (suspend (AudioRequest) -> AudioSource)? = null,
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
     private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long,
-        val cacheKey: String = sourceCacheKey(request.key, source))
+        val cacheKey: String = sourceCacheKey(request.key, source, request.selectedVivid(source)))
     private data class Denial(val request: AudioRequest, val error: ApiException)
     private val memo = java.util.concurrent.ConcurrentHashMap<String, Entry>()
     private val denied = java.util.concurrent.ConcurrentHashMap<String, Denial>()
@@ -61,6 +77,21 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         }
         return result(entry)
     }
+    private fun completeAudio(candidate: AudioRequest, accepts: (AudioSource) -> Boolean = candidate::accepts): ResolvedAudio? {
+        val key = candidate.key
+        if (denied[key]?.request == candidate) return null
+        val selected = cache.matchedSourceKey(key)
+        val vivid = selected?.takeIf { it.startsWith("$key:match:vivid:") }
+        // Match candidates still need the online selection check. Vivid belongs to this same recording.
+        if (selected != null && vivid == null) return null
+        if (vivid != null) {
+            cache.completeSource(vivid)?.takeIf(accepts)?.takeUnless { it.matched }?.let {
+                return ResolvedAudio(it, vivid, refreshAfterMs = Long.MAX_VALUE)
+            }
+        }
+        val audio = cache.completeSource(key)?.takeIf(accepts)?.takeUnless { it.matched } ?: return null
+        return ResolvedAudio(audio, key, refreshAfterMs = Long.MAX_VALUE)
+    }
     private fun result(entry: Entry): ResolvedAudio {
         val remainingMs = (entry.until - now()) / 1_000_000
         val advanceMs = minOf(30_000, entry.source.validForSeconds.coerceIn(1, 600) * 200)
@@ -70,7 +101,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     suspend fun register(request: AudioRequest, source: AudioSource): ResolvedAudio = withContext(Dispatchers.IO) {
         checkRequest(request)
         val started = now()
-        val sourceKey = sourceCacheKey(request.key, source)
+        val sourceKey = sourceCacheKey(request.key, source, request.selectedVivid(source))
         runCatching {
             cache.rememberSource(sourceKey, source)
             cache.rememberSelection(request.key, sourceKey)
@@ -99,9 +130,13 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             denied[key]?.takeIf { it.request == request }?.let { throw it.error }
             // Complete, account/provider/quality-scoped audio does not need a CDN URL.
             // Partial cache must still resolve a live URL to read the missing bytes.
-            cache.completeSource(key)?.takeIf(request::accepts)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
+            val complete = completeAudio(request)
+                ?: request.takeIf { it.neteaseAuto }?.let {
+                    completeAudio(it.copy(supportsVivid = !it.supportsVivid), accepts = request::accepts)
+                }
+            if (complete != null) {
                 checkRequest(request)
-                return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
+                return@withContext complete
             }
         }
         // A background renewal must not block a switch that already has a valid URL.
@@ -127,9 +162,12 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                 val (cachedRequest, cachedAudio) = request.offlineAudio { candidate ->
                     val candidateKey = if (candidate == request) key else candidate.key
                     if (denied[candidateKey]?.request == candidate) return@offlineAudio null
-                    val cachedKey = cache.matchedSourceKey(candidateKey) ?: candidateKey
-                    cache.completeSource(cachedKey)?.takeUnless { cachedKey == candidateKey && it.matched }
-                        ?.let { ResolvedAudio(it, cachedKey) }
+                    val matchedKey = cache.matchedSourceKey(candidateKey)
+                    val matched = matchedKey?.let { mk ->
+                        cache.completeSource(mk)?.takeIf(request::accepts)?.let { ResolvedAudio(it, mk) }
+                    }
+                    matched ?: cache.completeSource(candidateKey)?.takeIf(request::accepts)
+                        ?.takeUnless { it.matched }?.let { ResolvedAudio(it, candidateKey) }
                 } ?: throw e
                 if (cachedRequest != request) {
                     checkRequest(request)
@@ -142,7 +180,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             checkRequest(request)
             denied.remove(key)
             // Disk cache failure must not turn a valid network source into playback failure.
-            val sourceKey = fallbackKey ?: sourceCacheKey(key, source)
+            val sourceKey = fallbackKey ?: sourceCacheKey(key, source, request.selectedVivid(source))
             if (fallbackKey == null) runCatching {
                 cache.rememberSource(sourceKey, source)
                 cache.rememberSelection(key, sourceKey)
@@ -152,6 +190,9 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     }
 }
 
-/** Resolved candidates never share byte ranges with a different recording or plugin URL. */
-internal fun sourceCacheKey(requestKey: String, source: AudioSource): String =
-    if (source.matched || source.source.startsWith("lx:")) "$requestKey:match:${source.cacheIdentity}" else requestKey
+/** Keep alternate recordings and automatic Vivid bytes separate from the regular request. */
+internal fun sourceCacheKey(requestKey: String, source: AudioSource, autoVivid: Boolean = false): String = when {
+    autoVivid -> "$requestKey:match:vivid:${source.md5.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }.orEmpty()}"
+    source.matched || source.source.startsWith("lx:") -> "$requestKey:match:${source.cacheIdentity}"
+    else -> requestKey
+}

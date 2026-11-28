@@ -92,8 +92,9 @@ class MusicService : MediaSessionService() {
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
     private val outputManager by lazy { getSystemService(android.media.AudioManager::class.java) }
     private val playbackAttributes = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build()
+    private data class StagedSpatialFailure(val offer: TransitionOffer, val dolby: Boolean, val vivid: Boolean)
     private val dolbyPlayback by lazy { DolbyPlaybackSupport(this, playbackAttributes) }
-    private var failedStagedDolby: TransitionOffer? = null
+    private var failedStagedSpatial: StagedSpatialFailure? = null
     private fun applyOutputDevice() {
         val requested = container.audioOutput.state.value
         val device = outputManager.preferredOutput(requested.deviceKey)
@@ -190,23 +191,24 @@ class MusicService : MediaSessionService() {
         else container.musicSession()
     private fun updateDolbySupport() = dolbyPlayback.supports(container.playerController.state.value.mode,
         container.audioOutput.state.value).also { dolbyAvailable.value = it }
-    private fun audioRequest(song: Song, quality: AudioQuality, allowDolby: Boolean = dolbyAvailable.value) =
-        container.audioRequest(song, quality, supportsDolby = allowDolby)
+    private fun audioRequest(song: Song, quality: AudioQuality, allowDolby: Boolean = dolbyAvailable.value,
+        allowVivid: Boolean = true) =
+        container.audioRequest(song, quality, supportsDolby = allowDolby, supportsVivid = allowVivid)
     private fun playbackQuality(song: Song? = container.playbackQueue.state.value.current) =
         container.musicSettings.state.value.qualityFor(song?.musicSource, container.playbackNetworkStatus.value.kind)
 
     private fun checkDolbyRoute(): Boolean = playbackQuality() in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) &&
-        !updateDolbySupport() && retryAutoDolby()
+        !updateDolbySupport() && retryAutoSpatial()
 
-    private fun retryAutoDolby(): Boolean {
+    private fun retryAutoSpatial(vivid: Boolean = false): Boolean {
         val item = player.currentMediaItem ?: return false
         val current = container.playbackQueue.state.value.current
         val sameTrack = current == trackedSong && item.mediaId == current?.id?.toString()
-        val resume = dolbyResume(item.autoDolby, sameTrack, container.playerController.state.value,
+        val resume = dolbyResume(if (vivid) item.autoVivid else item.autoDolby, sameTrack, container.playerController.state.value,
             playbackQuality(), player.currentPosition, player.playWhenReady && !pauseFade.pausedIntent)
             ?: return false
-        container.logger.info("Player", "Automatic Dolby playback falling back to regular quality")
-        prepareSong(resume.play, resume.positionMs, retryWithoutDolby = true)
+        container.logger.info("Player", if (vivid) "Retrying playback without Vivid" else "Retrying playback without Dolby")
+        prepareSong(resume.play, resume.positionMs, retryWithoutDolby = true, retryWithoutVivid = vivid)
         return true
     }
     private fun flushListening() {
@@ -257,7 +259,8 @@ class MusicService : MediaSessionService() {
                 resolvedTransitionSongs[offer.next.id.toString()] = offer.next
                 resolvedTransitionSongs[trackLoudnessKey(offer.next, resolved.source)] = offer.next
                 val autoDolby = offer.request.selectedDolby(resolved.source)
-                if (autoDolby && !updateDolbySupport()) null else resolved.toMediaItem(offer.next, autoDolby)
+                if (autoDolby && !updateDolbySupport()) null
+                else resolved.toMediaItem(offer.next, autoDolby, offer.request.selectedVivid(resolved.source))
             }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.let { slot -> slot.loudnessJob?.cancel(); slot.equalizer.close() }; deckVolumes.remove(it) },
             currentSong = { container.playbackQueue.state.value.current },
             readVolume = { deckVolumes[it] ?: 1f }, writeVolume = ::deckVolume)
@@ -543,11 +546,14 @@ class MusicService : MediaSessionService() {
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (!::transitions.isInitialized) return
-                if (state == Player.STATE_READY && source.currentMediaItem?.autoDolby == true &&
+                val item = source.currentMediaItem
+                if (state == Player.STATE_READY && (item?.autoDolby == true || item?.autoVivid == true) &&
                     !source.currentTracks.isTypeSelected(C.TRACK_TYPE_AUDIO)) {
                     if (primary()) {
-                        if (retryAutoDolby()) return
-                    } else if (transitions.failed(source) { failedStagedDolby = it }) return
+                        if (retryAutoSpatial(vivid = item.autoVivid)) return
+                    } else if (transitions.failed(source) {
+                        failedStagedSpatial = StagedSpatialFailure(it, dolby = item.autoDolby, vivid = item.autoVivid)
+                    }) return
                 }
                 if (state == Player.STATE_ENDED && pauseFade.pausedIntent) { pauseFade.finishPause(); return }
                 if (state == Player.STATE_ENDED && transitions.ended(source)) return
@@ -561,11 +567,18 @@ class MusicService : MediaSessionService() {
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
-                val failedDolby = source.currentMediaItem?.autoDolby == true && (isDolbyPlaybackFailure(error.errorCode) ||
-                    error is ExoPlaybackException && error.type == ExoPlaybackException.TYPE_RENDERER)
-                if (failedDolby && primary() && retryAutoDolby()) return
+                val formatFailure = isDolbyPlaybackFailure(error.errorCode) ||
+                    error is ExoPlaybackException && error.type == ExoPlaybackException.TYPE_RENDERER
+                val item = source.currentMediaItem
+                val failedDolby = formatFailure && item?.autoDolby == true
+                val failedVivid = formatFailure && item?.autoVivid == true
+                if ((failedDolby || failedVivid) && primary() && retryAutoSpatial(vivid = failedVivid)) return
                 if (primary() && recoverOutput(error)) return
-                if (!::transitions.isInitialized || transitions.failed(source) { if (failedDolby) failedStagedDolby = it }) return
+                if (!::transitions.isInitialized || transitions.failed(source) {
+                    if (failedDolby || failedVivid) {
+                        failedStagedSpatial = StagedSpatialFailure(it, dolby = failedDolby, vivid = failedVivid)
+                    }
+                }) return
                 if (retryFailedLxSource(source, error)) return
                 if (container.audioOutput.state.value.mode.rawPcm)
                     CurrentMusicAudioDiagnostics.record("player.finalState=ERROR errorCode=${error.errorCode}")
@@ -615,7 +628,7 @@ class MusicService : MediaSessionService() {
         return TransitionOffer(from, next, audioRequest(next, playbackQuality(next)))
     }
     private fun promoteTransition(song: Song, outgoing: ExoPlayer, incoming: ExoPlayer) {
-        failedStagedDolby = null
+        failedStagedSpatial = null
         container.audioDiagnostics.resetTrack()
         playerSlots[incoming]?.formats?.publish(container.audioDiagnostics)
         flushListening()
@@ -870,7 +883,7 @@ class MusicService : MediaSessionService() {
         return true
     }
     private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false, refreshSource: Boolean = false,
-        retryWithoutDolby: Boolean = false) {
+        retryWithoutDolby: Boolean = false, retryWithoutVivid: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
         lxRetryJob?.cancel()
@@ -885,8 +898,8 @@ class MusicService : MediaSessionService() {
         player.pause()
         resetPauseFade()
         val song = container.playbackQueue.state.value.current ?: return
-        val stagedFailure = failedStagedDolby?.takeIf { newPlayback && it.from == trackedSong && it.next == song }
-        failedStagedDolby = null
+        val stagedFailure = failedStagedSpatial?.takeIf { newPlayback && it.offer.from == trackedSong && it.offer.next == song }
+        failedStagedSpatial = null
         if (newPlayback || trackedSong?.id != song.id || trackedSong?.musicSource != song.musicSource ||
             trackedSong?.video != song.video || trackedSession != currentSession(song)) {
             flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
@@ -902,30 +915,41 @@ class MusicService : MediaSessionService() {
             when (val result = appResult {
                 if (song.video) {
                     val url = withContext(Dispatchers.IO) { container.libraryRepository.mvSource(song.mv, song.videoQuality) }
-                    ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(url, "video", 0, 0), "") to false
+                    Triple(ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(url, "video", 0, 0), ""), false, false)
                 } else {
                     val quality = container.musicSettings.snapshot()
                         .qualityFor(song.musicSource, container.playbackNetworkStatus.value.kind)
                     val request = audioRequest(song, quality,
-                        allowDolby = !retryWithoutDolby && quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && updateDolbySupport())
-                        .let { if (it == stagedFailure?.request) it.copy(supportsDolby = false) else it }
+                        allowDolby = !retryWithoutDolby && quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && updateDolbySupport(),
+                        allowVivid = !retryWithoutVivid)
+                        .let { candidate ->
+                            if (stagedFailure != null &&
+                                candidate.copy(supportsDolby = stagedFailure.offer.request.supportsDolby) == stagedFailure.offer.request) {
+                                candidate.copy(
+                                    supportsDolby = if (stagedFailure.dolby || stagedFailure.vivid) false else candidate.supportsDolby,
+                                    supportsVivid = if (stagedFailure.vivid) false else candidate.supportsVivid,
+                                )
+                            } else candidate
+                        }
                     val resolved = container.audioSources.resolve(request, refresh = refreshSource)
                     val autoDolby = request.selectedDolby(resolved.source)
                     // The route can change during a CDN lookup or while the device is unplugged.
                     if (autoDolby && !updateDolbySupport()) {
-                        container.audioSources.resolve(request.copy(supportsDolby = false), refresh = refreshSource) to false
-                    } else resolved to autoDolby
+                        val fallback = request.copy(supportsDolby = false)
+                        val retry = container.audioSources.resolve(fallback, refresh = refreshSource)
+                        Triple(retry, false, fallback.selectedVivid(retry.source))
+                    } else Triple(resolved, autoDolby, request.selectedVivid(resolved.source))
                 }
             }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
                     playRequested = false, loading = false, resolving = false, error = result.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
-                    val (resolved, autoDolby) = result.value
+                    val (resolved, autoDolby, autoVivid) = result.value
                     val source = resolved.source
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false, error = null,
                         audioFullyCached = source.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(source))
-                    engine.prepare(resolved.toMediaItem(song, autoDolby), position, play)
+                    engine.prepare(resolved.toMediaItem(song, autoDolby, autoVivid), position, play)
                 }
             }
         }

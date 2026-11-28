@@ -300,7 +300,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     private fun kugouAudioIdentity(accountIdentity: String, access: AudioSourceAccess): String =
         if (access.provider == AudioProvider.LX) "$accountIdentity:${access.identity}" else accountIdentity
 
-    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
+    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality,
+        supportsDolby: Boolean = false, supportsVivid: Boolean = false): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
             qqMusic.selectOwner()
             return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L,
@@ -316,7 +317,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             val owner = neteaseSessions.state.value
             return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
                 RequestSession("https://music.163.com/", null, owner.revision), "netease-cloud", song,
-                supportsDolby = supportsDolby && quality == AudioQuality.AUTO)
+                supportsDolby = supportsDolby && quality == AudioQuality.AUTO,
+                supportsVivid = supportsVivid && quality == AudioQuality.AUTO)
         }
         val access = audioSettings.access()
         val directNetease = access.provider == AudioProvider.NETEASE
@@ -328,7 +330,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             val owner = neteaseSessions.state.value
             return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
                 RequestSession("https://music.163.com/", null, owner.revision),
-                AudioSourceAccess(AudioProvider.NETEASE).identity, song, supportsDolby = preferDolby)
+                AudioSourceAccess(AudioProvider.NETEASE).identity, song, supportsDolby = preferDolby,
+                supportsVivid = supportsVivid && quality == AudioQuality.AUTO)
         }
         return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), access.identity, song,
             supportsDolby = preferDolby)
@@ -409,8 +412,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 request.providerIdentity == "netease-cloud"
         } },
         loadTrack = { request -> request.song?.let {
-            musicRepository.source(it, request.quality, request.session, request.refresh, request.supportsDolby)
-        } ?: musicRepository.source(request.songId, request.quality, request.session, request.refresh, request.supportsDolby) },
+            musicRepository.source(it, request.quality, request.session, request.refresh, request.supportsDolby,
+                supportsVivid = request.supportsVivid)
+        } ?: musicRepository.source(request.songId, request.quality, request.session, request.refresh, request.supportsDolby,
+            supportsVivid = request.supportsVivid) },
         load = { id, quality, session -> musicRepository.source(id, quality, session) })
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
