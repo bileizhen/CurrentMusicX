@@ -44,6 +44,11 @@ object AboutCredits {
                 detail = "修复播放页封面歌词预览因固定行高导致的底部裁切，让行高与预览区域随字号和系统字体缩放调整。\n" +
                     "适配全面屏手势导航，让页面内容延伸至底部手势条区域，并为聊天输入区保留导航栏安全间距。",
                 githubUrl = "https://github.com/WhiteXero"),
+            AboutMember("1716200495", "TusanX", "播放页 MV · 播放器交互",
+                detail = "在播放页顶栏新增 MV 按钮，有 MV 的歌曲可直接在听歌页面切换，无需退出播放页。\n" +
+                    "新增静音 MV 背景层，独立播放 MV 并跟随播放进度与切歌对表，不影响音频、歌词、进度条与播放队列。\n" +
+                    "MV 取流失败时自动关闭背景层，不阻断当前音频播放。",
+                githubUrl = "https://github.com/TusanX"),
         )),
         AboutSection("CDN 组", listOf(
             AboutMember("2536843865", "Hutao_felicity", "CDN · currentmusic.geekertao.com",
