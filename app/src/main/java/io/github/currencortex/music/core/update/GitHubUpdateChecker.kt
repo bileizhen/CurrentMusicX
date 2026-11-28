@@ -11,8 +11,25 @@ class GitHubUpdateChecker(
     private val installedVersion: String,
     private val userAgent: String,
     private val nativeAssetsOnly: Boolean = false,
+    private val ciMetadataUrl: () -> String? = { null },
+    private val onMetadataFailure: (Exception) -> Unit = {},
 ) : ReleaseChecker {
     override fun check(channel: UpdateChannel): AppRelease? {
+        // The backend mirrors the CI release list and caches it for every client, so an
+        // unauthenticated GitHub quota exhaustion on one network no longer breaks updates.
+        if (channel == UpdateChannel.CI) {
+            try {
+                val metadataUrl = ciMetadataUrl()
+                if (metadataUrl != null) {
+                    val body = request(metadataUrl)
+                    if (body != null) {
+                        check(body.trimStart().startsWith("[")) { "Unexpected release metadata" }
+                        return parseResponse(body, channel)
+                    }
+                }
+            } catch (cancelled: java.util.concurrent.CancellationException) { throw cancelled
+            } catch (error: Exception) { onMetadataFailure(error) }
+        }
         val endpoint = if (channel == UpdateChannel.CI) {
             "https://api.github.com/repos/$owner/$repository/releases?per_page=100"
         } else {
