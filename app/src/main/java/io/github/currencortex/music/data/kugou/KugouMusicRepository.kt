@@ -1042,31 +1042,43 @@ class KugouMusicRepository(
         return null
     }
 
-    suspend fun userPlaylist(listId: Int, name: String = "酷狗歌单", page: Int = 1, pageSize: Int = 300): Playlist {
+    suspend fun userPlaylistPage(
+        listId: Int,
+        name: String = "酷狗歌单",
+        page: Int = 1,
+        pageSize: Int = 300,
+    ): KugouUserPlaylistPage {
         val (_, creds) = requireCredentials()
         var meta = synchronized(this) { userPlaylistMeta[listId] }
         if (meta == null && name == "酷狗歌单") {
             runCatching { playlists() }
             meta = synchronized(this) { userPlaylistMeta[listId] }
         }
+        val safePage = page.coerceAtLeast(1)
+        val cappedPageSize = pageSize.coerceIn(1, 300)
         val globalCollectionId = synchronized(this) { playlistGlobalIds[listId] }
             ?: "collection_3_${creds.userId}_${listId}_0"
         val root = gateway(
             "pubsongs/v2/get_other_list_file_nofilt",
             mapOf(
                 "global_collection_id" to globalCollectionId,
-                "page" to page.coerceAtLeast(1).toString(),
-                "pagesize" to pageSize.coerceIn(1, 300).toString(),
+                "page" to safePage.toString(),
+                "pagesize" to cappedPageSize.toString(),
                 "area_code" to "1",
             ),
         )
         val data = root.obj("data")
-        val songs = KugouParsing.songs(data.array("songs").takeIf { it.isNotEmpty() } ?: data.array("info"))
-        val total = data.long("count").toInt().coerceAtLeast(songs.size)
+        val rawItems = data.array("songs").takeIf { it.isNotEmpty() } ?: data.array("info")
+        val rawCount = rawItems.size
+        val songs = KugouParsing.songs(rawItems)
+        val serverCount = data.long("count").toInt()
+        val total = serverCount.coerceAtLeast(songs.size)
+        val fetchedEnd = (safePage - 1) * cappedPageSize + rawCount
+        val hasMore = rawCount > 0 && ((serverCount > 0 && fetchedEnd < serverCount) || (serverCount <= 0 && rawCount >= cappedPageSize))
         val resolvedName = meta?.name?.takeIf(String::isNotBlank) ?: name
         val resolvedCover = meta?.cover?.takeIf(String::isNotBlank)
             ?: songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty()
-        return Playlist(
+        val playlist = Playlist(
             id = listId.toLong(),
             name = resolvedName,
             description = meta?.description.orEmpty(),
@@ -1080,12 +1092,23 @@ class KugouMusicRepository(
             nativeSubscribed = meta?.nativeSubscribed ?: false,
             remoteId = listId.toString(),
         )
+        return KugouUserPlaylistPage(playlist = playlist, hasMore = hasMore)
     }
+
+    suspend fun userPlaylist(listId: Int, name: String = "酷狗歌单", page: Int = 1, pageSize: Int = 300): Playlist =
+        userPlaylistPage(listId, name, page, pageSize).playlist
 
     suspend fun likedSongs(fresh: Boolean = false): List<Song> = likedLock.withLock {
         if (!fresh) synchronized(this) { likedCache }?.let { return@withLock it }
-        val playlist = userPlaylist(KugouProtocol.LIKED_LIST_ID, "我喜欢", page = 1, pageSize = 300)
-        val songs = playlist.songs
+        val collected = mutableListOf<Song>()
+        var page = 1
+        while (page <= 50) {
+            val pageResult = userPlaylistPage(KugouProtocol.LIKED_LIST_ID, "我喜欢", page = page, pageSize = 300)
+            collected += pageResult.playlist.songs
+            if (!pageResult.hasMore) break
+            page++
+        }
+        val songs = collected.distinctBy(Song::id)
         synchronized(this) {
             likedCache = songs
             likedFileIds.clear()

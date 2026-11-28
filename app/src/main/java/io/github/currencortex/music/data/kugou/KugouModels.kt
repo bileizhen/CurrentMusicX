@@ -39,6 +39,7 @@ data class KugouArtistDetail(val id: String, val name: String, val cover: String
     val songCount: Int = 0, val albumCount: Int = 0, val songs: List<Song> = emptyList(), val hasMoreSongs: Boolean = false)
 data class KugouCategory(val id: String, val name: String, val group: String = "歌单风格")
 data class KugouPlaylistPage(val playlists: List<Playlist> = emptyList(), val total: Int = 0, val hasMore: Boolean = false)
+data class KugouUserPlaylistPage(val playlist: Playlist, val hasMore: Boolean = false)
 data class KugouComment(val id: String, val nickname: String, val avatar: String = "", val text: String,
     val time: Long = 0, val likes: Long = 0, val likedByMe: Boolean = false, val replyCount: Int = 0,
     val userId: Long = 0, val quotedNickname: String = "", val quotedContent: String? = null)

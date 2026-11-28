@@ -405,6 +405,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     val playbackMode = container.playerController.state.map { it.mode }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), container.playerController.state.value.mode)
     private var task: Job? = null
+    private var kugouUserPlaylistPage = 0
+    private var kugouPagedOffset = 0
     private val kind = route.split('/')[1]
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0
     private val qqPlaylist = route in setOf("qq/foryou", "qq/likes", "qq/recent") || kind == "playlist" && route.startsWith("qq/")
@@ -520,6 +522,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     }
                     if (identity != nextIdentity) {
                         task?.cancel()
+                        kugouUserPlaylistPage = 0
+                        kugouPagedOffset = 0
                         state.value = LibraryDetailState()
                     }
                     identity = nextIdentity
@@ -536,6 +540,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         val previous = state.value
         state.value = previous.copy(loading = !previous.loaded || more,
             refreshing = previous.loaded && !more, error = null, refreshError = null)
+        var completedKugouUserPlaylistPage: Int? = null
+        var completedKugouOffset: Int? = null
         task = viewModelScope.launch {
             when (val result = appResult {
                 when (kind) {
@@ -642,8 +648,10 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     }
                     "user-playlist" if kugouNative -> {
                         val listId = remotePlaylistId.toIntOrNull() ?: throw ApiException(ErrorKind.NotFound)
-                        val nextPage = if (more) previous.songs.size / 300 + 1 else 1
-                        val fetched = container.kugou.userPlaylist(listId, page = nextPage, pageSize = 300)
+                        val nextPage = if (more) (kugouUserPlaylistPage + 1).coerceAtLeast(1) else 1
+                        val pageResult = container.kugou.userPlaylistPage(listId, page = nextPage, pageSize = 300)
+                        completedKugouUserPlaylistPage = nextPage
+                        val fetched = pageResult.playlist
                         val combinedSongs = if (more && previous.playlist != null)
                             (previous.songs + fetched.songs).distinctBy(Song::id)
                         else fetched.songs
@@ -651,24 +659,28 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                         previous.copy(title = playlist.name, description = playlist.description,
                             cover = playlist.cover.ifBlank { combinedSongs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
                             songs = combinedSongs, playlist = playlist,
-                            more = fetched.songs.isNotEmpty() && combinedSongs.size < playlist.count)
+                            more = pageResult.hasMore)
                     }
                     "playlist" if kugouNative -> {
                         if (more && previous.playlist != null) {
-                            val page = container.kugou.playlistSongs(remotePlaylistId, previous.songs.size)
+                            val offset = kugouPagedOffset
+                            val page = container.kugou.playlistSongs(remotePlaylistId, offset)
+                            completedKugouOffset = offset + 30
                             val combined = (previous.songs + page.songs).distinctBy(Song::id)
                             previous.copy(songs = combined, playlist = previous.playlist.copy(songs = combined),
                                 more = page.hasMore && page.songs.isNotEmpty())
                         } else {
                             val playlist = container.kugou.playlist(remotePlaylistId)
+                            completedKugouOffset = 30
                             previous.copy(title = playlist.name, description = playlist.description,
                                 cover = playlist.cover.ifBlank { playlist.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
                                 songs = playlist.songs, playlist = playlist, more = playlist.songs.size < playlist.count)
                         }
                     }
                     "rank" if kugouNative -> {
-                        val offset = if (more) previous.songs.size else 0
+                        val offset = if (more) kugouPagedOffset else 0
                         val page = container.kugou.rankSongs(remotePlaylistId, offset)
+                        completedKugouOffset = offset + 30
                         val rankMeta = if (!more || previous.title.isBlank() || previous.cover.isBlank()) {
                             container.kugou.cachedHome().ranks.firstOrNull { it.id == remotePlaylistId }
                                 ?: runCatching { container.kugou.ranks().firstOrNull { it.id == remotePlaylistId } }.getOrNull()
@@ -710,6 +722,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     ensureActive()
                     if (expectedQqIdentity != null && expectedQqIdentity != container.qqMusic.audioIdentity) return@launch
                     if (expectedKugouIdentity != null && expectedKugouIdentity != container.kugou.audioIdentity) return@launch
+                    completedKugouUserPlaylistPage?.let { kugouUserPlaylistPage = it }
+                    completedKugouOffset?.let { kugouPagedOffset = it }
                     state.value = merged.copy(loading = false, loaded = true, refreshing = false, error = null, refreshError = null)
                 }
                 is AppResult.Failure -> {
@@ -742,6 +756,8 @@ data class CatalogState(val query: String = "", val submitted: String = "", val 
 class CatalogViewModel(private val container: AppContainer, albums: Boolean, query: String) : ViewModel() {
     val state = MutableStateFlow(CatalogState(query = query, albums = albums))
     private var task: Job? = null
+    private var kugouUserPlaylistPage = 0
+    private var kugouPagedOffset = 0
     init {
         viewModelScope.launch { container.musicSettings.state.map { it.server }.distinctUntilChanged().drop(1).collect { task?.cancel(); state.value = CatalogState(albums = albums) } }
         if (query.isNotBlank()) search()
