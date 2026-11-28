@@ -113,11 +113,29 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var mvLoading by remember { mutableStateOf(false) }
     val mvSongId = state.song?.mv?.takeIf { it > 0 }
     LaunchedEffect(mvBackground, mvSongId) {
-        if (!mvBackground || mvSongId == null) { mvUrl = null; mvLoading = false; return@LaunchedEffect }
+        // 切歌先清空，避免上一首的 MV 继续显示到新地址返回
+        mvUrl = null
+        if (!mvBackground || mvSongId == null) { mvLoading = false; return@LaunchedEffect }
         mvLoading = true
-        mvUrl = runCatching { vm.container.libraryRepository.mvSource(mvSongId) }.getOrNull()
-        mvLoading = false
-        if (mvUrl == null) mvBackground = false
+        val preferred = state.song?.videoQuality ?: 1080
+        // 服务端对不存在的档位返回 url = null（NotFound），按高→低回退
+        val ladder = listOf(preferred, 1080, 720, 480, 240).distinct()
+        var resolved: String? = null
+        try {
+            for (quality in ladder) {
+                resolved = try { vm.container.libraryRepository.mvSource(mvSongId, quality) }
+                catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                catch (_: Exception) { null }
+                if (resolved != null) break
+            }
+        } finally {
+            mvLoading = false
+        }
+        mvUrl = resolved
+        if (resolved == null) {
+            mvBackground = false
+            vm.container.errorNotices.show("这个 MV 暂时拿不到可播放的地址")
+        }
     }
     LaunchedEffect(mvSongId) { if (mvSongId == null) { mvBackground = false; mvUrl = null } }
     LaunchedEffect(roamingRequest) {
@@ -402,10 +420,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         if (mvBackground && mvFrame != null && !widePlayer) {
             PlayerMvBackdrop(
                 PlayerMvSource(mvFrame, "https://music.163.com/"),
-                playing = state.playing, active = expanded && overlay == PlayerOverlay.NONE,
+                playing = state.playing,
+                active = expanded && overlay == PlayerOverlay.NONE && !sidePage.active && !songNavigation.dialogActive,
                 positionMs = state.positionMs, timelineRevision = state.timelineRevision,
-                poster = queue.current?.cover.orEmpty(),
-                onError = { mvBackground = false },
+                playbackSpeed = state.playbackSpeed,
+                onError = { message -> mvBackground = false; vm.container.errorNotices.show(message) },
                 modifier = Modifier.matchParentSize(),
             )
         }

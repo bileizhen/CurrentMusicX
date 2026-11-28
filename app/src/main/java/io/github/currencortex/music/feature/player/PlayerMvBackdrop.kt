@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -26,6 +25,7 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -53,7 +53,7 @@ internal data class PlayerMvSource(
 @OptIn(UnstableApi::class)
 @Composable
 internal fun PlayerMvBackdrop(source: PlayerMvSource, playing: Boolean, active: Boolean,
-    positionMs: Long, timelineRevision: Long, poster: String, onError: (String) -> Unit,
+    positionMs: Long, timelineRevision: Long, playbackSpeed: Float, onError: (String) -> Unit,
     modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -91,12 +91,14 @@ internal fun PlayerMvBackdrop(source: PlayerMvSource, playing: Boolean, active: 
     val latestAttempt by rememberUpdatedState(attempt)
     val currentUrl = source.urls.getOrNull(attempt) ?: source.urls.firstOrNull().orEmpty()
 
-    DisposableEffect(player, source.urls) {
+    val latestUrls by rememberUpdatedState(source.urls)
+    DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                val urls = latestUrls
                 val next = latestAttempt + 1
-                android.util.Log.w("MvBackdrop", "candidate ${latestAttempt + 1}/${source.urls.size} failed: ${error.errorCodeName}", error)
-                if (next < source.urls.size) attempt = next
+                android.util.Log.w("MvBackdrop", "candidate ${latestAttempt + 1}/${urls.size} failed: ${error.errorCodeName}", error)
+                if (next < urls.size) attempt = next
                 else currentError("MV 背景播放失败，已尝试全部线路")
             }
         }
@@ -115,8 +117,10 @@ internal fun PlayerMvBackdrop(source: PlayerMvSource, playing: Boolean, active: 
         player.prepare()
         player.seekTo(positionMs.coerceAtLeast(0))
     }
-    LaunchedEffect(player, playing, active, lifecycleState) {
+    LaunchedEffect(player, playing, active, lifecycleState, playbackSpeed) {
         player.playWhenReady = active && playing && lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+        // 一起听会按房间校正改倍速，MV 必须跟着走，否则与音频持续漂移
+        player.playbackParameters = PlaybackParameters(playbackSpeed.coerceIn(0.25f, 4f))
     }
     LaunchedEffect(player, timelineRevision) {
         val target = positionMs.coerceAtLeast(0)
@@ -141,7 +145,7 @@ internal fun PlayerMvBackdrop(source: PlayerMvSource, playing: Boolean, active: 
         )
         AndroidView(
             factory = { ctx ->
-                (LayoutInflater.from(ctx).inflate(R.layout.view_mv_backdrop, null) as PlayerView).apply {
+                (LayoutInflater.from(ctx).inflate(R.layout.dynamic_cover_video, null) as PlayerView).apply {
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
