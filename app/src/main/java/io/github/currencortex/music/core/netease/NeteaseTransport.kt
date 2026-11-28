@@ -17,7 +17,7 @@ import kotlin.coroutines.resumeWithException
 data class NeteaseEndpoints(val web: String = "https://music.163.com/", val desktop: String = "https://interfacepc.music.163.com/",
     val clientLog: String = "https://clientlog.music.163.com/")
 internal enum class NeteaseEncoding { WEB, DESKTOP, LOG }
-internal enum class NeteaseClientProfile { DESKTOP, ANDROID, PLAYBACK }
+internal enum class NeteaseClientProfile { DESKTOP, ANDROID, ANDROID_VIVID, PLAYBACK }
 internal const val NETEASE_PLAYBACK_DEVICE_NAME = "CurrentMusicX"
 internal class NeteaseResponse(val body: JsonObject, val cookies: Map<String, String>) {
     override fun toString() = "NeteaseResponse([redacted])"
@@ -39,15 +39,18 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
         val cookies = cookieOverride ?: expected.credential.cookies
         require(path.startsWith("/api/") && '?' !in path && '#' !in path)
         sessions.check(expected)
-        val platform = if (clientProfile == NeteaseClientProfile.ANDROID)
-            mapOf("os" to "android", "appver" to "9.5.30") else
-            mapOf("os" to "pc", "appver" to "3.1.17.204416", "osver" to "Microsoft-Windows-10-Professional-build-19045-64bit")
+        val platform = when (clientProfile) {
+            NeteaseClientProfile.ANDROID -> mapOf("os" to "android", "appver" to "9.5.30")
+            NeteaseClientProfile.ANDROID_VIVID -> mapOf("os" to "android", "appver" to "9.5.61")
+            else -> mapOf("os" to "pc", "appver" to "3.1.17.204416",
+                "osver" to "Microsoft-Windows-10-Professional-build-19045-64bit")
+        }
         val common = platform + mapOf(
             "deviceId" to expected.credential.deviceId, "channel" to "netease", "__remember_me" to "true") + cookies +
             (if (encoding == NeteaseEncoding.LOG) mapOf("os" to "osx") else emptyMap())
         val requestCommon = when (clientProfile) {
             NeteaseClientProfile.DESKTOP -> common
-            NeteaseClientProfile.ANDROID -> common + platform
+            NeteaseClientProfile.ANDROID, NeteaseClientProfile.ANDROID_VIVID -> common + platform
             NeteaseClientProfile.PLAYBACK -> common + mapOf(
                 "deviceId" to (cookies["deviceId"]?.takeIf(String::isNotBlank) ?: expected.credential.deviceId),
                 "mobilename" to NETEASE_PLAYBACK_DEVICE_NAME,

@@ -264,21 +264,29 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             }
             "song/url", "song/url/v1" -> {
                 suspend fun trackAt(level: String): JsonObject? {
+                    val vivid = level == "vivid"
                     val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
-                        put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
+                        put("ids", "[$id]"); put("level", level)
+                        put("encodeType", if (vivid) "mp3" else "flac")
                         if (level == "sky") put("immerseType", "c51")
-                    }, expected = expected)
+                    }, expected = expected,
+                        clientProfile = if (vivid) NeteaseClientProfile.ANDROID_VIVID else NeteaseClientProfile.DESKTOP)
                     return raw.array("data").filterIsInstance<JsonObject>().firstOrNull { it.long("id").toString() == id }
                 }
                 val level = arg("level", "auto")
-                if (level == "auto" && arg("supportsDolby") == "1") {
-                    val dolby = try { trackAt("dolby") } catch (e: ApiException) {
-                        if (e.kind !in setOf(ErrorKind.Forbidden, ErrorKind.NotFound, ErrorKind.Server, ErrorKind.Parse, ErrorKind.Unknown)) throw e
-                        null
-                    } catch (_: java.io.IOException) { null }
-                    if (dolby != null && dolby.text("level") == "dolby" && dolby.text("url").toHttpUrlOrNull() != null &&
-                        (dolby["code"] == null || dolby.long("code") == 200L) &&
-                        (dolby["freeTrialInfo"] == null || dolby["freeTrialInfo"] == JsonNull)) return dolby
+                if (level == "auto") {
+                    val spatialLevels = if (arg("supportsDolby") == "1") listOf("dolby", "vivid") else listOf("vivid")
+                    for (spatialLevel in spatialLevels) {
+                        val track = try { withTimeoutOrNull(4_000) { trackAt(spatialLevel) } } catch (e: ApiException) {
+                            if (e.kind !in setOf(ErrorKind.Forbidden, ErrorKind.NotFound, ErrorKind.Server,
+                                    ErrorKind.Parse, ErrorKind.Unknown)) throw e
+                            null
+                        } catch (_: IOException) { null }
+                        if (track != null && track.text("level") == spatialLevel &&
+                            track.text("url").toHttpUrlOrNull()?.let { it.username.isEmpty() && it.password.isEmpty() } == true &&
+                            (track["code"] == null || track.long("code") == 200L) &&
+                            (track["freeTrialInfo"] == null || track["freeTrialInfo"] == JsonNull)) return track
+                    }
                 }
                 val track = trackAt(if (level == "auto") "jymaster" else level) ?: throw ApiException(ErrorKind.Parse)
                 if (track.text("url").isBlank()) throw ApiException(ErrorKind.NeteaseAudioUnavailable)

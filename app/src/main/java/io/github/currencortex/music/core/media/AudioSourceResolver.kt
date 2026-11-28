@@ -25,6 +25,9 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
         return cached(alternate)?.takeIf { accepts(it.source) }?.let { alternate to it }
     }
 
+    internal fun selectedVivid(source: AudioSource): Boolean = quality == AudioQuality.AUTO &&
+        providerIdentity in setOf("netease", "netease-cloud") && source.level == AudioQuality.VIVID.value
+
     internal fun selectedDolby(source: AudioSource): Boolean =
         quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && supportsDolby &&
             source.level == AudioQuality.DOLBY.value
@@ -39,7 +42,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private val loadTrack: (suspend (AudioRequest) -> AudioSource)? = null,
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
     private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long,
-        val cacheKey: String = sourceCacheKey(request.key, source))
+        val cacheKey: String = sourceCacheKey(request.key, source, request.selectedVivid(source)))
     private data class Denial(val request: AudioRequest, val error: ApiException)
     private val memo = java.util.concurrent.ConcurrentHashMap<String, Entry>()
     private val denied = java.util.concurrent.ConcurrentHashMap<String, Denial>()
@@ -70,7 +73,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     suspend fun register(request: AudioRequest, source: AudioSource): ResolvedAudio = withContext(Dispatchers.IO) {
         checkRequest(request)
         val started = now()
-        val sourceKey = sourceCacheKey(request.key, source)
+        val sourceKey = sourceCacheKey(request.key, source, request.selectedVivid(source))
         runCatching {
             cache.rememberSource(sourceKey, source)
             cache.rememberSelection(request.key, sourceKey)
@@ -142,7 +145,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             checkRequest(request)
             denied.remove(key)
             // Disk cache failure must not turn a valid network source into playback failure.
-            val sourceKey = fallbackKey ?: sourceCacheKey(key, source)
+            val sourceKey = fallbackKey ?: sourceCacheKey(key, source, request.selectedVivid(source))
             if (fallbackKey == null) runCatching {
                 cache.rememberSource(sourceKey, source)
                 cache.rememberSelection(key, sourceKey)
@@ -152,6 +155,9 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     }
 }
 
-/** Resolved candidates never share byte ranges with a different recording or plugin URL. */
-internal fun sourceCacheKey(requestKey: String, source: AudioSource): String =
-    if (source.matched || source.source.startsWith("lx:")) "$requestKey:match:${source.cacheIdentity}" else requestKey
+/** Keep alternate recordings and automatic Vivid bytes separate from the regular request. */
+internal fun sourceCacheKey(requestKey: String, source: AudioSource, autoVivid: Boolean = false): String = when {
+    autoVivid -> "$requestKey:match:vivid:${source.md5.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }.orEmpty()}"
+    source.matched || source.source.startsWith("lx:") -> "$requestKey:match:${source.cacheIdentity}"
+    else -> requestKey
+}
