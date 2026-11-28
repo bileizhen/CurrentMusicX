@@ -90,20 +90,32 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 @Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit, platform: MusicPlatform = MusicPlatform.NETEASE,
     showLikes: Boolean = true) {
     val qq = platform == MusicPlatform.QQ_MUSIC
+    val kugou = platform == MusicPlatform.KUGOU
     val colors = COUITheme.colorScheme
     ProfileCardGroup("我的音乐") {
         CardListGroup {
             if (showLikes) item {
                 ProfileDestination("我喜欢", "收藏的歌曲", COUIIcons.Favorites, "open_likes", iconColor = colors.red) {
-                    navigate(if (qq) "qq/likes" else "lib/likes")
+                    navigate(when { kugou -> "kugou/likes"; qq -> "qq/likes"; else -> "lib/likes" })
                 }
             }
             item {
                 ProfileDestination("歌单", "创建与收藏的歌单", COUIIcons.Playlist, "open_playlists", iconColor = colors.blue) {
-                    navigate(if (qq) "qq/playlists" else "lib/playlists")
+                    navigate(when { kugou -> "kugou/playlists"; qq -> "qq/playlists"; else -> "lib/playlists" })
                 }
             }
-            if (qq) item {
+            if (kugou) {
+                item {
+                    ProfileDestination("每日推荐", "酷狗每日专属推荐", COUIIcons.Recent, "open_kugou_daily", iconColor = colors.green) {
+                        navigate("kugou/daily")
+                    }
+                }
+                item {
+                    ProfileDestination("排行榜", "酷狗音乐热门榜单", COUIIcons.Playlist, "open_kugou_ranks", iconColor = colors.orange) {
+                        navigate("kugou/ranks")
+                    }
+                }
+            } else if (qq) item {
                 ProfileDestination("本周常听", "本周播放次数最多的歌曲", COUIIcons.Recent, "open_recent", iconColor = colors.green) {
                     navigate("qq/recent")
                 }
@@ -116,7 +128,11 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 }
             }
             item {
-                ProfileDestination("听歌时长", if (qq) "本机与 QQ 音乐听歌足迹" else "本机与网易云听歌足迹",
+                ProfileDestination("听歌时长", when {
+                    kugou -> "本机听歌足迹"
+                    qq -> "本机与 QQ 音乐听歌足迹"
+                    else -> "本机与网易云听歌足迹"
+                },
                     COUIIcons.Stopwatch, "open_listening", iconColor = colors.azure) { navigate("user/listening") }
             }
             item {
@@ -130,10 +146,17 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
 /** Account rows live on the account page opened from settings; services stay here. */
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
     navidromeConfigured: Boolean = false, embyConfigured: Boolean = false,
-    platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false) {
+    platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false, kugouBound: Boolean = false) {
     val colors = COUITheme.colorScheme
     ProfileCardGroup("音乐服务") {
         CardListGroup {
+            if (platform == MusicPlatform.KUGOU) {
+                item {
+                    ProfileDestination(if (kugouBound) "酷狗音乐账号" else "登录酷狗音乐",
+                        if (kugouBound) "已连接，管理个人歌单、喜欢与 VIP 权益" else "登录后访问云歌单、我喜欢与 VIP 曲库",
+                        COUIIcons.ContactsCircle, "open_kugou_binding", iconColor = colors.blue) { navigate("kugou/account") }
+                }
+            }
             if (platform == MusicPlatform.QQ_MUSIC) {
                 item {
                     ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",

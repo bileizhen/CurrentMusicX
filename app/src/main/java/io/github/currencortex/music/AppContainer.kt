@@ -269,13 +269,24 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             apiHttpClient ?: ApiClient.defaultHttpClient(),
             log = { logger.info("Network", it) },
         ))
+    val kugou = io.github.currencortex.music.data.kugou.KugouMusicRepository(SecureTokenStore(context, ".kugou$storageSuffix"),
+        io.github.currencortex.music.data.kugou.KugouClient(
+            apiHttpClient ?: ApiClient.defaultHttpClient(),
+            log = { logger.info("Network", it) },
+        ))
     val serverAudioSources = ServerAudioSources(apiClient)
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
-        lx = lxSources, emby = emby, qqMusic = qqMusic, serverAudioSources = serverAudioSources)
+        lx = lxSources, emby = emby, qqMusic = qqMusic, kugou = kugou, serverAudioSources = serverAudioSources)
     internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
         qqAudioIdentity(qqMusic.audioIdentity, access)
 
     private fun qqAudioIdentity(accountIdentity: String, access: AudioSourceAccess): String =
+        if (access.provider == AudioProvider.LX) "$accountIdentity:${access.identity}" else accountIdentity
+
+    internal fun kugouAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
+        kugouAudioIdentity(kugou.audioIdentity, access)
+
+    private fun kugouAudioIdentity(accountIdentity: String, access: AudioSourceAccess): String =
         if (access.provider == AudioProvider.LX) "$accountIdentity:${access.identity}" else accountIdentity
 
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
@@ -284,6 +295,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L,
                 qqMusic.session(), qqAudioIdentity(), song)
         }
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU)
+            return AudioRequest(song.id, quality, 0L, kugou.session(), kugouAudioIdentity(), song)
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
@@ -355,6 +368,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 if (request.providerIdentity.substringBefore(":lx:") != accountIdentity) false
                 else {
                     if (request.providerIdentity != qqAudioIdentity(accountIdentity, audioSettings.access()))
+                        throw ApiException(ErrorKind.AudioSourceChanged)
+                    true
+                }
+            }
+        } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU }?.let {
+            if (!kugou.accepts(it) || request.session != kugou.session()) false
+            else {
+                val accountIdentity = kugou.audioIdentity
+                if (request.providerIdentity.substringBefore(":lx:") != accountIdentity) false
+                else {
+                    if (request.providerIdentity != kugouAudioIdentity(accountIdentity, audioSettings.access()))
                         throw ApiException(ErrorKind.AudioSourceChanged)
                     true
                 }
@@ -514,17 +538,32 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.data.roaming.RoamingPreferences(settingsStore), playerScope,
         musicSettings.state.map { it.musicPlatform.name }.distinctUntilChanged()
             .stateIn(playerScope, SharingStarted.Eagerly, musicSettings.state.value.musicPlatform.name))
+    val kugouPersonalRoaming = io.github.currencortex.music.feature.roaming.PersonalRoamingController(
+        io.github.currencortex.music.data.roaming.KugouRoamingRepository(kugou),
+        io.github.currencortex.music.feature.roaming.KugouRoamingSessionStore(kugou.state), playerController,
+        io.github.currencortex.music.data.roaming.RoamingPreferences(settingsStore), playerScope,
+        musicSettings.state.map { it.musicPlatform.name }.distinctUntilChanged()
+            .stateIn(playerScope, SharingStarted.Eagerly, musicSettings.state.value.musicPlatform.name))
     val activePersonalRoaming
-        get() = if (playerController.state.value.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
-            musicSettings.state.value.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
-            qqMusicPersonalRoaming else personalRoaming
+        get() = when {
+            playerController.state.value.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU ||
+                (playerController.state.value.song?.musicSource != io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC &&
+                    musicSettings.state.value.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.KUGOU) ->
+                kugouPersonalRoaming
+            playerController.state.value.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
+                musicSettings.state.value.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC ->
+                qqMusicPersonalRoaming
+            else -> personalRoaming
+        }
     /** True when the station the roaming UI is bound to is QQ Music. */
     val activePersonalRoamingIsQq: Boolean get() = activePersonalRoaming === qqMusicPersonalRoaming
+    /** True when the station the roaming UI is bound to is KuGou Music. */
+    val activePersonalRoamingIsKugou: Boolean get() = activePersonalRoaming === kugouPersonalRoaming
     init {
-        // One shared dispatcher: both stations publish boundaries on the same player.
+        // One shared dispatcher: all stations publish boundaries on the same player.
         playerController.onRadioBoundary = {
             val session = playbackQueue.state.value.radioSession
-            val owner = listOf(personalRoaming, qqMusicPersonalRoaming).firstOrNull { it.ownsRadio(session) }
+            val owner = listOf(personalRoaming, qqMusicPersonalRoaming, kugouPersonalRoaming).firstOrNull { it.ownsRadio(session) }
             owner?.awaitNext()
         }
     }

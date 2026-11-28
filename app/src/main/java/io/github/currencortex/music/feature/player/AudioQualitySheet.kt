@@ -54,20 +54,29 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     audioInfo: io.github.currencortex.music.core.media.AudioStreamInfo? = null, onRefresh: (() -> Unit)? = null,
     container: AppContainer? = null, onEffects: (() -> Unit)? = null,
     isQq: Boolean = song?.musicSource == MusicSource.QQ_MUSIC,
+    isKugou: Boolean = song?.musicSource == MusicSource.KUGOU,
     available: Collection<AudioQuality>? = null) {
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
     var songQualities by remember(song?.id, song?.musicSource) { mutableStateOf<Set<AudioQuality>?>(null) }
-    val nativeQqQualitiesEnabled = qqNativeQualitiesEnabled(container)
-    LaunchedEffect(isQq, song?.id, song?.musicSource, container, nativeQqQualitiesEnabled) {
-        songQualities = if (isQq && song != null && container != null && nativeQqQualitiesEnabled)
-            (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }
-        else null
+    val nativeQualitiesEnabled = qqNativeQualitiesEnabled(container)
+    LaunchedEffect(isQq, isKugou, song?.id, song?.musicSource, container, nativeQualitiesEnabled) {
+        songQualities = when {
+            isQq && song != null && container != null && nativeQualitiesEnabled ->
+                (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }
+            isKugou && song != null && container != null && nativeQualitiesEnabled ->
+                (appResult { container.kugou.qualities(song) } as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }
+            else -> null
+        }
     }
-    val effectiveAvailable = if (isQq) songQualities ?: available ?: qqAudioQualities(container) else null
+    val effectiveAvailable = when {
+        isQq -> songQualities ?: available ?: qqAudioQualities(container)
+        isKugou -> songQualities ?: available ?: kugouAudioQualities(container)
+        else -> null
+    }
     LaunchedEffect(effectiveAvailable, selected) {
-        if (isQq && effectiveAvailable != null && selected != AudioQuality.AUTO && selected !in effectiveAvailable)
+        if ((isQq || isKugou) && effectiveAvailable != null && selected != AudioQuality.AUTO && selected !in effectiveAvailable)
             onSelect(AudioQuality.AUTO)
     }
     MusicBottomSheet(show = visible, title = title,
@@ -80,7 +89,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                 visible = false
             }
         }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
-            available = effectiveAvailable, isQq = isQq, extraContent = {
+            available = effectiveAvailable, isQq = isQq, isKugou = isKugou, extraContent = {
             if (isQq && onEffects != null) {
                 Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MusicTextAction("搭配音效 ›", {
@@ -150,9 +159,46 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     return available
 }
 
+private val kugouQualityOrder = listOf(
+    AudioQuality.KUGOU_VIPER_MASTER,
+    AudioQuality.KUGOU_VIPER_CLEAR,
+    AudioQuality.KUGOU_VIPER_ATMOS,
+    AudioQuality.DOLBY,
+    AudioQuality.HIRES,
+    AudioQuality.LOSSLESS,
+    AudioQuality.EXHIGH,
+    AudioQuality.STANDARD,
+)
+private val kugouNativeQualities = kugouQualityOrder.toCollection(linkedSetOf())
+
+@Composable private fun kugouAudioQualities(container: AppContainer?): Set<AudioQuality> {
+    if (container == null) return kugouNativeQualities
+    val access by container.audioSettings.state.collectAsStateWithLifecycle()
+    if (access.provider != AudioProvider.LX) return kugouNativeQualities
+    val sources by container.lxSources.state.collectAsStateWithLifecycle()
+    return kugouAudioQualities(access, sources)
+}
+
+internal fun kugouAudioQualities(access: AudioProviderState, sources: List<LxSourceInfo>): Set<AudioQuality> {
+    if (access.provider != AudioProvider.LX) return kugouNativeQualities
+    val supported = sources.asSequence().filter { access.lxSmartSwitch || it.id == access.lxSourceId }
+        .flatMap { it.qualities(LxPlatform.KUGOU).asSequence() }
+        .mapNotNull { quality -> when (quality) {
+            "128k" -> AudioQuality.STANDARD
+            "320k" -> AudioQuality.EXHIGH
+            "flac" -> AudioQuality.LOSSLESS
+            "flac24bit", "hires", "master", "atmos", "atmos_plus" -> AudioQuality.HIRES
+            "dolby" -> AudioQuality.DOLBY
+            else -> null
+        } }.toSet()
+    val available = linkedSetOf<AudioQuality>()
+    kugouQualityOrder.forEach { if (it in supported) available += it }
+    return available.ifEmpty { kugouNativeQualities }
+}
+
 @Composable internal fun AudioQualityChoices(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier,
-    available: Collection<AudioQuality>? = null, isQq: Boolean = false,
+    available: Collection<AudioQuality>? = null, isQq: Boolean = false, isKugou: Boolean = false,
     extraContent: @Composable () -> Unit = {}) {
     val colors = COUITheme.colorScheme
     val regularOptions = (available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
@@ -161,6 +207,12 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     val qqOptions = qqQualityOrder.filter { it in regularOptions }
     val qqFeaturedOptions = listOf(AudioQuality.QQ_SURROUND, AudioQuality.QQ_MASTER)
         .filter { it in regularOptions }
+    val kugouOptions = kugouQualityOrder.filter { it in regularOptions }
+    val kugouFeaturedOptions = listOf(
+        AudioQuality.KUGOU_VIPER_MASTER,
+        AudioQuality.KUGOU_VIPER_CLEAR,
+        AudioQuality.KUGOU_VIPER_ATMOS,
+    ).filter { it in regularOptions }
     // This is a fixed, short list. Compose it before the native entrance starts instead of
     // subcomposing every text row during the first animated layout pass.
     // Let the native sheet supply the available screen height. Keep the safe-area spacing
@@ -170,32 +222,45 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         run {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("已选 · ${selected.qualityLabel(isQq)}", Modifier.weight(1f), fontSize = 13.sp, color = colors.labelSecondaryVariant)
+                Text("已选 · ${selected.qualityLabel(isQq, isKugou)}", Modifier.weight(1f), fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 onNetwork?.let { action -> Text("网络与播放 ›", Modifier.heightIn(min = 48.dp).testTag("quality_network_settings")
                     .clickable(role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = action)
                     .padding(horizontal = 8.dp, vertical = 14.dp), fontSize = 12.sp, color = colors.primary) }
             }
         }
         if (available == null) run {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, false, Modifier.weight(1f))
-                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, false, Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, false, false, Modifier.weight(1f).fillMaxHeight())
+                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, false, false, Modifier.weight(1f).fillMaxHeight())
             }
-        } else if (isQq) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        } else if (isQq && qqFeaturedOptions.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 qqFeaturedOptions.forEach { quality ->
-                    FeaturedQuality(quality, selected, enabled, onSelect, true, Modifier.weight(1f))
+                    FeaturedQuality(quality, selected, enabled, onSelect, true, false, Modifier.weight(1f).fillMaxHeight())
+                }
+            }
+        } else if (isKugou && kugouFeaturedOptions.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(if (kugouFeaturedOptions.size >= 3) 8.dp else 12.dp)) {
+                val compact = kugouFeaturedOptions.size >= 3
+                kugouFeaturedOptions.forEach { quality ->
+                    FeaturedQuality(quality, selected, enabled, onSelect, false, true, Modifier.weight(1f).fillMaxHeight(), compact = compact)
                 }
             }
         }
-        (if (isQq) qqOptions.filter { it !in qqFeaturedOptions } else regularOptions).forEach { quality ->
-            QualityRow(quality, selected, enabled, onSelect, isQq)
+        val rowOptions = when {
+            isQq -> qqOptions.filter { it !in qqFeaturedOptions }
+            isKugou -> kugouOptions.filter { it !in kugouFeaturedOptions }
+            else -> regularOptions
         }
-        QualityRow(AudioQuality.AUTO, selected, enabled, onSelect, isQq)
+        rowOptions.forEach { quality ->
+            QualityRow(quality, selected, enabled, onSelect, isQq, isKugou)
+        }
+        QualityRow(AudioQuality.AUTO, selected, enabled, onSelect, isQq, isKugou)
         run {
             Text(when {
                 !enabled -> "请先退出一起听，再切换音质。"
                 isQq -> "可用音质取决于歌曲、账号权限和设备解码能力。"
+                isKugou -> "蝰蛇母带、蝰蛇超清与蝰蛇全景声需歌曲支持及酷狗相应会员权限，不支持时会自动回落到可用最高音质。"
                 else -> "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
             },
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
@@ -237,28 +302,36 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
 }
 
 @Composable private fun FeaturedQuality(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
-    onSelect: (AudioQuality) -> Unit, isQq: Boolean, modifier: Modifier) {
+    onSelect: (AudioQuality) -> Unit, isQq: Boolean, isKugou: Boolean, modifier: Modifier, compact: Boolean = false) {
     val colors = COUITheme.colorScheme
     val active = selected == quality
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(if (compact) 18.dp else 22.dp)
+    val badge = when (quality) {
+        AudioQuality.SKY, AudioQuality.QQ_SURROUND -> "SURROUND"
+        AudioQuality.KUGOU_VIPER_ATMOS -> "ATMOS"
+        AudioQuality.KUGOU_VIPER_CLEAR -> "96kHz"
+        AudioQuality.KUGOU_VIPER_MASTER -> "192kHz"
+        else -> "MASTER"
+    }
     Column(modifier.qualityClick(quality, active, enabled) { onSelect(quality) }
         .background(colors.primary.copy(alpha = if (active) .16f else .07f), shape)
         .border(1.dp, if (active) colors.primary.copy(alpha = .6f) else Color.Transparent, shape)
-        .padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 12.dp else 14.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (quality == AudioQuality.SKY || quality == AudioQuality.QQ_SURROUND) "SURROUND" else "MASTER",
+            Text(badge,
                 Modifier.weight(1f), fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold, color = colors.primary)
             QualityCheck(active)
         }
-        Spacer(Modifier.height(10.dp))
-        Text(quality.qualityLabel(isQq), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.labelPrimary)
-        Text(quality.description(isQq), fontSize = 12.sp, color = colors.labelSecondaryVariant)
+        Spacer(Modifier.height(if (compact) 6.dp else 10.dp))
+        Text(quality.qualityLabel(isQq, isKugou), fontSize = if (compact) 12.sp else 17.sp, fontWeight = FontWeight.SemiBold, color = colors.labelPrimary, maxLines = 2)
+        Text(quality.description(isQq, isKugou), fontSize = if (compact) 10.5.sp else 12.sp, color = colors.labelSecondaryVariant, maxLines = 2)
     }
 }
 
 @Composable private fun QualityRow(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
-    onSelect: (AudioQuality) -> Unit, isQq: Boolean) {
+    onSelect: (AudioQuality) -> Unit, isQq: Boolean, isKugou: Boolean) {
     val colors = COUITheme.colorScheme
     val active = quality == selected
     Row(Modifier.fillMaxWidth().qualityClick(quality, active, enabled) { onSelect(quality) }
@@ -270,8 +343,8 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
             Text(quality.shortName(), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.primary)
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(quality.qualityLabel(isQq), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.labelPrimary)
-            Text(quality.description(isQq), fontSize = 12.sp, color = colors.labelSecondaryVariant)
+            Text(quality.qualityLabel(isQq, isKugou), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.labelPrimary)
+            Text(quality.description(isQq, isKugou), fontSize = 12.sp, color = colors.labelSecondaryVariant)
         }
         QualityCheck(active)
     }
@@ -295,8 +368,9 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
 }
 
 private fun AudioQuality.shortName() = when (this) {
-    AudioQuality.QQ_MASTER -> "母带"
-    AudioQuality.QQ_SURROUND -> "全景"
+    AudioQuality.QQ_MASTER, AudioQuality.KUGOU_VIPER_MASTER -> "母带"
+    AudioQuality.QQ_SURROUND, AudioQuality.KUGOU_VIPER_ATMOS -> "全景"
+    AudioQuality.KUGOU_VIPER_CLEAR -> "超清"
     AudioQuality.QQ_STUDIO -> "臻品"
     AudioQuality.QQ_DTS_X -> "DTS:X"
     AudioQuality.QQ_NAC -> "NAC"
@@ -310,25 +384,39 @@ private fun AudioQuality.shortName() = when (this) {
     AudioQuality.STANDARD -> "标"
     else -> "自动"
 }
-internal fun AudioQuality.qualityLabel(qqMusic: Boolean): String = if (qqMusic) when (this) {
-    AudioQuality.LOSSLESS -> "SQ 无损品质"
-    AudioQuality.EXHIGH -> "HQ 高品质"
-    AudioQuality.STANDARD -> "标准品质"
+internal fun AudioQuality.qualityLabel(qqMusic: Boolean, kugou: Boolean = false): String = when {
+    qqMusic -> when (this) {
+        AudioQuality.LOSSLESS -> "SQ 无损品质"
+        AudioQuality.EXHIGH -> "HQ 高品质"
+        AudioQuality.STANDARD -> "标准品质"
+        else -> label
+    }
+    kugou -> when (this) {
+        AudioQuality.KUGOU_VIPER_MASTER -> "蝰蛇母带2.0"
+        AudioQuality.KUGOU_VIPER_ATMOS -> "蝰蛇全景声2.0"
+        AudioQuality.LOSSLESS -> "无损音质"
+        AudioQuality.EXHIGH -> "高品音质"
+        AudioQuality.STANDARD -> "标准音质"
+        else -> label
+    }
     else -> label
-} else label
+}
 
-private fun AudioQuality.description(qqMusic: Boolean) = when (this) {
+private fun AudioQuality.description(qqMusic: Boolean, kugou: Boolean = false) = when (this) {
     AudioQuality.QQ_MASTER -> "QQ 音乐高解析母带音源"
     AudioQuality.QQ_SURROUND -> "QQ 音乐全景声音源"
     AudioQuality.QQ_STUDIO -> "QQ 音乐高品质音源"
     AudioQuality.QQ_DTS_X -> "需设备支持 DTS:X 解码与输出"
     AudioQuality.QQ_NAC -> "QQ 音乐 AI 编码音源"
+    AudioQuality.KUGOU_VIPER_MASTER -> "还原录音棚细节"
+    AudioQuality.KUGOU_VIPER_CLEAR -> "声音纯净通透"
+    AudioQuality.KUGOU_VIPER_ATMOS -> "身临其境环绕感"
     AudioQuality.VIVID -> "臻音全景声档位，需歌曲与账号支持"
     AudioQuality.DOLBY -> if (qqMusic) "QQ 音乐杜比全景声，需歌曲、账号和设备支持" else "杜比全景声档位，需音源、账号与设备支持"
     AudioQuality.JYEFFECT -> "网易云高清臻音档位，与 Hi-Res 分开选择"
     AudioQuality.HIRES -> "请求高解析度音源，不代表设备已高解析输出"
-    AudioQuality.LOSSLESS -> if (qqMusic) "FLAC 无损音源" else "无损音源，还原原始细节"
-    AudioQuality.EXHIGH -> if (qqMusic) "高码率音源" else "清晰细腻，兼顾音质与流量"
+    AudioQuality.LOSSLESS -> if (qqMusic || kugou) "FLAC 无损音源" else "无损音源，还原原始细节"
+    AudioQuality.EXHIGH -> if (qqMusic || kugou) "320kbps 高品质音源" else "清晰细腻，兼顾音质与流量"
     AudioQuality.HIGHER -> "较高码率，兼顾清晰度与流量"
     AudioQuality.STANDARD -> "均衡音质，更省流量"
     else -> "优先请求可用的最高音质"

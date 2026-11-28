@@ -1,6 +1,7 @@
 package io.github.currencortex.music.data.lx
 
 import io.github.currencortex.music.core.network.SourceAvailabilityStatus
+import io.github.currencortex.music.data.song.KugouTrackRef
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.QqMusicTrackRef
 import io.github.currencortex.music.data.song.Song
@@ -21,6 +22,12 @@ internal fun lxProbeSong(platform: LxPlatform): Song = when (platform) {
         Song(648474549, "Dawnlight", "VZEUS", "Dawnlight", durationMs = 96000,
             musicSource = MusicSource.QQ_MUSIC, externalIds = SongExternalIds(qqMusicId = mid),
             qqMusic = QqMusicTrackRef(mid, 648474549, "003jE4bK0y7HlO", mediaMid = mid))
+    }
+    LxPlatform.KUGOU -> {
+        val hash = "C758A19E10F820D866FE97E2B2C59A97"
+        Song(32100650L, "起风了", "买辣椒也用券", "起风了", durationMs = 325000,
+            musicSource = MusicSource.KUGOU, externalIds = SongExternalIds(kugouId = hash),
+            kugou = KugouTrackRef(hash = hash, albumId = "977768", albumAudioId = 32100650L, audioId = 20505418L))
     }
 }
 

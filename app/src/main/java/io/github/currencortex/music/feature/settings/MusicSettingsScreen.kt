@@ -77,7 +77,11 @@ import io.github.suqi8.coui.kmp.basic.TextField
             if (provider.provider != AudioProvider.LX) audioState.message?.let { SettingsHint(it) }
         } }
         if (provider.provider == AudioProvider.LX) item("lx_sources") {
-            val platform = if (settings.musicPlatform == MusicPlatform.QQ_MUSIC) LxPlatform.QQ_MUSIC else LxPlatform.NETEASE
+            val platform = when (settings.musicPlatform) {
+                MusicPlatform.QQ_MUSIC -> LxPlatform.QQ_MUSIC
+                MusicPlatform.KUGOU -> LxPlatform.KUGOU
+                MusicPlatform.NETEASE -> LxPlatform.NETEASE
+            }
             LxSourceSettings(vm, platform)
         }
         item("lyrics") { SettingsSection("歌词来源", MusicIcons.File) {

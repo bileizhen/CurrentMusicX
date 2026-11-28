@@ -74,21 +74,30 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
     onBack: (() -> Unit)? = null, onCreate: () -> Unit,
     qqPlaylists: List<Playlist>? = null, qqLoading: Boolean = false,
-    qqError: String? = null, onQqRefresh: () -> Unit = {}) {
+    qqError: String? = null, onQqRefresh: () -> Unit = {},
+    externalPlatform: String? = if (qqPlaylists != null) "qqmusic" else null) {
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugouAccount by vm.container.kugou.state.collectAsStateWithLifecycle()
     val sourcePlaylists = qqPlaylists ?: home.playlists
     val loading = if (qqPlaylists == null) home.loading || account.loading else qqLoading
     val sourceErrors = if (qqPlaylists == null) home.errors
         else listOfNotNull(qqError).associateBy { "我的歌单" }
     val refresh = if (qqPlaylists == null) vm::refresh else onQqRefresh
     fun openPlaylist(playlist: Playlist) {
-        if (playlist.source == "qqmusic") {
-            if (playlist.nativeLiked) navigate("qq/likes")
-            else navigate(io.github.currencortex.music.feature.qqmusic.qqRoute("playlist", playlist.remoteId.ifBlank { playlist.id.toString() }))
-        } else navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
+        when (playlist.source) {
+            "qqmusic" -> {
+                if (playlist.nativeLiked) navigate("qq/likes")
+                else navigate(io.github.currencortex.music.feature.qqmusic.qqRoute("playlist", playlist.remoteId.ifBlank { playlist.id.toString() }))
+            }
+            "kugou" -> {
+                if (playlist.nativeLiked) navigate("kugou/likes")
+                else navigate("kugou/user-playlist/${playlist.remoteId.ifBlank { playlist.id.toString() }}")
+            }
+            else -> navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
+        }
     }
     var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
     val playlistPlayback = rememberPlaylistPreviewPlayback(vm, play)
@@ -99,7 +108,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         sourcePlaylists.filter { category.includes(it, account.account?.id ?: 0) }
     }
     MusicSubpage("我的歌单", "playlist_index_page", onBack, actions = {
-        if (qqPlaylists != null) {
+        if (externalPlatform == "kugou") {
+            if (kugouAccount.loggedIn) GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
+        } else if (qqPlaylists != null) {
             if (qqAccount.loggedIn) GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
         } else if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale))
             GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
@@ -148,8 +159,18 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         Box(Modifier.springChainItem(chain, emptyRow)) {
                             Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = COUITheme.colorScheme.primary.copy(alpha = .6f))
-                                Text(if (qqPlaylists != null && !qqAccount.loggedIn) "登录 QQ 音乐后查看你的歌单" else if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
-                                Text(if (qqPlaylists != null && !qqAccount.loggedIn) "同步 QQ 音乐的自建与收藏歌单" else if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
+                                Text(when {
+                                    externalPlatform == "kugou" && !kugouAccount.loggedIn -> "登录酷狗音乐后查看你的歌单"
+                                    qqPlaylists != null && externalPlatform != "kugou" && !qqAccount.loggedIn -> "登录 QQ 音乐后查看你的歌单"
+                                    qqPlaylists == null && account.account == null -> "登录后查看你的歌单"
+                                    else -> "为喜欢的音乐建一个歌单"
+                                }, Modifier.padding(top = 16.dp), fontSize = 17.sp)
+                                Text(when {
+                                    externalPlatform == "kugou" && !kugouAccount.loggedIn -> "同步酷狗音乐的自建与收藏歌单"
+                                    qqPlaylists != null && externalPlatform != "kugou" && !qqAccount.loggedIn -> "同步 QQ 音乐的自建与收藏歌单"
+                                    qqPlaylists == null && account.account == null -> "绑定网易云账号后也可同步收藏"
+                                    else -> "点右上角 + 开始收藏"
+                                }, Modifier.padding(top = 8.dp),
                                     fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                             }
                         }
@@ -177,7 +198,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                                 }, 480, cornerRadius = 18.dp)
                             Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }}",
+                            Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; "kugou" -> "酷狗音乐"; else -> "CurrentMusic" }}",
                                 Modifier.padding(top = 4.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                         }
                     }
@@ -217,6 +238,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugouLikes by vm.container.kugou.likedState.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
@@ -325,6 +347,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 song.navidrome != null -> navidromeLikes[song.id] == true
                 song.emby != null -> embyLikes[song.id] == true
                 song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> song.id in qqLikes
+                song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU -> song.id in kugouLikes
                 song.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE ->
                     io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
                 else -> statuses[song.id]?.liked == true
@@ -361,13 +384,15 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val resume = if (canPlay && pausedWithProgress) remember(state.songs, currentSong) {
         currentSong?.takeIf { current -> state.songs.any { it.id == current.id && it.musicSource == current.musicSource } }
     } else null
-    val albumPage = vm.route.startsWith("lib/album/")
+    val albumPage = vm.route.startsWith("lib/album/") || vm.route.startsWith("kugou/album/")
     val collectionKind = if (albumPage) "专辑" else "歌单"
     val title = state.title.ifBlank { sharedMotion?.title.orEmpty() }
         .ifBlank { if (state.loading) "正在加载$collectionKind" else collectionKind }
     val origin = when {
         albumPage -> state.description.lineSequence().firstOrNull { it.isNotBlank() } ?: "专辑"
         localMusic != null -> "本地曲库 · ${state.songs.size} 首歌曲"
+        state.playlist?.source == "kugou" && state.playlist.nativeLiked -> "酷狗音乐 · 我喜欢"
+        state.playlist?.source == "kugou" -> "酷狗音乐"
         state.playlist?.source == "qqmusic-liked" -> "QQ 音乐 · 我喜欢"
         state.playlist?.source == "qqmusic" -> "QQ 音乐"
         state.playlist?.source == "ncm" -> "网易云音乐 · 同步歌单只读"
@@ -379,11 +404,16 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         vm.route == "lib/recent" -> "最近听过的音乐"
         vm.route == "lib/cloud" -> "网易云音乐"
         vm.route == "qq/daily" -> "QQ 音乐 · ${if (qqAccount.loggedIn) "每日推荐" else "新歌推荐"}"
+        vm.route.startsWith("qq/chart/") -> "QQ 音乐 · 排行榜"
+        vm.route == "kugou/daily" -> "酷狗音乐 · 每日推荐"
+        vm.route == "kugou/new" -> "酷狗音乐 · 新歌速递"
+        vm.route.startsWith("kugou/rank/") -> "酷狗音乐 · 热门榜单"
         else -> "CurrentMusic 歌单"
     }
     val heroOrigin = when (state.playlist?.source) {
         "ncm" -> "网易云音乐"
         "qqmusic", "qqmusic-liked" -> "QQ 音乐"
+        "kugou" -> "酷狗音乐"
         else -> origin
     }
     val heroDescription = (if (albumPage) state.description.substringAfter('\n', "") else state.description).trim().takeUnless {
@@ -528,6 +558,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                     if (vm.route in setOf("lib/cloud", "lib/likes") &&
                         error == io.github.currencortex.music.core.network.ErrorKind.NeteaseBindingRequired.message)
                         TextButton("登录网易云", onClick = { navigate("user/binding") })
+                    else if (vm.route.startsWith("kugou/") && !vm.container.kugou.state.value.loggedIn &&
+                        (vm.route == "kugou/likes" || vm.route.startsWith("kugou/user-playlist/")))
+                        TextButton("登录酷狗音乐", onClick = { navigate("kugou/account") })
                     else TextButton("重试", onClick = ::refresh)
                 } } }
                 if (room != null && localMusic == null) item { Text("点击歌曲，为当前房间点歌", Modifier.playlistPullSurface(pullMotion).padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp) }
@@ -546,6 +579,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             PlaylistTrack(song, selected = currentSong?.id == song.id && currentSong?.musicSource == song.musicSource,
                                 liked = localMusic == null && when (song.musicSource) {
                                     io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> song.id in qqLikes
+                                    io.github.currencortex.music.data.song.MusicSource.KUGOU -> song.id in kugouLikes
                                     io.github.currencortex.music.data.song.MusicSource.NETEASE ->
                                         io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
                                     io.github.currencortex.music.data.song.MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
@@ -599,7 +633,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         }, modifier = Modifier.testTag("playlist_depth_ribbon_toggle"), chevron = false)
         MusicDestinationRow("${collectionKind}信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow(if (localMusic != null) "重新扫描本地音乐" else "刷新歌单", { menuOpen = false; refresh() }, chevron = false)
-        if (state.playlist?.editable(account.account?.id ?: 0) == true && state.playlist?.source != "qqmusic") {
+        if (state.playlist?.editable(account.account?.id ?: 0) == true && state.playlist?.source !in setOf("qqmusic", "kugou")) {
             MusicDestinationRow(if (importState.running) "查看网易云导入进度" else "一键导入网易云我喜欢", {
                 menuOpen = false
                 if (!importState.running) vm.container.playlistLikeImporter.start(vm.id, state.title)
@@ -625,7 +659,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
         }
         if (removable) {
-            MusicDestinationRow(if (state.playlist?.source in setOf("netease", "qqmusic") && state.playlist?.nativeOwned == false) "取消收藏" else "删除歌单",
+            MusicDestinationRow(if (state.playlist?.source in setOf("netease", "qqmusic", "kugou") && state.playlist?.nativeOwned == false) "取消收藏" else "删除歌单",
                 { menuOpen = false; onDelete() }, enabled = !busy, modifier = Modifier.testTag("delete_playlist"), chevron = false)
         }
     }

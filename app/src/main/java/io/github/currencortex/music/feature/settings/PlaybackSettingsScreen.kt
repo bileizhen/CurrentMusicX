@@ -18,6 +18,7 @@ import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.player.AudioQualitySheet
+import io.github.currencortex.music.feature.player.kugouAudioQualities
 import io.github.currencortex.music.feature.player.qqAudioQualities
 import io.github.currencortex.music.feature.player.qualityLabel
 import io.github.currencortex.music.ui.component.MusicDestinationRow
@@ -36,7 +37,12 @@ import kotlin.math.roundToInt
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val isQq = settings.musicPlatform == MusicPlatform.QQ_MUSIC
-    val qualitySource = if (isQq) MusicSource.QQ_MUSIC else null
+    val isKugou = settings.musicPlatform == MusicPlatform.KUGOU
+    val qualitySource = when (settings.musicPlatform) {
+        MusicPlatform.QQ_MUSIC -> MusicSource.QQ_MUSIC
+        MusicPlatform.KUGOU -> MusicSource.KUGOU
+        MusicPlatform.NETEASE -> null
+    }
     var mobileQualityOpen by rememberSaveable { mutableStateOf(false) }
     var wirelessQualityOpen by rememberSaveable { mutableStateOf(false) }
     var downloadQualityOpen by rememberSaveable { mutableStateOf(false) }
@@ -48,15 +54,15 @@ import kotlin.math.roundToInt
             Column {
                 MusicDestinationRow("移动网络播放", { mobileQualityOpen = true },
                     Modifier.testTag("mobile_playback_quality"),
-                    summary = settings.qualityFor(qualitySource).qualityLabel(isQq))
+                    summary = settings.qualityFor(qualitySource).qualityLabel(isQq, isKugou))
                 SettingsDivider()
                 MusicDestinationRow("无线网络播放", { wirelessQualityOpen = true },
                     Modifier.testTag("wireless_playback_quality"),
-                    summary = settings.qualityFor(qualitySource, PlaybackNetworkKind.WIRELESS).qualityLabel(isQq))
+                    summary = settings.qualityFor(qualitySource, PlaybackNetworkKind.WIRELESS).qualityLabel(isQq, isKugou))
                 SettingsDivider()
                 MusicDestinationRow("下载", { downloadQualityOpen = true },
                     Modifier.testTag("download_quality"),
-                    summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq))
+                    summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq, isKugou))
             }
         } }
         item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
@@ -120,17 +126,25 @@ import kotlin.math.roundToInt
                 summary = "包括移动网络，会额外消耗流量", enabled = settings.preloadAudio, modifier = Modifier.testTag("preload_metered"))
         } }
     }
-    val available = if (isQq) {
-        val provider by vm.audioProvider.collectAsStateWithLifecycle()
-        val sources by vm.lxSources.collectAsStateWithLifecycle()
-        qqAudioQualities(provider, sources)
-    } else null
+    val available = when {
+        isQq -> {
+            val provider by vm.audioProvider.collectAsStateWithLifecycle()
+            val sources by vm.lxSources.collectAsStateWithLifecycle()
+            qqAudioQualities(provider, sources)
+        }
+        isKugou -> {
+            val provider by vm.audioProvider.collectAsStateWithLifecycle()
+            val sources by vm.lxSources.collectAsStateWithLifecycle()
+            kugouAudioQualities(provider, sources)
+        }
+        else -> null
+    }
     if (mobileQualityOpen) AudioQualitySheet(settings.qualityFor(qualitySource), vm::mobileQuality,
-        { mobileQualityOpen = false }, title = "移动网络播放音质", isQq = isQq, available = available)
+        { mobileQualityOpen = false }, title = "移动网络播放音质", isQq = isQq, isKugou = isKugou, available = available)
     if (wirelessQualityOpen) AudioQualitySheet(settings.qualityFor(qualitySource, PlaybackNetworkKind.WIRELESS),
-        vm::wirelessQuality, { wirelessQualityOpen = false }, title = "无线网络播放音质", isQq = isQq, available = available)
+        vm::wirelessQuality, { wirelessQualityOpen = false }, title = "无线网络播放音质", isQq = isQq, isKugou = isKugou, available = available)
     if (downloadQualityOpen) AudioQualitySheet(settings.downloadQualityFor(qualitySource), vm::downloadQuality,
-        { downloadQualityOpen = false }, title = "下载音质", isQq = isQq, available = available)
+        { downloadQualityOpen = false }, title = "下载音质", isQq = isQq, isKugou = isKugou, available = available)
     if (appleLyricsOpen) MusicDialog("Apple Music 歌词", { appleLyricsOpen = false }) {
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
             .testTag("apple_lyrics_settings")) {

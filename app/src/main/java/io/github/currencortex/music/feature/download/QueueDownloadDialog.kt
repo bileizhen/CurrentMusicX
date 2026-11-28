@@ -46,7 +46,10 @@ import io.github.suqi8.coui.kmp.basic.Text
                             check(qq.loggedIn) { "请先登录 QQ 音乐" }
                         songs.distinctBy { it.id to it.musicSource }.forEach { song ->
                             val quality = settings.downloadQualityFor(song.musicSource)
-                            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU)
+                                container.songDownloads.start(song, quality, 0L, "kugou://account", container.kugouAudioIdentity(access),
+                                    navidromeRevision = container.kugou.state.value.revision.toString())
+                            else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
                                 container.songDownloads.start(song, quality, account, server, container.qqAudioIdentity(access),
                                     navidromeRevision = qq.revision.toString())
                             else container.songDownloads.start(song, quality, account, server, access.identity, uid)

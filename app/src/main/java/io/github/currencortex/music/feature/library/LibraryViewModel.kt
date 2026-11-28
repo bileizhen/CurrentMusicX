@@ -45,6 +45,14 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                         if (account != null) appResult { container.qqMusic.likedSongs() }
                     }
             }
+            launch {
+                combine(container.musicSettings.state.map { it.musicPlatform }.distinctUntilChanged(),
+                    container.kugou.state) { platform, account -> account.takeIf { platform == MusicPlatform.KUGOU && it.loggedIn } }
+                    .distinctUntilChangedBy { it?.revision }
+                    .collectLatest { account ->
+                        if (account != null) appResult { container.kugou.likedSongs() }
+                    }
+            }
             launch { container.accountRepository.sessionRevision.drop(1).collect {
                 playlistLoad?.cancel(); selectedSong.value = null
                 availablePlaylists.value = emptyList(); playlistError.value = null
@@ -123,6 +131,15 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         val expected = container.musicSession()
         playlistLoad = viewModelScope.launch {
             try {
+                if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) {
+                    val owner = container.kugou.audioIdentity
+                    val result = appResult { container.kugou.playlists().filter { it.nativeOwned && !it.nativeLiked } }
+                    if (owner == container.kugou.audioIdentity && selectedSong.value == song) when (result) {
+                        is AppResult.Success -> availablePlaylists.value = result.value
+                        is AppResult.Failure -> playlistError.value = result.message
+                    }
+                    return@launch
+                }
                 if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
                     val owner = container.qqMusic.audioIdentity
                     val result = appResult { container.qqMusic.playlists().filter { it.nativeOwned } }
@@ -164,7 +181,10 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         val song = selectedSong.value ?: return
         if (playlist !in availablePlaylists.value) return
         action("已加入歌单") {
-            if (playlist.source == "qqmusic") container.qqMusic.addToPlaylist(playlist.remoteId, listOf(song))
+            if (playlist.source == "kugou") {
+                val listId = playlist.remoteId.toIntOrNull() ?: throw ApiException(ErrorKind.NotFound)
+                container.kugou.addToPlaylist(listId, listOf(song))
+            } else if (playlist.source == "qqmusic") container.qqMusic.addToPlaylist(playlist.remoteId, listOf(song))
             else if (playlist.source == "navidrome") container.navidrome.add(playlist.remoteId, song)
             else if (playlist.source == "netease") container.neteaseLibrary.add(playlist.id, song)
             else container.libraryRepository.add(playlist.id, listOf(song))
@@ -229,10 +249,20 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         likeUndoNotice?.let(container.errorNotices::clear); likeUndoNotice = null
         val expected = container.musicSession()
         val expectedQq = container.qqMusic.audioIdentity
+        val expectedKugou = container.kugou.audioIdentity
         var restore: (suspend () -> Unit)? = null
         viewModelScope.launch {
             try {
                 when (val result = appResult {
+                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) {
+                        val kugouIdentity = container.kugou.audioIdentity
+                        restore = {
+                            if (kugouIdentity != container.kugou.audioIdentity) throw ApiException(ErrorKind.Unauthorized)
+                            container.kugou.toggleLiked(song, true)
+                            Unit
+                        }
+                        return@appResult container.kugou.toggleLiked(song, desiredLiked)
+                    }
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
                         val qqIdentity = container.qqMusic.audioIdentity
                         restore = {
@@ -277,7 +307,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                         }
                     }
                 }) {
-                    is AppResult.Success -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity) {
+                    is AppResult.Success -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity && expectedKugou == container.kugou.audioIdentity) {
                         if (!song.privateLibrary) container.libraryRepository.invalidate()
                         if (undoable && !result.value) {
                             val restoreLike = requireNotNull(restore)
@@ -302,7 +332,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                             }
                         } else message.value = if (result.value) "已加入我喜欢" else "已取消喜欢"
                     }
-                    is AppResult.Failure -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity) container.errorNotices.show(result.kind.message)
+                    is AppResult.Failure -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity && expectedKugou == container.kugou.audioIdentity) container.errorNotices.show(result.message)
                 }
             } finally { primaryLikeBusy.value = false }
         }
@@ -317,15 +347,17 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         busy.value = true
         val expected = container.musicSession()
         val expectedQq = container.qqMusic.audioIdentity
+        val expectedKugou = container.kugou.audioIdentity
         viewModelScope.launch {
             try {
                 when (val r = appResult {
-                    if (expected != container.musicSession() || expectedQq != container.qqMusic.audioIdentity)
+                    if (expected != container.musicSession() || expectedQq != container.qqMusic.audioIdentity ||
+                        expectedKugou != container.kugou.audioIdentity)
                         throw ApiException(ErrorKind.Unauthorized)
                     block()
                 }) {
-                    is AppResult.Success -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity) message.value = success
-                    is AppResult.Failure -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity) container.errorNotices.show(r.kind.message)
+                    is AppResult.Success -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity && expectedKugou == container.kugou.audioIdentity) message.value = success
+                    is AppResult.Failure -> if (expected == container.musicSession() && expectedQq == container.qqMusic.audioIdentity && expectedKugou == container.kugou.audioIdentity) container.errorNotices.show(r.message)
                 }
             } finally { busy.value = false }
         }
@@ -333,13 +365,16 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     fun refreshSearchLikes(songs: List<Song>) = viewModelScope.launch { appResult {
         val qq = songs.filter { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC }
         if (qq.isNotEmpty() && container.qqMusic.state.value.loggedIn) container.qqMusic.refreshLiked(qq)
+        val kugou = songs.filter { it.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU }
+        if (kugou.isNotEmpty() && container.kugou.state.value.loggedIn) container.kugou.refreshLiked(kugou)
         val online = songs.filter { !it.privateLibrary && it.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE }
         if (online.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
     } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
         val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
-            io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) }
+            io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC,
+            io.github.currencortex.music.data.song.MusicSource.KUGOU) }
         if (legacySongs.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
     } }
@@ -374,10 +409,17 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0
     private val qqPlaylist = route in setOf("qq/foryou", "qq/likes", "qq/recent") || kind == "playlist" && route.startsWith("qq/")
     private val qqDaily = route == "qq/daily"
-    private val qqNative = qqPlaylist || qqDaily
+    private val qqChart = kind == "chart" && route.startsWith("qq/")
+    private val qqNative = qqPlaylist || qqDaily || qqChart
     private val qqLikedSongs = route == "qq/likes"
+    private val kugouNative = route.startsWith("kugou/") && (
+        kind in setOf("playlist", "user-playlist", "rank", "album") ||
+            route in setOf("kugou/daily", "kugou/new", "kugou/likes")
+        )
+    private val kugouLikedSongs = route == "kugou/likes"
     val remotePlaylistId = java.net.URLDecoder.decode(route.substringAfterLast('/'), "UTF-8")
     fun editable(playlist: Playlist?, accountId: Long) = playlist?.let {
+        if (it.source == "kugou") it.nativeOwned && !it.nativeLiked && container.kugou.state.value.loggedIn else
         if (it.source == "qqmusic") it.nativeOwned && !it.nativeLiked && container.qqMusic.state.value.loggedIn else
         if (it.source == "netease") it.nativeOwned && !it.nativeLiked &&
             container.bindingRepository.state.value?.let { binding ->
@@ -386,6 +428,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         else it.editable(accountId)
     } == true
     fun removable(playlist: Playlist?, accountId: Long) = playlist?.let {
+        if (it.source == "kugou") !it.nativeLiked && container.kugou.state.value.loggedIn && (it.nativeOwned || it.nativeSubscribed) else
         if (it.source == "qqmusic") it.nativeOwned && !it.nativeLiked && container.qqMusic.state.value.loggedIn else
         if (it.source == "netease") !it.nativeLiked &&
             container.bindingRepository.state.value?.let { binding ->
@@ -395,7 +438,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             } == true
         else it.editable(accountId)
     } == true
-    fun subscribable(playlist: Playlist?) = playlist?.takeUnless { qqLikedSongs }?.let {
+    fun subscribable(playlist: Playlist?) = playlist?.takeUnless { qqLikedSongs || kugouLikedSongs || qqChart }?.let {
+        (it.source == "kugou" && !it.nativeOwned && !it.nativeLiked && container.kugou.state.value.loggedIn) ||
         (it.source == "qqmusic" && !it.nativeOwned && !it.nativeLiked && container.qqMusic.state.value.loggedIn) ||
         (it.source == "netease" && !it.nativeOwned && !it.nativeLiked &&
             container.bindingRepository.state.value?.let { binding ->
@@ -405,7 +449,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     suspend fun subscribe() {
         val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
         if (!subscribable(playlist)) throw ApiException(ErrorKind.Forbidden)
-        if (playlist.source == "qqmusic") container.qqMusic.subscribePlaylist(playlist.remoteId, true)
+        if (playlist.source == "kugou") container.kugou.subscribePlaylist(playlist)
+        else if (playlist.source == "qqmusic") container.qqMusic.subscribePlaylist(playlist.remoteId, true)
         else container.neteaseLibrary.subscribe(playlist.id)
     }
     suspend fun unsubscribeQqPlaylist() {
@@ -415,13 +460,25 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     }
     suspend fun rename(name: String) {
         val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
-        if (playlist.source == "qqmusic") container.qqMusic.renamePlaylist(playlist.remoteId, name)
+        if (playlist.source == "kugou") {
+            val listId = playlist.remoteId.toIntOrNull() ?: throw ApiException(ErrorKind.NotFound)
+            container.kugou.renamePlaylist(listId, name)
+        }
+        else if (playlist.source == "qqmusic") container.qqMusic.renamePlaylist(playlist.remoteId, name)
         else if (playlist.source == "netease") container.neteaseLibrary.rename(id, name)
         else container.libraryRepository.rename(id, name)
     }
     suspend fun delete() {
         val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
-        if (playlist.source == "qqmusic") container.qqMusic.deletePlaylist(playlist.remoteId)
+        if (playlist.source == "kugou") {
+            if (playlist.nativeOwned) {
+                val listId = playlist.remoteId.toIntOrNull() ?: playlist.id.toInt()
+                container.kugou.deletePlaylist(listId, listType = 0)
+            } else {
+                container.kugou.unsubscribePlaylist(playlist)
+            }
+        }
+        else if (playlist.source == "qqmusic") container.qqMusic.deletePlaylist(playlist.remoteId)
         else if (playlist.source == "netease") {
             if (playlist.nativeOwned) container.neteaseLibrary.delete(id)
             else container.neteaseLibrary.unsubscribe(id)
@@ -430,7 +487,11 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     }
     suspend fun remove(song: Song) {
         val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
-        if (playlist.source == "qqmusic") container.qqMusic.removeFromPlaylist(playlist.remoteId, listOf(song))
+        if (playlist.source == "kugou") {
+            val listId = playlist.remoteId.toIntOrNull() ?: throw ApiException(ErrorKind.NotFound)
+            container.kugou.removeSongFromPlaylist(listId, song)
+        }
+        else if (playlist.source == "qqmusic") container.qqMusic.removeFromPlaylist(playlist.remoteId, listOf(song))
         else if (playlist.source == "netease") container.neteaseLibrary.remove(id, song)
         else container.libraryRepository.remove(id, song)
     }
@@ -449,9 +510,14 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                 // a CurrentMusic playlist's membership, including during bulk imports.
                 container.neteaseSongActions.revision.map { if (kind == "playlist") 0L else it }.distinctUntilChanged()) { keys -> keys.toList() }
                 .combine(container.neteaseSessions.state.map { it.profile?.uid }.distinctUntilChanged()) { keys, uid -> keys + uid }
+                .combine(container.kugou.state.map { if (kugouNative) it.revision else 0L }.distinctUntilChanged()) { keys, rev -> keys + rev }
+                .combine(container.kugou.playlistRevision.map { if (kugouNative) it else 0L }.distinctUntilChanged()) { keys, rev -> keys + rev }
                 .collectLatest { keys ->
-                    val nextIdentity = if (qqNative) keys + container.qqMusic.audioIdentity
-                    else keys.take(2) + listOfNotNull(keys[5], keys.last())
+                    val nextIdentity = when {
+                        qqNative -> keys + container.qqMusic.audioIdentity
+                        kugouNative -> keys + container.kugou.audioIdentity
+                        else -> keys.take(2) + listOfNotNull(keys[5], keys[keys.size - 3])
+                    }
                     if (identity != nextIdentity) {
                         task?.cancel()
                         state.value = LibraryDetailState()
@@ -466,6 +532,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         if (force && task?.isActive == true) return
         task?.cancel()
         val expectedQqIdentity = if (qqNative) container.qqMusic.audioIdentity else null
+        val expectedKugouIdentity = if (kugouNative) container.kugou.audioIdentity else null
         val previous = state.value
         state.value = previous.copy(loading = !previous.loaded || more,
             refreshing = previous.loaded && !more, error = null, refreshError = null)
@@ -476,6 +543,18 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                         val songs = container.qqMusic.daily().songs
                         previous.copy(title = if (container.qqMusic.state.value.loggedIn) "每日推荐" else "新歌推荐",
                             description = if (container.qqMusic.state.value.loggedIn) "今天的专属歌单" else "QQ 音乐新歌推荐",
+                            cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
+                            songs = songs)
+                    }
+                    "daily" if kugouNative -> {
+                        val songs = container.kugou.daily().songs
+                        previous.copy(title = "每日推荐", description = "今天的专属酷狗推荐",
+                            cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
+                            songs = songs)
+                    }
+                    "new" if kugouNative -> {
+                        val songs = container.kugou.newSongs()
+                        previous.copy(title = "新歌速递", description = "酷狗音乐热门新歌",
                             cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
                             songs = songs)
                     }
@@ -490,6 +569,22 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                         val playlist = io.github.currencortex.music.data.library.Playlist(
                             0L, "我喜欢的音乐", "QQ 音乐收藏的歌曲", "", "qqmusic", 0, songs.size, songs,
                             nativeOwned = true, nativeLiked = true)
+                        previous.copy(title = playlist.name, description = playlist.description,
+                            cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
+                            songs = songs, playlist = playlist, more = false)
+                    }
+                    "likes" if kugouLikedSongs -> {
+                        if (!container.kugou.state.value.loggedIn) {
+                            throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录酷狗音乐账号")
+                        }
+                        val songs = container.kugou.likedSongs(fresh = force)
+                        val playlist = Playlist(
+                            io.github.currencortex.music.data.kugou.KugouProtocol.LIKED_LIST_ID.toLong(),
+                            "我喜欢", "酷狗音乐收藏的歌曲", "", "kugou",
+                            container.kugou.state.value.userId, songs.size, songs,
+                            nativeOwned = true, nativeLiked = true,
+                            remoteId = io.github.currencortex.music.data.kugou.KugouProtocol.LIKED_LIST_ID.toString(),
+                        )
                         previous.copy(title = playlist.name, description = playlist.description,
                             cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
                             songs = songs, playlist = playlist, more = false)
@@ -533,6 +628,70 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                             cover = playlist.cover,
                             songs = playlist.songs, playlist = playlist, more = playlist.songs.size < playlist.count)
                     }
+                    "chart" if qqNative -> {
+                        val chart = container.qqMusic.chart(remotePlaylistId)
+                        previous.copy(
+                            title = chart.name,
+                            description = io.github.currencortex.music.feature.qqmusic.readableText(chart.description),
+                            cover = chart.cover.ifBlank { chart.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
+                            songs = chart.songs,
+                            more = false,
+                        )
+                    }
+                    "user-playlist" if kugouNative -> {
+                        val listId = remotePlaylistId.toIntOrNull() ?: throw ApiException(ErrorKind.NotFound)
+                        val nextPage = if (more) previous.songs.size / 300 + 1 else 1
+                        val fetched = container.kugou.userPlaylist(listId, page = nextPage, pageSize = 300)
+                        val combinedSongs = if (more && previous.playlist != null)
+                            (previous.songs + fetched.songs).distinctBy(Song::id)
+                        else fetched.songs
+                        val playlist = fetched.copy(songs = combinedSongs)
+                        previous.copy(title = playlist.name, description = playlist.description,
+                            cover = playlist.cover.ifBlank { combinedSongs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
+                            songs = combinedSongs, playlist = playlist,
+                            more = fetched.songs.isNotEmpty() && combinedSongs.size < playlist.count)
+                    }
+                    "playlist" if kugouNative -> {
+                        if (more && previous.playlist != null) {
+                            val page = container.kugou.playlistSongs(remotePlaylistId, previous.songs.size)
+                            val combined = (previous.songs + page.songs).distinctBy(Song::id)
+                            previous.copy(songs = combined, playlist = previous.playlist.copy(songs = combined),
+                                more = page.hasMore && page.songs.isNotEmpty())
+                        } else {
+                            val playlist = container.kugou.playlist(remotePlaylistId)
+                            previous.copy(title = playlist.name, description = playlist.description,
+                                cover = playlist.cover.ifBlank { playlist.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
+                                songs = playlist.songs, playlist = playlist, more = playlist.songs.size < playlist.count)
+                        }
+                    }
+                    "rank" if kugouNative -> {
+                        val offset = if (more) previous.songs.size else 0
+                        val page = container.kugou.rankSongs(remotePlaylistId, offset)
+                        val rankMeta = if (!more || previous.title.isBlank() || previous.cover.isBlank()) {
+                            container.kugou.cachedHome().ranks.firstOrNull { it.id == remotePlaylistId }
+                                ?: runCatching { container.kugou.ranks().firstOrNull { it.id == remotePlaylistId } }.getOrNull()
+                        } else null
+                        val combined = if (more) (previous.songs + page.songs).distinctBy(Song::id) else page.songs
+                        previous.copy(
+                            title = rankMeta?.name?.takeIf(String::isNotBlank) ?: previous.title.ifBlank { "酷狗榜单" },
+                            description = rankMeta?.intro?.ifBlank { rankMeta.updateText }?.takeIf(String::isNotBlank) ?: previous.description,
+                            cover = rankMeta?.cover?.takeIf(String::isNotBlank)
+                                ?: previous.cover.takeIf(String::isNotBlank)
+                                ?: combined.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
+                            songs = combined,
+                            more = page.hasMore && page.songs.isNotEmpty(),
+                        )
+                    }
+                    "album" if kugouNative -> {
+                        val album = container.kugou.album(remotePlaylistId)
+                        previous.copy(
+                            title = album.entry.name,
+                            description = listOf(album.entry.subtitle, album.intro).filter(String::isNotBlank).joinToString("\n"),
+                            cover = album.entry.cover.ifBlank { album.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() },
+                            songs = album.songs,
+                            more = false,
+                        )
+                    }
                     "playlist" -> container.libraryRepository.playlist(id, fresh = force).let { previous.copy(title = it.name, description = it.description,
                         cover = it.cover, songs = it.songs, playlist = it) }
                     "artist" -> container.libraryRepository.artist(id, if (more) previous.songs.size else 0).let { previous.copy(title = it.name,
@@ -548,14 +707,17 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     val merged = withContext(Dispatchers.Default) { previous.mergeFetched(result.value) }
                     ensureActive()
                     if (expectedQqIdentity != null && expectedQqIdentity != container.qqMusic.audioIdentity) return@launch
+                    if (expectedKugouIdentity != null && expectedKugouIdentity != container.kugou.audioIdentity) return@launch
                     state.value = merged.copy(loading = false, loaded = true, refreshing = false, error = null, refreshError = null)
                 }
                 is AppResult.Failure -> {
                     ensureActive()
                     if (expectedQqIdentity != null && expectedQqIdentity != container.qqMusic.audioIdentity) return@launch
+                    if (expectedKugouIdentity != null && expectedKugouIdentity != container.kugou.audioIdentity) return@launch
+                    val errMsg = if (kugouNative) result.message else result.kind.message
                     state.update { it.copy(loading = false, refreshing = false,
-                        error = result.kind.message.takeUnless { previous.loaded },
-                        refreshError = result.kind.message.takeIf { previous.loaded }) }
+                        error = errMsg.takeUnless { previous.loaded },
+                        refreshError = errMsg.takeIf { previous.loaded }) }
                 }
             }
         }

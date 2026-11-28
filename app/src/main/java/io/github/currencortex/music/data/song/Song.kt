@@ -11,7 +11,8 @@ import kotlinx.serialization.SerialName
                              val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
                               val albumId: Long = 0, val translatedName: String = "",
                               val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false,
-                              val qqMusic: QqMusicTrackRef? = null) {
+                              val qqMusic: QqMusicTrackRef? = null,
+                              val kugou: KugouTrackRef? = null) {
     val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
     val privateIdentity get() = emby?.identity ?: navidrome?.identity
     val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
@@ -20,15 +21,20 @@ import kotlinx.serialization.SerialName
         .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
     val displayNames get() = listOf(name) + alternateNames
 }
-@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY,
+@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, KUGOU, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY,
     /** Persisted by the removed external-service feature; filtered when restoring a saved queue. */
     SERVICE }
 @Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
     val singerMids: List<String> = emptyList(), val mediaMid: String = "")
+/** KuGou identifies a recording by file hash; the other hashes are the higher-quality files of the same song. */
+@Serializable data class KugouTrackRef(val hash: String, val albumId: String = "", val albumAudioId: Long = 0, val audioId: Long = 0,
+    val hqHash: String = "", val sqHash: String = "", val resHash: String = "",
+    val superHash: String = "", val dolbyHash: String = "", val mvHash: String = "", val fileId: Int = 0,
+    val viperMasterHash: String = "", val viperClearHash: String = "", val viperAtmosHash: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
     val sampleRate: Int = 0, val channels: Int = 0)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
-    val appleMusicId: String? = null, val spotifyId: String? = null)
+    val kugouId: String? = null, val appleMusicId: String? = null, val spotifyId: String? = null)
 @Serializable data class LyricContextDto(val t: Long? = null, val txt: String = "", val matched: Boolean = false)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
                                 val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,
@@ -96,6 +102,7 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
         ((sampleRate <= 0 || channelCount <= 0) && level in setOf(
             "hires", "jymaster", "sky", "jyeffect", "flac24bit",
             "qq_master", "qq_surround", "qq_studio", "qq_nac", "qq_dts_x",
+            "kugou_viper_master", "kugou_viper_clear", "kugou_viper_atmos",
         ))
 }
 @Serializable data class LyricDto(val lines: List<LyricLine> = emptyList())

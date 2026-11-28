@@ -169,6 +169,7 @@ class MusicService : MediaSessionService() {
     private data class PreloadPlan(val request: AudioRequest, val metered: Boolean)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
         if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) container.qqMusic.session()
+        else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) container.kugou.session()
         else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session()
         else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) container.emby.session()
         else container.musicSession()

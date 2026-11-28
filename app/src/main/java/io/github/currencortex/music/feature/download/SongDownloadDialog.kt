@@ -42,13 +42,16 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val directory by manager.directory.collectAsStateWithLifecycle()
     val project by container.accountRepository.state.collectAsStateWithLifecycle()
     val qqAccount by container.qqMusic.state.collectAsStateWithLifecycle()
+    val kugouAccount by container.kugou.state.collectAsStateWithLifecycle()
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
     val audioProvider by container.audioSettings.state.collectAsStateWithLifecycle()
-    val owner = remember(song.id, song.musicSource, project.account?.id, settings.server, qqAccount.revision, audioProvider.identity) {
+    val owner = remember(song.id, song.musicSource, project.account?.id, settings.server, qqAccount.revision, kugouAccount.revision, audioProvider.identity) {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
             container.qqMusic.selectOwner()
             manager.ownerKey(song, project.account?.id ?: 0L, container.accountRepository.server,
                 container.qqAudioIdentity(), container.qqMusic.state.value.revision.toString())
+        } else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) {
+            manager.ownerKey(song, 0L, "kugou://account", container.kugouAudioIdentity(), kugouAccount.revision.toString())
         } else ""
     }
     val info by remember(manager, song.id, song.musicSource, owner) { manager.observe(song, owner) }.collectAsStateWithLifecycle(null)
@@ -62,7 +65,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val saved = info?.state == WorkInfo.State.SUCCEEDED
     fun start() {
         try {
-            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.KUGOU) {
+                manager.start(song, quality, 0L, "kugou://account", container.kugouAudioIdentity(),
+                    navidromeRevision = container.kugou.state.value.revision.toString())
+            } else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
                 container.qqMusic.selectOwner()
                 val account = container.qqMusic.state.value
                 if (!account.loggedIn) { context.showMusicError("请先登录 QQ 音乐"); return }
