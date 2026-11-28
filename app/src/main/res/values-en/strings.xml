@@ -1,0 +1,4 @@
+<resources>
+    <!-- The app is called CurrentMusic in English; the Chinese name stays 流声音乐. -->
+    <string name="app_name">CurrentMusic</string>
+</resources>
