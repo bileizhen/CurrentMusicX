@@ -262,7 +262,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     }
 }
 
-internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
+internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE, VIDEO }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, countLabel: String? = null,
@@ -304,6 +304,7 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
             PlayerIcon.REPEAT_ONE -> R.drawable.player_symbol_repeat_one
             PlayerIcon.SHUFFLE -> R.drawable.player_symbol_shuffle
             PlayerIcon.HEART_MODE -> R.drawable.player_symbol_ecg_heart
+            PlayerIcon.VIDEO -> R.drawable.player_symbol_mv
         }), null, iconModifier, colorFilter = ColorFilter.tint(ink))
         if (showCount) Text(countLabel ?: count?.let(::formatNeteaseCount) ?: "—", fontSize = 9.sp,
             color = Color.White.copy(alpha = .8f), maxLines = 1,
