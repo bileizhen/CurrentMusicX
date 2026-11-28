@@ -47,12 +47,13 @@ internal class PlaylistPreviewPlayback(val enabled: Boolean, val play: (Playlist
                             "qqmusic" -> vm.container.qqMusic.playlist(
                                 playlist.remoteId.ifBlank { playlist.id.toString() },
                             ).songs
+                            // Kugou library cards are always cloud playlists (owned or collected), so
+                            // their numeric id is a user listid — never a public specialid.
                             "kugou" -> if (playlist.nativeLiked) vm.container.kugou.likedSongs()
-                            else if (playlist.nativeOwned) vm.container.kugou.userPlaylist(
+                            else vm.container.kugou.userPlaylist(
                                 playlist.remoteId.toIntOrNull() ?: playlist.id.toInt(),
                                 playlist.name,
                             ).songs
-                            else vm.container.kugou.playlist(playlist.remoteId.ifBlank { playlist.id.toString() }).songs
                             else -> vm.container.libraryRepository.playlist(playlist.id).songs
                         }
                     }
