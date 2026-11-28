@@ -107,6 +107,37 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var sideDialog by remember { mutableStateOf(false) }
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
+    // MV: 在本页把 MV 当静音背景播放；音频仍归 MusicService，歌词时钟不变。
+    var mvBackground by rememberSaveable { mutableStateOf(false) }
+    var mvUrl by remember { mutableStateOf<String?>(null) }
+    var mvLoading by remember { mutableStateOf(false) }
+    val mvSongId = state.song?.mv?.takeIf { it > 0 }
+    LaunchedEffect(mvBackground, mvSongId) {
+        // 切歌先清空，避免上一首的 MV 继续显示到新地址返回
+        mvUrl = null
+        if (!mvBackground || mvSongId == null) { mvLoading = false; return@LaunchedEffect }
+        mvLoading = true
+        val preferred = state.song?.videoQuality ?: 1080
+        // 服务端对不存在的档位返回 url = null（NotFound），按高→低回退
+        val ladder = listOf(preferred, 1080, 720, 480, 240).distinct()
+        var resolved: String? = null
+        try {
+            for (quality in ladder) {
+                resolved = try { vm.container.libraryRepository.mvSource(mvSongId, quality) }
+                catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+                catch (_: Exception) { null }
+                if (resolved != null) break
+            }
+        } finally {
+            mvLoading = false
+        }
+        mvUrl = resolved
+        if (resolved == null) {
+            mvBackground = false
+            vm.container.errorNotices.show("这个 MV 暂时拿不到可播放的地址")
+        }
+    }
+    LaunchedEffect(mvSongId) { if (mvSongId == null) { mvBackground = false; mvUrl = null } }
     LaunchedEffect(roamingRequest) {
         if (roamingRequest > 0) { overlay = PlayerOverlay.ROAMING; onRoamingRequestConsumed() }
     }
@@ -347,6 +378,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                if (mvSongId != null && !widePlayer) {
+                    PlayerIconButton(PlayerIcon.VIDEO,
+                        if (mvBackground) "关闭 MV 背景" else "把 MV 当背景播放",
+                        { mvBackground = !mvBackground },
+                        Modifier.testTag("player_mv_background"),
+                        selected = mvBackground, enabled = headerEnabled && !mvLoading)
+                }
                 PlayerIconButton(PlayerIcon.SHARE, "分享歌曲", { overlay = PlayerOverlay.SHARE }, Modifier.testTag("player_share"),
                     enabled = headerEnabled && queue.current != null)
             }
@@ -378,6 +416,18 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur,
             active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground,
             motionSpeed = { backgroundSpeed.value })
+        val mvFrame = mvUrl
+        if (mvBackground && mvFrame != null && !widePlayer) {
+            PlayerMvBackdrop(
+                PlayerMvSource(mvFrame, "https://music.163.com/"),
+                playing = state.playing,
+                active = expanded && overlay == PlayerOverlay.NONE && !sidePage.active && !songNavigation.dialogActive,
+                positionMs = state.positionMs, timelineRevision = state.timelineRevision,
+                playbackSpeed = state.playbackSpeed,
+                onError = { message -> mvBackground = false; vm.container.errorNotices.show(message) },
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
