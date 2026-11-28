@@ -969,13 +969,22 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val position = rememberLyricsPosition(if (active) player else player.copy(playing = false))
     if (lyrics.matches(player.song) && lyrics.document.lines.isNotEmpty()) key(lyrics.songKey, lyrics.document) {
         val settings by vm.settings.collectAsStateWithLifecycle()
+        // Power saver turns glow off, and the Apple Music / smoke stages never consume the
+        // envelope, so the meter must not be held for an effect that cannot render.
+        val effectiveGlow = rememberEffectiveLyricsGlow(settings.lyricsDisplay)
+        val stageUsesGlow = settings.lyricsDisplay.style !=
+            io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC &&
+            !settings.lyricsDisplay.smoke && !settings.lyricsDisplay.particles
+        val rhythmGlow = rememberLyricsRhythmGlow(vm.container.dockAudioLevel,
+            active && effectiveGlow && stageUsesGlow, active && player.playing && !player.loading)
         LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
             settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
             settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
             settings.lyricsWeight, settings.lyricsOffsetMs - lyrics.songOffsetMs,
             settings.lyricsDisplay.copy(hideControls = expandLyricsWindow),
             minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty(),
-            mediaDurationMs = player.durationMs, playbackRunning = active && player.playing && !player.loading)
+            mediaDurationMs = player.durationMs, playbackRunning = active && player.playing && !player.loading,
+            rhythmGlow = rhythmGlow)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

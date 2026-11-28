@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package io.github.currencortex.music.feature.lyrics.ui
 
+import android.app.ActivityManager
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import io.github.currencortex.music.data.settings.KaraokeScope
 import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.data.settings.LyricsRenderQuality
@@ -30,4 +35,17 @@ internal fun LyricsDisplayOptions.withRenderQuality(quality: LyricsRenderQuality
         stagger = false, karaokeScope = KaraokeScope.CURRENT,
         appleMusic = appleMusic.copy(blurStrength = 0f),
     )
+}
+
+/** The glow a device will actually draw, resolved once for callers outside the stage. */
+@Composable internal fun rememberEffectiveLyricsGlow(display: LyricsDisplayOptions): Boolean {
+    val context = LocalContext.current
+    val lowRam = remember(context) {
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
+    }
+    return remember(display, lowRam) {
+        display.withRenderQuality(
+            effectiveLyricsRenderQuality(display.renderQuality, lowRam, android.os.Build.VERSION.SDK_INT)
+        ).glow
+    }
 }
