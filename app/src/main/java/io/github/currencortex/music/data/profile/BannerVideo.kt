@@ -67,8 +67,7 @@ data class PreparedBannerVideo(
 
 object BannerVideoRules {
     const val MIN_TRIM_DURATION_MS = 1_000L
-    private const val STANDARD_MAX_DURATION_MS = 5_000L
-    private const val ADMIN_MAX_DURATION_MS = 10_000L
+    private val STANDARD_MAX_DURATION_MS = BannerUploadPolicy.STANDARD.maxVideoDurationMs
     private const val EXPORT_MARGIN_MS = 100L
 
     private val MP4_BRANDS = setOf(
@@ -82,9 +81,6 @@ object BannerVideoRules {
 
     fun minSelectableDurationMs(totalDurationMs: Long): Long =
         if (totalDurationMs <= 0L) 0L else min(MIN_TRIM_DURATION_MS, totalDurationMs)
-
-    fun maxDurationMs(role: UserRole?): Long =
-        if (role == null) STANDARD_MAX_DURATION_MS else ADMIN_MAX_DURATION_MS
 
     fun defaultRange(totalDurationMs: Long, maxDurationMs: Long = STANDARD_MAX_DURATION_MS): BannerTrimSelection {
         if (totalDurationMs <= 0L) return BannerTrimSelection(0L, 0L)
@@ -506,7 +502,7 @@ private fun inspectLocalVideoFile(file: File): Pair<Long, Long>? {
     }
 }
 
-private fun copyUriUpToLimit(resolver: ContentResolver, uri: Uri, dest: File, limitBytes: Long): Boolean {
+internal fun copyUriUpToLimit(resolver: ContentResolver, uri: Uri, dest: File, limitBytes: Long): Boolean {
     val input = resolver.openInputStream(uri) ?: return false
     var total = 0L
     return input.use { stream ->
@@ -553,7 +549,7 @@ private fun sniffImageBounds(resolver: ContentResolver, uri: Uri): Boolean {
     }
 }
 
-private fun queryUriSizeBytes(resolver: ContentResolver, uri: Uri): Long {
+internal fun queryUriSizeBytes(resolver: ContentResolver, uri: Uri): Long {
     runCatching {
         resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
             val col = cursor.getColumnIndex(OpenableColumns.SIZE)

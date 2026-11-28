@@ -249,9 +249,11 @@ internal fun ProfileBannerVideoDialog(
     busy: Boolean,
     statusText: String?,
     onCancel: () -> Unit,
+    allowsOriginalAudio: Boolean,
     onSave: (startMs: Long, endMs: Long, keepAudio: Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val canKeepAudio = info.hasAudio && allowsOriginalAudio
     val durationMs = info.durationMs
     val defaultRange = BannerVideoRules.defaultRange(durationMs, maxDurationMs)
     var selection by remember(uri, durationMs, maxDurationMs) { mutableStateOf(defaultRange) }
@@ -284,7 +286,7 @@ internal fun ProfileBannerVideoDialog(
                 scrubPositionMs = scrubMs,
                 onPositionUpdate = { playheadMs = it },
                 audio = when {
-                    !info.hasAudio -> BannerVideoAudio.Disabled
+                    !canKeepAudio -> BannerVideoAudio.Disabled
                     auditionAudio -> BannerVideoAudio.Audible
                     else -> BannerVideoAudio.Muted
                 },
@@ -354,7 +356,7 @@ internal fun ProfileBannerVideoDialog(
                 .testTag("banner_video_trim_bar"),
         )
 
-        if (info.hasAudio) {
+        if (canKeepAudio) {
             SettingsSwitch(
                 title = stringResource(R.string.profile_banner_video_keep_audio),
                 summary = stringResource(R.string.profile_banner_video_keep_audio_summary),
@@ -362,6 +364,12 @@ internal fun ProfileBannerVideoDialog(
                 onCheckedChange = { keepAudio = it; auditionAudio = it },
                 enabled = !busy,
                 modifier = Modifier.testTag("profile_banner_keep_audio"),
+            )
+        } else if (info.hasAudio) {
+            Text(
+                text = stringResource(R.string.profile_banner_video_remove_audio),
+                fontSize = 12.sp,
+                color = colors.labelSecondaryVariant,
             )
         }
 
@@ -383,7 +391,7 @@ internal fun ProfileBannerVideoDialog(
                 text = if (busy) "处理中…" else "保存横幅",
                 onClick = {
                     scrubMs = null
-                    onSave(selection.startMs, selection.endMs, keepAudio)
+                    onSave(selection.startMs, selection.endMs, canKeepAudio && keepAudio)
                 },
                 enabled = !busy && selection.durationMs > 0L,
                 modifier = Modifier

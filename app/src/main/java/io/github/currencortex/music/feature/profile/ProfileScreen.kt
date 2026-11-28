@@ -431,17 +431,20 @@ private data class BannerPreview(val url: String, val isVideo: Boolean)
     if (privateOwnProfile) when (val draft = bannerDraft) {
         is ProfileViewModel.BannerDraft.Image -> ProfileBannerCropDialog(
             uri = draft.uri,
+            original = draft.original,
+            policy = draft.policy,
             busy = busy,
             onCancel = vm::dismissBanner,
-            onSave = { crop -> vm.saveBanner(context.contentResolver, crop) },
+            onSave = { crop, useLossless -> vm.saveBanner(context, crop, useLossless) },
         )
         is ProfileViewModel.BannerDraft.Video -> ProfileBannerVideoDialog(
             uri = draft.uri,
             info = draft.info,
-            maxDurationMs = draft.maxDurationMs,
+            maxDurationMs = draft.policy.maxVideoDurationMs,
             busy = busy,
             statusText = bannerStatus,
             onCancel = vm::dismissBanner,
+            allowsOriginalAudio = draft.policy.allowsOriginalMedia,
             onSave = { startMs, endMs, keepAudio -> vm.saveVideoBanner(context, startMs, endMs, keepAudio) },
         )
         null -> Unit

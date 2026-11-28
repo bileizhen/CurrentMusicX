@@ -2,6 +2,12 @@
     <string name="app_name">流声音乐</string>
     <string name="profile_banner_video_trim_limit">拖动框选最多 %1$d 秒，按 3:2 居中裁剪</string>
     <string name="profile_banner_video_keep_audio">保留原声</string>
+    <string name="profile_banner_video_remove_audio">当前账号只可上传无音轨视频，升至 Lv.3 可上传有声视频</string>
+    <string name="profile_banner_image_lossless">无损上传</string>
+    <string name="profile_banner_image_lossless_summary">保留裁切后的像素尺寸，存为无损 PNG</string>
+    <string name="profile_banner_image_compressed">升至 Lv.3 可解锁无损保存</string>
+    <string name="profile_banner_image_original_error">无法读取原图或原图超过 32 MiB，可关闭「无损上传」后重试</string>
+    <string name="profile_banner_image_lossless_failed">%1$s，可关闭「无损上传」后重试</string>
     <string name="profile_banner_video_keep_audio_summary">开启后可试听，访客也能在全屏预览中开启声音</string>
     <string name="profile_banner_video_export_with_audio_error">视频转码失败，可关闭「保留原声」后重试</string>
     <string name="profile_banner_video_trim_hint">保存前可预览或裁切片段，按 3:2 居中裁剪</string>
