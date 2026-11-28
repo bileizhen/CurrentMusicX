@@ -29,6 +29,7 @@ import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.domain.withDetectedChorus
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
@@ -82,7 +83,8 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
     display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
-    cover: String = "", mediaDurationMs: Long = 0, playbackRunning: Boolean = true) {
+    cover: String = "", mediaDurationMs: Long = 0, playbackRunning: Boolean = true,
+    rhythmGlow: State<Float>? = null) {
     // Resolve the quality once, then render with the reduced options; the saved preference is untouched.
     val context = LocalContext.current
     val lowRam = remember(context) {
@@ -95,8 +97,10 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     // Blur is the expensive part; a POWER_SAVER device must not keep drawing it just because the
     // saved preference asked for it.
     val renderEffects = effects && renderDisplay.blur
+    // Chorus detection runs once per document; it only tags roles, it never rewrites the text.
+    val renderedDocument = remember(document) { document.withDetectedChorus() }
     if (renderDisplay.style == io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC) {
-        AppleMusicLyrics(document, position, onSeek, modifier, canSeek, translation, romanization,
+        AppleMusicLyrics(renderedDocument, position, onSeek, modifier, canSeek, translation, romanization,
             wordAnimation, renderEffects, LyricsTypography.normalize(fontSize), weightMode,
             lyricsOffsetMs, renderDisplay, mediaDurationMs, playbackRunning)
         return
@@ -120,7 +124,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     val playbackTarget by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
     if (smokeStage) {
-        SmokeLyricsStage(document, target, effectivePosition, onSeek = {
+        SmokeLyricsStage(renderedDocument, target, effectivePosition, onSeek = {
             LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let(onSeek)
         },
             modifier = modifier, canSeek = canSeek, translation = translation, romanization = romanization,
@@ -131,11 +135,11 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     var followRequest by remember(document) { mutableIntStateOf(0) }
     val browsingOffStage = remember { mutableLongStateOf(-1L) }
     Box(modifier.testTag("lyrics_panel")) {
-        MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
+        MonetLyricsRail(renderedDocument, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
             renderDisplay.centered, minimal, perspective, renderEffects, followRequest,
             onBrowse = { browseAnchor = it },
             expandWindow = renderDisplay.hideControls && !minimal, playbackTarget = playbackTarget) { index, browsing, tone, focused, focusIndex ->
-            val line = document.lines[index]
+            val line = renderedDocument.lines[index]
             // Browsing rows never self-match: bold, glow, karaoke fill and the translation slot
             // belong to the sung line alone. The selection reads through the rail tone lift only.
             LyricsLineView(line, index, if (browsing) browsingOffStage else visualPosition, focused,
@@ -145,6 +149,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
                         onSeek(target); followRequest++
                     }
                 }, translation, romanization, wordAnimation, renderEffects, size, weightMode, renderDisplay, monetTone = tone,
+                rhythmGlow = rhythmGlow,
                 browsing = browsing)
         }
         if (!minimal && interlude != null && browseAnchor == null)
